@@ -1,46 +1,149 @@
-# Getting Started with Create React App
+# Knox Web Application
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A React-based web application for managing Knox photo circles and providing public album viewing.
+
+## Features
+
+- **Admin Dashboard**: Comprehensive management interface for circles, albums, users, and invitations
+- **Public Album Viewing**: Unauthenticated access to shared albums via invite links
+- **Role-based Access Control**: Different permission levels (read-only, contributor, editor, admin)
+- **Real-time Data**: Live updates using Supabase real-time subscriptions
+
+## Development Setup
+
+### Prerequisites
+- Node.js 20+ (recommended)
+- npm or yarn
+- Docker (optional)
+
+### Local Development
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Set up environment variables:**
+   Copy `.env.example` to `.env` and fill in your Supabase credentials:
+   ```env
+   VITE_SUPABASE_URL=your_supabase_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
+
+3. **Start development server:**
+   ```bash
+   npm run dev
+   ```
+
+4. **Open your browser:**
+   Navigate to `http://localhost:3000`
+
+### Docker Development
+
+For a consistent development environment using Docker:
+
+1. **Development with hot reload:**
+   ```bash
+   docker-compose -f docker-compose.dev.yml up --build
+   ```
+
+2. **Production-like build:**
+   ```bash
+   docker-compose up --build
+   ```
+
+3. **With nginx proxy:**
+   ```bash
+   docker-compose --profile production up --build
+   ```
+
+### Docker Commands
+
+- **Build development container:**
+  ```bash
+  docker build -f Dockerfile.dev -t knox-web-dev .
+  ```
+
+- **Run development container:**
+  ```bash
+  docker run -p 3000:3000 -v $(pwd):/app -v /app/node_modules knox-web-dev
+  ```
+
+- **Stop all containers:**
+  ```bash
+  docker-compose down
+  ```
+
+- **View logs:**
+  ```bash
+  docker-compose logs -f knox-web-dev
+  ```
+
+## Project Structure
+
+```
+src/
+├── components/
+│   ├── admin/          # Admin panel components
+│   │   ├── CirclesManager.tsx
+│   │   ├── AlbumsManager.tsx
+│   │   ├── UsersManager.tsx
+│   │   └── InvitesManager.tsx
+│   ├── AlbumViewer.tsx # Public album viewing
+│   ├── Login.tsx       # Authentication
+│   └── AdminDashboard.tsx
+├── context/
+│   └── AuthContext.tsx # Authentication context
+├── lib/
+│   └── supabase.ts     # Supabase client setup
+└── App.tsx             # Main application component
+```
 
 ## Available Scripts
 
-In the project directory, you can run:
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
+- `npm run lint` - Run ESLint
 
-### `npm start`
+## Environment Variables
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+Required environment variables:
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+- `VITE_SUPABASE_URL` - Your Supabase project URL
+- `VITE_SUPABASE_ANON_KEY` - Your Supabase anonymous key
 
-### `npm test`
+## Deployment
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### AWS Amplify
+1. Connect your GitHub repository to AWS Amplify
+2. Set environment variables in Amplify console
+3. Deploy automatically on push to main branch
 
-### `npm run build`
+### Docker Production
+```bash
+docker build -t knox-web .
+docker run -p 3000:3000 --env-file .env knox-web
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## API Routes
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- `/` - Redirects to admin dashboard
+- `/login` - Admin login
+- `/admin/*` - Admin dashboard (requires authentication)
+- `/album/:inviteId` - Public album viewing (no authentication required)
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Database Integration
 
-### `npm run eject`
+The application integrates with Supabase for:
+- User authentication and management
+- Circle and album data
+- Real-time updates
+- File storage (images/videos)
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+## Security
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
+- Row Level Security (RLS) policies protect data access
+- Admin functions require authentication
+- Public album access is controlled by invitation status
+- Environment variables secure API keys

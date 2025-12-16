@@ -1,24 +1,27 @@
 import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { AlbumViewer } from './components/AlbumViewer';
+import { AdminDashboard } from './components/AdminDashboard';
+import { Login } from './components/Login';
+import { AuthCallback } from './components/AuthCallback';
 
 function App() {
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      <Routes>
+        {/* Public route for album viewing without authentication */}
+        <Route path="/album/:inviteId" element={<AlbumViewer />} />
+        
+        {/* Authentication routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        
+        {/* Admin routes (require authentication) */}
+        <Route path="/admin/*" element={<AdminDashboard />} />
+        
+        {/* Default route */}
+        <Route path="/" element={<Navigate to="/admin" replace />} />
+      </Routes>
     </div>
   );
 }

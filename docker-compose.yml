@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  knox-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+    volumes:
+      # Mount source code for development (hot reload)
+      - .:/app
+      # Use a volume for node_modules to avoid conflicts
+      - /app/node_modules
+    stdin_open: true
+    tty: true
+    command: npm run dev -- --host 0.0.0.0
+    networks:
+      - knox-network
+
+  # Optional: Add a reverse proxy for production-like setup
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - knox-web
+    networks:
+      - knox-network
+    profiles:
+      - production
+
+networks:
+  knox-network:
+    driver: bridge

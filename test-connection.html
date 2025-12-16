@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Supabase Connection Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Simple Supabase Connection Test</h1>
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        
+        function log(message, type = 'info') {
+            console.log(message);
+            const color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+            results.innerHTML += `<p style="color: ${color}">${message}</p>`;
+        }
+        
+        async function testConnection() {
+            try {
+                log('=== Starting Simple Connection Test ===');
+                
+                // Configuration
+                const supabaseUrl = 'https://quqlovduekdasldqadge.supabase.co';
+                const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1cWxvdmR1ZWtkYXNsZHFhZGdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NzQ5MjgsImV4cCI6MjA4MTE1MDkyOH0.bePrytQ_iJtzBjjkguFSCBrIpgzZlhBeOrbmsmzo5x4';
+                
+                log(`URL: ${supabaseUrl}`);
+                log(`Key: ${supabaseKey ? 'Present' : 'Missing'}`);
+                
+                // Create Supabase client with timeout configuration
+                const supabase = window.supabase.createClient(supabaseUrl, supabaseKey, {
+                  global: {
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                  }
+                });
+                
+                log('✓ Supabase client created', 'success');
+                
+                // Test 1: Simple profiles query with timeout
+                log('Testing profiles table query...');
+                
+                const queryPromise = supabase
+                    .from('profiles')
+                    .select('id')
+                    .limit(1);
+                
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Query timeout after 15 seconds')), 15000)
+                );
+                
+                const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+                
+                if (error) {
+                    log(`❌ Query error: ${error.message}`, 'error');
+                    log(`Error details: ${JSON.stringify(error)}`, 'error');
+                    return;
+                }
+                
+                log(`✓ Query successful: ${JSON.stringify(data)}`, 'success');
+                
+                // Test 2: Auth session test
+                log('Testing auth session...');
+                const { data: session, error: authError } = await supabase.auth.getSession();
+                
+                if (authError) {
+                    log(`❌ Auth error: ${authError.message}`, 'error');
+                    return;
+                }
+                
+                log(`✓ Auth test successful: Session = ${!!session.session}`, 'success');
+                log('=== All tests passed! ===', 'success');
+                
+            } catch (err) {
+                log(`❌ Connection test failed: ${err.message}`, 'error');
+                log(`Stack trace: ${err.stack}`, 'error');
+            }
+        }
+        
+        // Run test when page loads
+        window.onload = testConnection;
+    </script>
+</body>
+</html>
