@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { TokenManager } from '../utils/tokenManager';
 
 interface UserProfile {
   id: string;
@@ -15,6 +16,9 @@ interface AuthContextType {
   loading: boolean;
   isSuperAdmin: boolean;
   signInWithMagicLink: (email: string) => Promise<{ error: any }>;
+  signInWithCode: (email: string) => Promise<{ error: any; code?: string }>;
+  verifyCode: (email: string, code: string) => Promise<{ error: any; success?: boolean }>;
+  checkUserExists: (email: string) => Promise<{ exists: boolean; error?: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -268,6 +272,193 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const signInWithCode = async (email: string) => {
+    try {
+      console.log('Sending verification code to email:', email);
+      
+      // Generate 4-digit code
+      const code = TokenManager.generateVerificationCode();
+      console.log('Generated verification code:', code);
+
+      // Store the code temporarily (in production, this would be server-side)
+      const codeData = {
+        email: email.toLowerCase().trim(),
+        code: code,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000).getTime(), // 10 minutes
+        attempts: 0,
+      };
+      
+      // Store in sessionStorage for web
+      sessionStorage.setItem('pendingVerification', JSON.stringify(codeData));
+      
+      // Send custom email with 4-digit code using Supabase Edge Function
+      const { data, error } = await supabase.functions.invoke('send-verification-code', {
+        body: {
+          email: email.toLowerCase().trim(),
+          code: code,
+          type: '4-digit'
+        }
+      });
+
+      if (error) {
+        console.error('Edge function failed', error);
+        throw new Error('Failed to send verification code via Edge Function');
+      }
+      
+      console.log('Verification code sent successfully');
+      
+      // In development, return the code for testing
+      if (import.meta.env.DEV) {
+        return { error: null, code };
+      }
+      
+      return { error: null };
+    } catch (err) {
+      console.error('Verification code error', err);
+      return { error: err };
+    }
+  };
+
+  const verifyCode = async (email: string, code: string) => {
+    try {
+      console.log('Verifying code:', { email, code });
+      
+      // Verify against local storage
+      const pendingData = sessionStorage.getItem('pendingVerification');
+      
+      if (!pendingData) {
+        return { error: new Error('No verification code found. Please request a new code.') };
+      }
+
+      const localCode = JSON.parse(pendingData);
+      
+      // Check if code has expired
+      if (Date.now() > localCode.expiresAt) {
+        sessionStorage.removeItem('pendingVerification');
+        return { error: new Error('Verification code has expired. Please request a new one.') };
+      }
+
+      // Check if email matches
+      if (localCode.email !== email.toLowerCase().trim()) {
+        return { error: new Error('Email mismatch. Please try again.') };
+      }
+
+      // Check if code matches
+      if (localCode.code !== code.toUpperCase()) {
+        localCode.attempts = (localCode.attempts || 0) + 1;
+        
+        if (localCode.attempts >= 3) {
+          sessionStorage.removeItem('pendingVerification');
+          return { error: new Error('Too many failed attempts. Please request a new code.') };
+        }
+        
+        sessionStorage.setItem('pendingVerification', JSON.stringify(localCode));
+        return { error: new Error(`Incorrect code. ${3 - localCode.attempts} attempts remaining.`) };
+      }
+
+      // Code is valid! Create session using Edge Function
+      console.log('Code verification successful, creating session via Edge Function');
+      
+      // Clear the verification data
+      sessionStorage.removeItem('pendingVerification');
+      
+      const { data: authResponse, error: authError } = await supabase.functions.invoke('create-session-with-code', {
+        body: {
+          email: email.toLowerCase().trim(),
+          code: code.toUpperCase()
+        }
+      });
+
+      if (authError || !authResponse?.success) {
+        console.error('Auth via Edge Function failed', { authError, authResponse });
+        return { error: new Error('Failed to create session. Please try again.') };
+      }
+
+      console.log('Auth Edge Function succeeded', authResponse);
+
+      // Handle the response from Edge Function
+      if (authResponse.temp_auth?.temp_password) {
+        // Got temporary password - sign in client-side to create proper session
+        console.log('Received temporary password from Edge Function');
+        
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: authResponse.temp_auth.email,
+          password: authResponse.temp_auth.temp_password
+        });
+
+        if (signInError) {
+          console.error('Error signing in with temporary password', signInError);
+          return { error: new Error('Failed to sign in with temporary credentials.') };
+        }
+
+        if (signInData.session && signInData.user) {
+          console.log('Successfully authenticated with temporary password');
+          
+          // Clear the temporary password for security (async, don't wait)
+          supabase.functions.invoke('clear-temp-password', {
+            body: {
+              user_id: authResponse.temp_auth.user_id,
+              temp_password: authResponse.temp_auth.temp_password
+            }
+          }).catch(error => console.warn('Note: Could not clear temp password', error));
+          
+          await TokenManager.setCustomTokenExpiry(signInData.user.id);
+          
+          return { error: null, success: true };
+        } else {
+          return { error: new Error('Temporary password sign-in succeeded but no session established.') };
+        }
+        
+      } else if (authResponse.session?.access_token && authResponse.session?.refresh_token) {
+        // Got direct session tokens - use them immediately
+        console.log('Received session tokens from Edge Function');
+        
+        const { data: sessionData, error: setSessionError } = await supabase.auth.setSession({
+          access_token: authResponse.session.access_token,
+          refresh_token: authResponse.session.refresh_token
+        });
+
+        if (setSessionError) {
+          console.error('Error setting session from Edge Function tokens', setSessionError);
+          return { error: new Error('Failed to establish session with provided tokens.') };
+        }
+
+        if (sessionData.session && sessionData.user) {
+          console.log('Successfully authenticated with direct session tokens');
+          await TokenManager.setCustomTokenExpiry(sessionData.user.id);
+          return { error: null, success: true };
+        } else {
+          return { error: new Error('Token setting succeeded but no session established.') };
+        }
+      }
+
+      return { error: new Error('Server error: No session tokens received after verification.') };
+      
+    } catch (error) {
+      console.error('Code verification exception', error);
+      return { error: new Error('Verification failed. Please try again.') };
+    }
+  };
+
+  const checkUserExists = async (email: string) => {
+    try {
+      // Use the Edge Function to check if user exists
+      const { data: response, error } = await supabase.functions.invoke('check-user-exists', {
+        body: { email: email.toLowerCase().trim() }
+      });
+
+      if (error) {
+        console.error('Error checking user existence', error);
+        return { exists: false, error };
+      }
+
+      return { exists: response?.exists || false };
+    } catch (error) {
+      console.error('Exception checking user existence', error);
+      return { exists: false, error };
+    }
+  };
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
@@ -280,6 +471,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loading,
     isSuperAdmin,
     signInWithMagicLink,
+    signInWithCode,
+    verifyCode,
+    checkUserExists,
     signOut,
   };
 

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { PhotoPicker } from './PhotoPicker';
 import { ImageUploader } from './ImageUploader';
+import { adminApi } from '../../services/adminApi';
 
 interface Album {
   id: string;
@@ -63,57 +63,24 @@ export const AlbumsManager: React.FC = () => {
   }, [user?.id]);
 
   const loadAlbums = async () => {
+    if (!user?.id) {
+      console.warn('No user ID available for filtering albums');
+      setAlbums([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      // Load albums first
-      const { data: albumsData, error: albumsError } = await supabase
-        .from('albums')
-        .select('*')
-        .order('date_modified', { ascending: false });
-
-      if (albumsError) throw albumsError;
-
-      let enrichedAlbums = albumsData || [];
-
-      if (albumsData && albumsData.length > 0) {
-        // Load related data separately
-        const albumIds = albumsData.map(album => album.id);
-        const userIds = albumsData.map(album => album.user_id);
-
-        // Load profiles
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', userIds);
-
-        // Load album assets
-        const { data: assetsData } = await supabase
-          .from('album_assets')
-          .select('id, album_id, asset_uri, asset_type')
-          .in('album_id', albumIds);
-
-        // Load album shares with circles
-        const { data: sharesData } = await supabase
-          .from('album_shares')
-          .select(`
-            id,
-            album_id,
-            circle_id,
-            role,
-            is_active,
-            circles!inner(id, name)
-          `)
-          .in('album_id', albumIds);
-
-        // Merge all data
-        enrichedAlbums = albumsData.map(album => ({
-          ...album,
-          profiles: profilesData?.find(profile => profile.id === album.user_id) || null,
-          album_assets: assetsData?.filter(asset => asset.album_id === album.id) || [],
-          album_shares: sharesData?.filter(share => share.album_id === album.id) || []
-        }));
+      setError(null);
+      
+      const result = await adminApi.getAlbums();
+      
+      if (!result.success) {
+        throw new Error(adminApi.handleApiError(result));
       }
 
+      const enrichedAlbums = result.data?.albums || [];
       setAlbums(enrichedAlbums);
       
       // Debug log keyphoto values
@@ -127,7 +94,6 @@ export const AlbumsManager: React.FC = () => {
         });
       });
       
-      setError(null); // Clear any previous errors on successful load
       setFailedImages(new Set()); // Reset failed images when data reloads
     } catch (err) {
       console.error('Error loading albums:', err);
@@ -138,17 +104,24 @@ export const AlbumsManager: React.FC = () => {
   };
 
   const loadCircles = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('circles')
-        .select('id, name, description')
-        .eq('is_active', true)
-        .order('name');
+    if (!user?.id) {
+      console.warn('No user ID available for filtering circles');
+      setCircles([]);
+      return;
+    }
 
-      if (error) throw error;
-      setCircles(data || []);
+    try {
+      const result = await adminApi.getCircles();
+      
+      if (result.success) {
+        setCircles(result.data?.circles || []);
+      } else {
+        console.error('Error loading circles:', adminApi.handleApiError(result));
+        setCircles([]);
+      }
     } catch (err) {
       console.error('Error loading circles:', err);
+      setCircles([]);
     }
   };
 
@@ -205,12 +178,12 @@ export const AlbumsManager: React.FC = () => {
     if (!confirm('Are you sure you want to delete this album? This action cannot be undone.')) return;
 
     try {
-      const { error } = await supabase
-        .from('albums')
-        .update({ is_active: false })
-        .eq('id', albumId);
-
-      if (error) throw error;
+      const result = await adminApi.deleteAlbum(albumId);
+      
+      if (!result.success) {
+        throw new Error(adminApi.handleApiError(result));
+      }
+      
       await loadAlbums();
       if (selectedAlbum?.id === albumId) {
         setSelectedAlbum(null);
@@ -495,7 +468,7 @@ export const AlbumsManager: React.FC = () => {
         <div className="text-center py-16">
           <div className="text-6xl mb-4 opacity-50">📁</div>
           <h3 className="text-2xl font-bold text-gray-700 mb-2">No Albums Found</h3>
-          <p className="text-gray-500">Albums created by users will appear here.</p>
+          <p className="text-gray-500">Your albums will appear here when you create them.</p>
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { adminApi } from '../../services/adminApi';
 
 interface Invitation {
   id: string;
@@ -60,61 +60,44 @@ export const InvitesManager: React.FC = () => {
 
   useEffect(() => {
     if (user?.id) {
-      loadInvitations();
-      loadCircles();
+      loadInvitations(); // This now loads both invitations and circles
     } else {
       setLoading(false);
     }
   }, [user?.id]);
 
+  // Stats are now calculated on backend, no need for local calculation
   useEffect(() => {
-    calculateStats();
+    // No-op: stats come from API
   }, [invitations]);
 
   const loadInvitations = async () => {
+    if (!user?.id) {
+      console.warn('No user ID available for filtering invitations');
+      setInvitations([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
+      setError(null);
       
-      // Load circle_users first
-      const { data: invitesData, error: invitesError } = await supabase
-        .from('circle_users')
-        .select('*')
-        .order('date_invited', { ascending: false });
-
-      if (invitesError) throw invitesError;
-
-      let enrichedInvitations = invitesData || [];
-
-      if (invitesData && invitesData.length > 0) {
-        // Get unique IDs for related data
-        const circleIds = [...new Set(invitesData.map(invite => invite.circle_id))];
-        const userIds = [...new Set(invitesData.map(invite => invite.user_id).filter(Boolean))];
-        const inviterIds = [...new Set(invitesData.map(invite => invite.invited_by).filter(Boolean))];
-        const allUserIds = [...new Set([...userIds, ...inviterIds])];
-
-        // Load circles
-        const { data: circlesData } = await supabase
-          .from('circles')
-          .select('id, name, description')
-          .in('id', circleIds);
-
-        // Load profiles
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', allUserIds);
-
-        // Merge all data
-        enrichedInvitations = invitesData.map(invite => ({
-          ...invite,
-          circles: circlesData?.find(circle => circle.id === invite.circle_id) || { id: invite.circle_id, name: 'Unknown Circle', description: null },
-          invited_by_profile: profilesData?.find(profile => profile.id === invite.invited_by) || null,
-          user_profile: invite.user_id ? profilesData?.find(profile => profile.id === invite.user_id) || null : null
-        }));
+      const result = await adminApi.getInvitations();
+      
+      if (!result.success) {
+        throw new Error(adminApi.handleApiError(result));
       }
 
-      setInvitations(enrichedInvitations);
-      setError(null); // Clear any previous errors on successful load
+      setInvitations(result.data?.invitations || []);
+      setStats(result.data?.stats || {
+        total_invites: 0,
+        pending_invites: 0,
+        accepted_invites: 0,
+        declined_invites: 0,
+      });
+      setCircles(result.data?.circles || []);
+      setError(null);
     } catch (err) {
       console.error('Error loading invitations:', err);
       setError(err instanceof Error ? err.message : 'Failed to load invitations');
@@ -124,32 +107,15 @@ export const InvitesManager: React.FC = () => {
   };
 
   const loadCircles = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('circles')
-        .select('id, name, description')
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
-      setCircles(data || []);
-    } catch (err) {
-      console.error('Error loading circles:', err);
-    }
+    // Circles are now loaded as part of loadInvitations()
+    // This method is kept for compatibility but does nothing
+    return;
   };
 
   const calculateStats = () => {
-    const total = invitations.length;
-    const pending = invitations.filter(inv => inv.status === 'pending').length;
-    const accepted = invitations.filter(inv => inv.status === 'accepted').length;
-    const declined = invitations.filter(inv => inv.status === 'declined').length;
-
-    setStats({
-      total_invites: total,
-      pending_invites: pending,
-      accepted_invites: accepted,
-      declined_invites: declined,
-    });
+    // Stats are now calculated on the backend and loaded with invitations
+    // This method is kept for compatibility but does nothing
+    return;
   };
 
   const handleSendInvitation = async (e: React.FormEvent) => {
@@ -158,37 +124,14 @@ export const InvitesManager: React.FC = () => {
     const formData = new FormData(form);
 
     try {
-      const { data, error } = await supabase
-        .from('circle_users')
-        .insert([
-          {
-            circle_id: formData.get('circle_id') as string,
-            email: formData.get('email') as string,
-            role: formData.get('role') as string,
-            invited_by: user!.id,
-          }
-        ])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Send email invitation
-      const { error: emailError } = await supabase.functions.invoke('send-email', {
-        body: {
-          to: formData.get('email') as string,
-          type: 'invitation',
-          data: {
-            circle_name: circles.find(c => c.id === formData.get('circle_id'))?.name,
-            role: formData.get('role') as string,
-            invite_id: data.id,
-          }
-        }
+      const result = await adminApi.sendInvitation({
+        circle_id: formData.get('circle_id') as string,
+        email: formData.get('email') as string,
+        role: formData.get('role') as string,
       });
-
-      if (emailError) {
-        console.warn('Email sending failed:', emailError);
-        // Don't fail the whole operation if email fails
+      
+      if (!result.success) {
+        throw new Error(adminApi.handleApiError(result));
       }
 
       setShowInviteForm(false);
@@ -202,19 +145,12 @@ export const InvitesManager: React.FC = () => {
 
   const handleResendInvitation = async (inviteId: string, email: string, circleName: string, role: string) => {
     try {
-      const { error } = await supabase.functions.invoke('send-email', {
-        body: {
-          to: email,
-          type: 'invitation',
-          data: {
-            circle_name: circleName,
-            role: role,
-            invite_id: inviteId,
-          }
-        }
-      });
-
-      if (error) throw error;
+      const result = await adminApi.resendInvitation(inviteId);
+      
+      if (!result.success) {
+        throw new Error(adminApi.handleApiError(result));
+      }
+      
       alert('Invitation resent successfully!');
     } catch (err) {
       console.error('Error resending invitation:', err);
@@ -226,12 +162,12 @@ export const InvitesManager: React.FC = () => {
     if (!confirm('Are you sure you want to cancel this invitation?')) return;
 
     try {
-      const { error } = await supabase
-        .from('circle_users')
-        .update({ status: 'cancelled' })
-        .eq('id', inviteId);
-
-      if (error) throw error;
+      const result = await adminApi.cancelInvitation(inviteId);
+      
+      if (!result.success) {
+        throw new Error(adminApi.handleApiError(result));
+      }
+      
       await loadInvitations();
     } catch (err) {
       console.error('Error cancelling invitation:', err);
@@ -475,7 +411,7 @@ export const InvitesManager: React.FC = () => {
           <h3 className="text-2xl font-bold text-gray-700 mb-2">No Invitations Found</h3>
           <p className="text-gray-500">
             {selectedStatus === 'all' && selectedCircle === 'all' 
-              ? 'No invitations have been sent yet.' 
+              ? 'You haven\'t sent any invitations yet. Create circles and invite people to start sharing!' 
               : 'No invitations match your current filters.'}
           </p>
         </div>

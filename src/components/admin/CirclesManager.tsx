@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { adminApi } from '../../services/adminApi';
+import { supabase } from '../../lib/supabase';
 
 interface Circle {
   id: string;
@@ -49,62 +50,42 @@ export const CirclesManager: React.FC = () => {
   }, [user?.id]);
 
   const loadCircles = async () => {
+    if (!user?.id) {
+      console.warn('No user ID available for filtering circles');
+      setCircles([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
       
-      // First, ensure the user has a profile
-      if (user) {
-        try {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .upsert({
-              id: user.id,
-              email: user.email,
-              full_name: user.user_metadata?.full_name || null,
-            }, {
-              onConflict: 'id'
-            });
-
-          if (profileError) {
-            console.warn('Profile upsert warning:', profileError);
-          }
-        } catch (profileErr) {
-          console.warn('Profile upsert failed, continuing anyway:', profileErr);
-        }
+      console.log('Loading circles for user:', user?.id);
+      
+      // Debug authentication state  
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      console.log('Current session state:', {
+        hasSession: !!session,
+        hasToken: !!session?.access_token,
+        userId: session?.user?.id,
+        userEmail: session?.user?.email,
+        sessionError
+      });
+      
+      if (!session?.access_token) {
+        throw new Error('No valid authentication session. Please log in again.');
+      }
+      
+      const result = await adminApi.getCircles();
+      console.log('Circles API result:', result);
+      
+      if (!result.success) {
+        throw new Error(adminApi.handleApiError(result));
       }
 
-      // Load circles first
-      const { data: circlesData, error: circlesError } = await supabase
-        .from('circles')
-        .select('*')
-        .eq('is_active', true)
-        .order('date_created', { ascending: false });
-
-      if (circlesError) throw circlesError;
-
-      // Then load profiles for the owners
-      let enrichedCircles = circlesData || [];
-      if (circlesData && circlesData.length > 0) {
-        const ownerIds = circlesData.map(circle => circle.owner_id);
-        const { data: profilesData, error: profilesError } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', ownerIds);
-
-        if (profilesError) {
-          console.warn('Error loading profiles:', profilesError);
-        }
-
-        // Merge profile data with circles
-        enrichedCircles = circlesData.map(circle => ({
-          ...circle,
-          profiles: profilesData?.find(profile => profile.id === circle.owner_id) || null
-        }));
-      }
-
-      setCircles(enrichedCircles);
-      setError(null); // Clear any previous errors on successful load
+      setCircles(result.data?.circles || []);
+      setError(null);
     } catch (err) {
       console.error('Error loading circles:', err);
       setError(err instanceof Error ? err.message : 'Failed to load circles');
@@ -115,21 +96,17 @@ export const CirclesManager: React.FC = () => {
 
   const loadCircleUsers = async (circleId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('circle_users')
-        .select(`
-          *,
-          profiles:user_id(full_name, email)
-        `)
-        .eq('circle_id', circleId)
-        .order('date_invited', { ascending: false });
-
-      if (error) throw error;
-      setCircleUsers(data || []);
+      const result = await adminApi.getCircleUsers(circleId);
+      
+      if (result.success) {
+        setCircleUsers(result.data?.users || []);
+      } else {
+        console.warn('Circle users could not be loaded:', adminApi.handleApiError(result));
+        setCircleUsers([]);
+      }
     } catch (err) {
       console.error('Error loading circle users:', err);
-      // Don't set error for circle users as it's not critical
-      console.warn('Circle users could not be loaded');
+      setCircleUsers([]);
     }
   };
 
@@ -144,19 +121,14 @@ export const CirclesManager: React.FC = () => {
     const formData = new FormData(form);
     
     try {
-      const { data, error } = await supabase
-        .from('circles')
-        .insert([
-          {
-            name: formData.get('name') as string,
-            description: formData.get('description') as string || null,
-            owner_id: user!.id,
-          }
-        ])
-        .select()
-        .single();
-
-      if (error) throw error;
+      const result = await adminApi.createCircle({
+        name: formData.get('name') as string,
+        description: formData.get('description') as string || undefined,
+      });
+      
+      if (!result.success) {
+        throw new Error(adminApi.handleApiError(result));
+      }
 
       setShowNewCircleForm(false);
       form.reset();
@@ -175,20 +147,14 @@ export const CirclesManager: React.FC = () => {
     const formData = new FormData(form);
     
     try {
-      const { data, error } = await supabase
-        .from('circle_users')
-        .insert([
-          {
-            circle_id: selectedCircle.id,
-            email: formData.get('email') as string,
-            role: formData.get('role') as string,
-            invited_by: user!.id,
-          }
-        ])
-        .select()
-        .single();
-
-      if (error) throw error;
+      const result = await adminApi.inviteUserToCircle(selectedCircle.id, {
+        email: formData.get('email') as string,
+        role: formData.get('role') as string,
+      });
+      
+      if (!result.success) {
+        throw new Error(adminApi.handleApiError(result));
+      }
 
       setShowInviteForm(false);
       form.reset();
@@ -260,7 +226,7 @@ export const CirclesManager: React.FC = () => {
           <div className="divide-y">
             {circles.length === 0 ? (
               <div className="p-6 text-center text-gray-500">
-                No circles found. Create your first circle!
+                No circles found. Create your first circle to start sharing photos!
               </div>
             ) : (
               circles.map(circle => (

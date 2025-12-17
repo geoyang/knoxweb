@@ -52,11 +52,39 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
     loadUserAlbums();
   }, [user?.id]);
 
-  // Upload to ImageKit
-  const uploadToImageKit = async (file: File): Promise<string> => {
-    if (!import.meta.env.VITE_IMAGEKIT_KEY || import.meta.env.VITE_IMAGEKIT_KEY.trim() === '') {
-      throw new Error('ImageKit key not configured, using Supabase fallback');
+  // Upload to ImageKit and generate thumbnail
+  const uploadToImageKit = async (file: File): Promise<{ originalUrl: string, thumbnailUrl: string }> => {
+    // Debug environment variables
+    console.log('Available env vars:', {
+      VITE_IMAGEKIT_KEY: import.meta.env.VITE_IMAGEKIT_KEY?.substring(0, 20) + '...',
+      VITE_IMAGEKIT_URL: import.meta.env.VITE_IMAGEKIT_URL,
+      EXPO_PUBLIC_IMAGEKIT_URL: import.meta.env.EXPO_PUBLIC_IMAGEKIT_URL,
+      NODE_ENV: import.meta.env.NODE_ENV,
+      MODE: import.meta.env.MODE
+    });
+    
+    // Use the private key for authentication
+    const imagekitPrivateKey = import.meta.env.VITE_IMAGEKIT_KEY;
+    const imagekitUrl = import.meta.env.VITE_IMAGEKIT_URL || import.meta.env.EXPO_PUBLIC_IMAGEKIT_URL;
+    
+    if (!imagekitPrivateKey || imagekitPrivateKey.trim() === '') {
+      console.error('ImageKit private key not available:', {
+        hasKey: !!imagekitPrivateKey,
+        keyLength: imagekitPrivateKey?.length,
+        keyStart: imagekitPrivateKey?.substring(0, 10)
+      });
+      throw new Error('ImageKit private key not configured, using Supabase fallback');
     }
+    
+    if (!imagekitUrl || imagekitUrl.trim() === '') {
+      throw new Error('ImageKit URL not configured, using Supabase fallback');
+    }
+    
+    console.log('Using ImageKit with URL:', imagekitUrl);
+    console.log('Private key format check:', {
+      length: imagekitPrivateKey.length,
+      startsWithPrivate: imagekitPrivateKey.startsWith('private_')
+    });
     
     const formData = new FormData();
     formData.append('file', file);
@@ -66,25 +94,83 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
     const response = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${btoa(import.meta.env.VITE_IMAGEKIT_KEY + ':')}`
+        'Authorization': `Basic ${btoa(imagekitPrivateKey + ':')}`
       },
       body: formData
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`ImageKit upload failed: ${error}`);
+      const errorText = await response.text();
+      console.error('ImageKit upload error:', errorText);
+      throw new Error(`ImageKit upload failed: ${errorText}`);
     }
 
     const result = await response.json();
-    return result.url;
+    console.log('ImageKit upload result:', result);
+    
+    const originalUrl = result.url;
+    
+    // Generate thumbnail URL using ImageKit transformation
+    const thumbnailUrl = originalUrl + '?tr=w-80,h-80,c-at_max';
+    
+    return { originalUrl, thumbnailUrl };
+  };
+
+  // Create thumbnail from canvas for Supabase uploads
+  const createThumbnailBlob = async (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // Set canvas size to 80x80
+        canvas.width = 80;
+        canvas.height = 80;
+        
+        // Calculate aspect ratio
+        const aspectRatio = img.width / img.height;
+        let drawWidth, drawHeight, offsetX, offsetY;
+        
+        if (aspectRatio > 1) {
+          // Landscape
+          drawHeight = 80;
+          drawWidth = 80 * aspectRatio;
+          offsetX = -(drawWidth - 80) / 2;
+          offsetY = 0;
+        } else {
+          // Portrait
+          drawWidth = 80;
+          drawHeight = 80 / aspectRatio;
+          offsetX = 0;
+          offsetY = -(drawHeight - 80) / 2;
+        }
+        
+        // Clear canvas and draw image
+        ctx!.clearRect(0, 0, 80, 80);
+        ctx!.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+        
+        // Convert to blob
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Failed to create thumbnail blob'));
+          }
+        }, 'image/jpeg', 0.8);
+      };
+      
+      img.onerror = () => reject(new Error('Failed to load image for thumbnail'));
+      img.src = URL.createObjectURL(file);
+    });
   };
 
   // Upload to Supabase Storage as fallback
-  const uploadToSupabase = async (file: File): Promise<string> => {
+  const uploadToSupabase = async (file: File): Promise<{ originalUrl: string, thumbnailUrl: string }> => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${user!.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
 
+    // Upload original file
     const { data, error } = await supabase.storage
       .from('assets')
       .upload(fileName, file);
@@ -93,21 +179,42 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
       throw error;
     }
 
+    // Generate and upload thumbnail for images
+    let thumbnailUrl = '';
+    if (file.type.startsWith('image/')) {
+      try {
+        const thumbnailBlob = await createThumbnailBlob(file);
+        const thumbnailFileName = `${user!.id}/thumbnails/${Date.now()}_${Math.random().toString(36).substr(2, 9)}_thumb.jpg`;
+        
+        const { data: thumbData, error: thumbError } = await supabase.storage
+          .from('assets')
+          .upload(thumbnailFileName, thumbnailBlob);
+          
+        if (!thumbError && thumbData) {
+          const { data: thumbUrlData } = supabase.storage
+            .from('assets')
+            .getPublicUrl(thumbData.path);
+          thumbnailUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/assets/${thumbData.path}`;
+        }
+      } catch (thumbError) {
+        console.warn('Failed to create thumbnail, using original image:', thumbError);
+      }
+    }
+
     const { data: publicUrlData } = supabase.storage
       .from('assets')
       .getPublicUrl(data.path);
 
+    // Manual URL construction as workaround for URL duplication bug
+    const originalUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/assets/${data.path}`;
+    
     console.log('Supabase upload successful:', {
       uploadPath: data.path,
-      publicUrl: publicUrlData.publicUrl,
-      publicUrlData: publicUrlData
+      originalUrl: originalUrl,
+      thumbnailUrl: thumbnailUrl
     });
 
-    // Manual URL construction as workaround for URL duplication bug
-    const manualUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/assets/${data.path}`;
-    console.log('Manual URL:', manualUrl);
-
-    return manualUrl;
+    return { originalUrl, thumbnailUrl: thumbnailUrl || originalUrl };
   };
 
   // Create new album if needed
@@ -250,15 +357,15 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
         f.id === fileObj.id ? { ...f, status: 'uploading', progress: 0 } : f
       ));
 
-      let uploadUrl: string;
+      let uploadResult: { originalUrl: string, thumbnailUrl: string };
       
       try {
         // Try ImageKit first
-        uploadUrl = await uploadToImageKit(fileObj.file);
+        uploadResult = await uploadToImageKit(fileObj.file);
       } catch (imagekitError) {
         console.warn('ImageKit upload failed, trying Supabase:', imagekitError);
         // Fallback to Supabase
-        uploadUrl = await uploadToSupabase(fileObj.file);
+        uploadResult = await uploadToSupabase(fileObj.file);
       }
 
       // Update progress to 75% after upload
@@ -276,11 +383,12 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
 
       const displayOrder = (maxOrderData?.[0]?.display_order || 0) + 1;
 
-      // Create album asset entry
+      // Create album asset entry with thumbnail
       const assetData = {
         album_id: albumId,
         asset_id: generateId(),
-        asset_uri: uploadUrl,
+        asset_uri: uploadResult.originalUrl,
+        thumbnail_uri: uploadResult.thumbnailUrl,
         asset_type: fileObj.file.type.startsWith('video/') ? 'video' : 'image',
         display_order: displayOrder,
         date_added: new Date().toISOString(),
@@ -299,7 +407,7 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
 
       // Update status to success
       setUploadedFiles(prev => prev.map(f => 
-        f.id === fileObj.id ? { ...f, status: 'success', progress: 100, url: uploadUrl } : f
+        f.id === fileObj.id ? { ...f, status: 'success', progress: 100, url: uploadResult.originalUrl } : f
       ));
 
     } catch (error) {

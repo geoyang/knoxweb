@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { StandaloneImageUploader } from './StandaloneImageUploader';
+import { adminApi } from '../../services/adminApi';
+import { supabase } from '../../lib/supabase';
 
 interface Asset {
   id: string;
   asset_id: string;
   asset_uri: string;
+  thumbnail_uri?: string;
   asset_type: 'image' | 'video';
   date_added: string;
   album_id: string;
@@ -40,6 +42,7 @@ export const ImagesManager: React.FC = () => {
   const [sortBy, setSortBy] = useState<'date_added' | 'album' | 'type'>('date_added');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showImageUploader, setShowImageUploader] = useState(false);
+  const imageUrlsRef = useRef<Map<string, string>>(new Map());
 
   const { user } = useAuth();
 
@@ -49,6 +52,205 @@ export const ImagesManager: React.FC = () => {
     return url.startsWith('http://') || url.startsWith('https://');
   };
 
+  // Get thumbnail URL - use stored thumbnail_uri if available
+  const getThumbnailUrl = (asset: Asset): string => {
+    // Use stored thumbnail if available
+    if (asset.thumbnail_uri && isWebAccessibleUrl(asset.thumbnail_uri)) {
+      return asset.thumbnail_uri;
+    }
+    
+    // Legacy fallback: If it's an ImageKit URL, add thumbnail transformation
+    if (asset.asset_uri.includes('imagekit.io')) {
+      const url = new URL(asset.asset_uri);
+      // Add ImageKit transformation for 80x80 thumbnail
+      url.searchParams.set('tr', 'w-80,h-80,c-at_max');
+      return url.toString();
+    }
+    
+    // For Supabase storage without stored thumbnail, use original
+    return asset.asset_uri;
+  };
+
+  // Helper function to fetch authenticated images from Supabase
+  const fetchAuthenticatedImage = async (filePath: string, cacheKey: string): Promise<string> => {
+    // Get current session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('No authentication token available');
+    }
+    
+    // Fetch image with authentication
+    const imageUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/serve-image?path=${encodeURIComponent(filePath)}`;
+    const response = await fetch(imageUrl, {
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    }
+    
+    // Convert to blob URL
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    
+    // Cache the blob URL
+    imageUrlsRef.current.set(cacheKey, blobUrl);
+    
+    return blobUrl;
+  };
+
+  // Get authenticated image URL using fetch with auth headers, return as blob URL
+  const getAuthenticatedImageBlob = useCallback(async (asset: Asset, useThumbnail: boolean = false): Promise<string> => {
+    const cacheKey = `${asset.id}_${useThumbnail ? 'thumb' : 'full'}`;
+    
+    // Check cache first
+    const cached = imageUrlsRef.current.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // For thumbnails, use the stored thumbnail_uri if available
+    if (useThumbnail && asset.thumbnail_uri && isWebAccessibleUrl(asset.thumbnail_uri)) {
+      // Check if it's ImageKit (can be used directly) or Supabase (needs auth)
+      if (asset.thumbnail_uri.includes('imagekit.io')) {
+        imageUrlsRef.current.set(cacheKey, asset.thumbnail_uri);
+        return asset.thumbnail_uri;
+      }
+      
+      // Supabase thumbnail - needs auth fetch
+      if (asset.thumbnail_uri.includes('supabase.co/storage')) {
+        const urlParts = asset.thumbnail_uri.split('/storage/v1/object/public/assets/');
+        if (urlParts.length === 2) {
+          const filePath = urlParts[1];
+          return await fetchAuthenticatedImage(filePath, cacheKey);
+        }
+      }
+    }
+
+    // For full images or fallback for thumbnails
+    if (asset.asset_uri.includes('imagekit.io')) {
+      // ImageKit URLs can be used directly
+      let url = asset.asset_uri;
+      if (useThumbnail) {
+        const urlObj = new URL(asset.asset_uri);
+        urlObj.searchParams.set('tr', 'w-80,h-80,c-at_max');
+        url = urlObj.toString();
+      }
+      
+      // Cache and return
+      imageUrlsRef.current.set(cacheKey, url);
+      return url;
+    }
+    
+    if (asset.asset_uri.includes('supabase.co/storage')) {
+      const urlParts = asset.asset_uri.split('/storage/v1/object/public/assets/');
+      if (urlParts.length === 2) {
+        const filePath = urlParts[1];
+        return await fetchAuthenticatedImage(filePath, cacheKey);
+      }
+    }
+    
+    return asset.asset_uri; // Fallback to original
+  }, []);
+
+  // Component for image display with authentication headers
+  const AuthenticatedImage: React.FC<{
+    asset: Asset;
+    className?: string;
+    alt?: string;
+    onError?: (e: any) => void;
+    onLoad?: () => void;
+    style?: React.CSSProperties;
+    useThumbnail?: boolean;
+  }> = React.memo(({ asset, className, alt, onError, onLoad, style, useThumbnail = true }) => {
+    const [imageSrc, setImageSrc] = useState<string>('');
+    const [imageLoading, setImageLoading] = useState(true);
+    const [imageError, setImageError] = useState(false);
+    const [hasLoaded, setHasLoaded] = useState(false);
+
+    useEffect(() => {
+      // Prevent loading if we've already loaded this asset with this thumbnail setting
+      const cacheKey = `${asset.id}_${useThumbnail ? 'thumb' : 'full'}`;
+      if (hasLoaded && imageUrlsRef.current.has(cacheKey)) {
+        setImageSrc(imageUrlsRef.current.get(cacheKey)!);
+        setImageLoading(false);
+        return;
+      }
+
+      const loadImage = async () => {
+        if (!isWebAccessibleUrl(asset.asset_uri)) {
+          setImageLoading(false);
+          return;
+        }
+
+        try {
+          console.log(`Loading ${useThumbnail ? 'thumbnail' : 'full-size'} image for asset:`, asset.id);
+          
+          // Use the authenticated blob method
+          const imageUrl = await getAuthenticatedImageBlob(asset, useThumbnail);
+          setImageSrc(imageUrl);
+          setHasLoaded(true);
+          
+          console.log(`${useThumbnail ? 'Thumbnail' : 'Full-size'} image loaded:`, imageUrl.substring(0, 50) + '...');
+        } catch (error) {
+          console.error('Failed to load authenticated image:', error);
+          setImageError(true);
+        }
+        
+        setImageLoading(false);
+      };
+
+      loadImage();
+    }, [asset.id, asset.asset_uri, useThumbnail]); // Remove dependencies that cause loops
+
+    if (imageLoading) {
+      return (
+        <div className={`bg-gray-200 animate-pulse ${className || ''}`} style={style}>
+          <div className="w-full h-full flex items-center justify-center text-gray-400">
+            Loading...
+          </div>
+        </div>
+      );
+    }
+
+    if (!isWebAccessibleUrl(asset.asset_uri) || imageError) {
+      return (
+        <div className={`w-full h-full flex flex-col items-center justify-center text-gray-500 ${className || ''}`} style={style}>
+          <div className="text-3xl mb-2">{asset.asset_type === 'video' ? '🎥' : '📸'}</div>
+          <div className="text-xs text-center px-2">
+            {imageError ? 'Failed to load' : `${asset.asset_type === 'video' ? 'Video' : 'Image'} not available in web view`}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <img
+        src={imageSrc}
+        alt={alt}
+        className={className}
+        style={style}
+        loading="lazy"
+        onError={(e) => {
+          console.error('Image failed to load:', {
+            src: imageSrc,
+            originalSrc: asset.asset_uri,
+            error: e,
+            asset: asset
+          });
+          setImageError(true);
+          onError?.(e);
+        }}
+        onLoad={() => {
+          console.log('Image loaded successfully:', imageSrc);
+          onLoad?.();
+        }}
+      />
+    );
+  });
+
   useEffect(() => {
     if (user?.id) {
       loadAssets();
@@ -56,6 +258,17 @@ export const ImagesManager: React.FC = () => {
       setLoading(false);
     }
   }, [user?.id, filterType, sortBy]);
+
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      imageUrlsRef.current.forEach((url) => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, []);
 
   const handleImagesUploaded = async (count: number) => {
     console.log(`Uploaded ${count} new images`);
@@ -74,62 +287,19 @@ export const ImagesManager: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Get user's albums first
-      const { data: albumsData, error: albumsError } = await supabase
-        .from('albums')
-        .select('id, title, user_id')
-        .eq('user_id', user.id);
-
-      if (albumsError) throw albumsError;
-
-      if (!albumsData || albumsData.length === 0) {
-        setAssets([]);
-        setStats({
-          total_images: 0,
-          total_videos: 0,
-          total_albums: 0,
-          recent_uploads: 0,
-        });
-        setError(null); // Clear any previous errors
-        return;
+      const result = await adminApi.getImages(filterType, sortBy);
+      
+      if (!result.success) {
+        throw new Error(adminApi.handleApiError(result));
       }
 
-      const albumIds = albumsData.map(album => album.id);
-
-      // Build query for assets
-      let query = supabase
-        .from('album_assets')
-        .select('*')
-        .in('album_id', albumIds);
-
-      // Apply filter
-      if (filterType !== 'all') {
-        query = query.eq('asset_type', filterType);
-      }
-
-      // Apply sort
-      const ascending = false; // Most recent first by default
-      switch (sortBy) {
-        case 'date_added':
-          query = query.order('date_added', { ascending });
-          break;
-        case 'album':
-          query = query.order('album_id').order('display_order');
-          break;
-        case 'type':
-          query = query.order('asset_type').order('date_added', { ascending });
-          break;
-      }
-
-      const { data: assetsData, error: assetsError } = await query;
-
-      if (assetsError) throw assetsError;
-
-      // Merge album info with assets
-      const enrichedAssets = (assetsData || []).map(asset => ({
-        ...asset,
-        album: albumsData.find(album => album.id === asset.album_id)
-      }));
+      const enrichedAssets = result.data?.assets || [];
+      const statsData = result.data?.stats || {
+        total_images: 0,
+        total_videos: 0,
+        total_albums: 0,
+        recent_uploads: 0,
+      };
 
       console.log('Loaded assets:', enrichedAssets.map(asset => ({
         id: asset.id,
@@ -138,27 +308,8 @@ export const ImagesManager: React.FC = () => {
       })));
 
       setAssets(enrichedAssets);
-
-      // Calculate stats
-      const totalImages = enrichedAssets.filter(asset => asset.asset_type === 'image').length;
-      const totalVideos = enrichedAssets.filter(asset => asset.asset_type === 'video').length;
-      const totalAlbums = albumsData.length;
-      
-      // Recent uploads (last 7 days)
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const recentUploads = enrichedAssets.filter(
-        asset => new Date(asset.date_added) > sevenDaysAgo
-      ).length;
-
-      setStats({
-        total_images: totalImages,
-        total_videos: totalVideos,
-        total_albums: totalAlbums,
-        recent_uploads: recentUploads,
-      });
-
-      setError(null); // Clear any previous errors on successful load
+      setStats(statsData);
+      setError(null);
 
     } catch (err) {
       console.error('Error loading assets:', err);
@@ -172,12 +323,11 @@ export const ImagesManager: React.FC = () => {
     if (!confirm('Are you sure you want to remove this image from the album?')) return;
 
     try {
-      const { error } = await supabase
-        .from('album_assets')
-        .delete()
-        .eq('id', assetId);
-
-      if (error) throw error;
+      const result = await adminApi.deleteAsset(assetId);
+      
+      if (!result.success) {
+        throw new Error(adminApi.handleApiError(result));
+      }
       
       // Refresh the assets list
       await loadAssets();
@@ -300,36 +450,11 @@ export const ImagesManager: React.FC = () => {
               className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative group"
               onClick={() => setSelectedAsset(asset)}
             >
-              {(() => {
-                const isAccessible = isWebAccessibleUrl(asset.asset_uri);
-                console.log('Rendering asset:', asset.id, 'URL:', asset.asset_uri, 'isAccessible:', isAccessible);
-                return isAccessible;
-              })() ? (
-                <img
-                  src={asset.asset_uri}
-                  alt={`Asset from ${asset.album?.title || 'Unknown Album'}`}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  onError={(e) => {
-                    console.error('Image failed to load:', {
-                      src: asset.asset_uri,
-                      error: e,
-                      asset: asset
-                    });
-                  }}
-                  onLoad={() => {
-                    console.log('Image loaded successfully:', asset.asset_uri);
-                  }}
-                  style={{ border: '2px solid red' }}
-                />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
-                  <div className="text-3xl mb-2">{asset.asset_type === 'video' ? '🎥' : '📸'}</div>
-                  <div className="text-xs text-center px-2">
-                    {asset.asset_type === 'video' ? 'Video' : 'Image'} not available in web view
-                  </div>
-                </div>
-              )}
+              <AuthenticatedImage
+                asset={asset}
+                alt={`Asset from ${asset.album?.title || 'Unknown Album'}`}
+                className="w-full h-full object-cover"
+              />
               {asset.asset_type === 'video' && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="bg-black/50 rounded-full p-2">
@@ -371,27 +496,11 @@ export const ImagesManager: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-16 w-16 bg-gray-100 rounded-lg overflow-hidden">
-                        {isWebAccessibleUrl(asset.asset_uri) ? (
-                          <img
-                            src={asset.asset_uri}
-                            alt="Asset thumbnail"
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              console.error('List view image failed to load:', {
-                                src: asset.asset_uri,
-                                error: e,
-                                asset: asset
-                              });
-                            }}
-                            onLoad={() => {
-                              console.log('List view image loaded successfully:', asset.asset_uri);
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400">
-                            {asset.asset_type === 'video' ? '🎥' : '📸'}
-                          </div>
-                        )}
+                        <AuthenticatedImage
+                          asset={asset}
+                          alt="Asset thumbnail"
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                       <div className="ml-4">
                         <div className="text-sm text-gray-500">
@@ -478,17 +587,30 @@ export const ImagesManager: React.FC = () => {
               <div className="aspect-video bg-gray-100">
                 {isWebAccessibleUrl(selectedAsset.asset_uri) ? (
                   selectedAsset.asset_type === 'image' ? (
-                    <img
-                      src={selectedAsset.asset_uri}
+                    <AuthenticatedImage
+                      asset={selectedAsset}
                       alt="Full size"
                       className="w-full h-full object-contain"
+                      useThumbnail={false}
                     />
                   ) : (
-                    <video
-                      src={selectedAsset.asset_uri}
-                      controls
-                      className="w-full h-full object-contain"
-                    />
+                    // For videos, we'll need a different approach with signed URLs
+                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
+                      <div className="text-6xl mb-4">🎥</div>
+                      <div className="text-xl font-semibold mb-2">Video Playback</div>
+                      <div className="text-sm text-center max-w-md">
+                        Video playback in authenticated storage requires additional implementation.
+                        <br />
+                        <a 
+                          href={selectedAsset.asset_uri} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline mt-2 inline-block"
+                        >
+                          Open video in new tab
+                        </a>
+                      </div>
+                    </div>
                   )
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
