@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { PhotoPicker } from './PhotoPicker';
 import { ImageUploader } from './ImageUploader';
 import { adminApi } from '../../services/adminApi';
+import { supabase } from '../../lib/supabase';
 
 interface Album {
   id: string;
@@ -20,6 +21,7 @@ interface Album {
     id: string;
     asset_uri: string;
     asset_type: string;
+    thumbnail_uri?: string;
   }[];
   album_shares?: {
     id: string;
@@ -43,6 +45,7 @@ export const AlbumsManager: React.FC = () => {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [circles, setCircles] = useState<Circle[]>([]);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<Album['album_assets'][0] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showShareForm, setShowShareForm] = useState(false);
@@ -74,6 +77,16 @@ export const AlbumsManager: React.FC = () => {
       setLoading(true);
       setError(null);
       
+      // Check authentication state first
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session?.access_token) {
+        console.error('Authentication issue:', sessionError);
+        setError('Please log in again to continue.');
+        setLoading(false);
+        return;
+      }
+      
       const result = await adminApi.getAlbums();
       
       if (!result.success) {
@@ -95,6 +108,7 @@ export const AlbumsManager: React.FC = () => {
       });
       
       setFailedImages(new Set()); // Reset failed images when data reloads
+      setError(null);
     } catch (err) {
       console.error('Error loading albums:', err);
       setError(err instanceof Error ? err.message : 'Failed to load albums');
@@ -111,6 +125,15 @@ export const AlbumsManager: React.FC = () => {
     }
 
     try {
+      // Check authentication state first
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session?.access_token) {
+        console.error('Authentication issue in loadCircles:', sessionError);
+        setCircles([]);
+        return;
+      }
+
       const result = await adminApi.getCircles();
       
       if (result.success) {
@@ -554,18 +577,31 @@ export const AlbumsManager: React.FC = () => {
               {selectedAlbum.album_assets && selectedAlbum.album_assets.length > 0 ? (
                 <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
                   {selectedAlbum.album_assets.map(asset => (
-                    <div key={asset.id} className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                    <div 
+                      key={asset.id} 
+                      className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative"
+                      onClick={() => setSelectedAsset(asset)}
+                    >
                       {isWebAccessibleUrl(asset.asset_uri) ? (
                         <img
-                          src={asset.asset_uri}
+                          src={asset.thumbnail_uri || asset.asset_uri}
                           alt="Album photo"
                           className="w-full h-full object-cover"
                         />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
-                          <div className="text-2xl mb-1">📸</div>
+                          <div className="text-2xl mb-1">
+                            {asset.asset_type === 'video' ? '🎥' : '📸'}
+                          </div>
                           <div className="text-xs text-center px-1">
-                            Image not available in web view
+                            {asset.asset_type === 'video' ? 'Video' : 'Image'} not available in web view
+                          </div>
+                        </div>
+                      )}
+                      {asset.asset_type === 'video' && isWebAccessibleUrl(asset.asset_uri) && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="bg-black/50 rounded-full p-2">
+                            <span className="text-white text-xl">▶️</span>
                           </div>
                         </div>
                       )}
@@ -673,6 +709,96 @@ export const AlbumsManager: React.FC = () => {
           onImagesUploaded={handleImagesUploaded}
           onClose={() => setShowImageUploader(false)}
         />
+      )}
+
+      {/* Asset Detail Modal */}
+      {selectedAsset && (
+        <div 
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedAsset(null)}
+        >
+          <div className="relative max-w-4xl max-h-full">
+            <button
+              onClick={() => setSelectedAsset(null)}
+              className="absolute -top-12 right-0 text-white text-2xl hover:text-gray-300"
+            >
+              ×
+            </button>
+            
+            <div className="bg-white rounded-lg overflow-hidden">
+              <div className="aspect-video bg-gray-100">
+                {isWebAccessibleUrl(selectedAsset.asset_uri) ? (
+                  selectedAsset.asset_type === 'image' ? (
+                    <img
+                      src={selectedAsset.asset_uri}
+                      alt="Full size"
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    // For videos, show a placeholder with link
+                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
+                      <div className="text-6xl mb-4">🎥</div>
+                      <div className="text-xl font-semibold mb-2">Video Playback</div>
+                      <div className="text-sm text-center max-w-md">
+                        Video playback in albums requires additional implementation.
+                        <br />
+                        <a 
+                          href={selectedAsset.asset_uri} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline mt-2 inline-block"
+                        >
+                          Open video in new tab
+                        </a>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
+                    <div className="text-6xl mb-4">
+                      {selectedAsset.asset_type === 'video' ? '🎥' : '📸'}
+                    </div>
+                    <div className="text-xl font-semibold mb-2">
+                      {selectedAsset.asset_type === 'video' ? 'Video' : 'Image'} Not Available
+                    </div>
+                    <div className="text-sm text-center max-w-md">
+                      This {selectedAsset.asset_type} is stored locally on the device and cannot be viewed in the web interface.
+                      <br />
+                      <span className="text-xs text-gray-400 mt-2 block">
+                        URL: {selectedAsset.asset_uri}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  From album: {selectedAlbum?.title || 'Unknown Album'}
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                  <div>
+                    <span className="font-medium">Type:</span> {selectedAsset.asset_type}
+                  </div>
+                  <div>
+                    <span className="font-medium">ID:</span> {selectedAsset.id}
+                  </div>
+                </div>
+                
+                <div className="mt-4 flex space-x-2">
+                  <a
+                    href={selectedAsset.asset_uri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Open Original
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

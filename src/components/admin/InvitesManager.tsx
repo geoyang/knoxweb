@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../../services/adminApi';
+import { supabase } from '../../lib/supabase';
 
 interface Invitation {
   id: string;
@@ -82,6 +83,16 @@ export const InvitesManager: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
+      
+      // Check authentication state first
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session?.access_token) {
+        console.error('Authentication issue:', sessionError);
+        setError('Please log in again to continue.');
+        setLoading(false);
+        return;
+      }
       
       const result = await adminApi.getInvitations();
       

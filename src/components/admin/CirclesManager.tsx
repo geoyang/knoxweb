@@ -63,18 +63,14 @@ export const CirclesManager: React.FC = () => {
       
       console.log('Loading circles for user:', user?.id);
       
-      // Debug authentication state  
+      // Check authentication state first
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      console.log('Current session state:', {
-        hasSession: !!session,
-        hasToken: !!session?.access_token,
-        userId: session?.user?.id,
-        userEmail: session?.user?.email,
-        sessionError
-      });
       
-      if (!session?.access_token) {
-        throw new Error('No valid authentication session. Please log in again.');
+      if (sessionError || !session?.access_token) {
+        console.error('Authentication issue:', sessionError);
+        setError('Please log in again to continue.');
+        setLoading(false);
+        return;
       }
       
       const result = await adminApi.getCircles();
