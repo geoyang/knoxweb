@@ -9,7 +9,7 @@ export default defineConfig({
     host: true, // needed for docker
   },
   build: {
-    outDir: 'build',
+    outDir: 'dist',
   },
   define: {
     // Fallback for any remaining process.env usage
