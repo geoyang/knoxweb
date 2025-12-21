@@ -101,15 +101,19 @@ export const AlbumsManager: React.FC = () => {
 
       const enrichedAlbums = result.data?.albums || [];
       setAlbums(enrichedAlbums);
-      
-      // Debug log keyphoto values
+
+      // Debug log album data
+      console.log('Albums API response stats:', result.data?.stats);
       enrichedAlbums.forEach(album => {
         const displayImage = getDisplayImage(album);
         console.log(`Album "${album.title}":`, {
+          id: album.id,
+          isOwner: album.isOwner,
           keyphoto: album.keyphoto,
           hasKeyphoto: hasKeyphoto(album.keyphoto),
           displayImage: displayImage,
-          assetCount: album.album_assets?.length || 0
+          assetCount: album.album_assets?.length || 0,
+          assets: album.album_assets?.slice(0, 2) // Log first 2 assets for debugging
         });
       });
       
