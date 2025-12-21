@@ -13,6 +13,12 @@ interface Album {
   user_id: string;
   date_created: string;
   date_modified: string;
+  isOwner?: boolean;
+  shared_via?: {
+    circle_id: string;
+    circle_name: string;
+    role: string;
+  }[];
   profiles?: {
     full_name: string | null;
     email: string | null;
@@ -360,17 +366,35 @@ export const AlbumsManager: React.FC = () => {
                 })()}
               </div>
               <div className="p-4">
-                <h3 className="font-semibold text-gray-900 truncate">{album.title}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900 truncate flex-1">{album.title}</h3>
+                  {album.isOwner ? (
+                    <span className="flex-shrink-0 text-amber-500" title="You own this album">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                        <path fillRule="evenodd" d="M12.516 2.17a.75.75 0 00-1.032 0 11.209 11.209 0 01-7.877 3.08.75.75 0 00-.722.515A12.74 12.74 0 002.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.749.749 0 00.374 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.39-.223-2.73-.635-3.985a.75.75 0 00-.722-.516 11.209 11.209 0 01-7.877-3.08z" clipRule="evenodd" />
+                      </svg>
+                    </span>
+                  ) : (
+                    <span className="flex-shrink-0 text-blue-500" title={`Shared via ${album.shared_via?.map(s => s.circle_name).join(', ')}`}>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                        <path fillRule="evenodd" d="M8.25 6.75a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM15.75 9.75a3 3 0 116 0 3 3 0 01-6 0zM2.25 9.75a3 3 0 116 0 3 3 0 01-6 0zM6.31 15.117A6.745 6.745 0 0112 12a6.745 6.745 0 016.709 7.498.75.75 0 01-.372.568A12.696 12.696 0 0112 21.75c-2.305 0-4.47-.612-6.337-1.684a.75.75 0 01-.372-.568 6.787 6.787 0 011.019-4.38z" clipRule="evenodd" />
+                        <path d="M5.082 14.254a8.287 8.287 0 00-1.308 5.135 9.687 9.687 0 01-1.764-.44l-.115-.04a.563.563 0 01-.373-.487l-.01-.121a3.75 3.75 0 013.57-4.047zM20.226 19.389a8.287 8.287 0 00-1.308-5.135 3.75 3.75 0 013.57 4.047l-.01.121a.563.563 0 01-.373.486l-.115.04c-.567.2-1.156.349-1.764.441z" />
+                      </svg>
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-gray-600 mt-1">
                   {album.album_assets?.length || 0} photos
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {album.profiles?.full_name || album.profiles?.email || 'Unknown user'}
-                </p>
-                {album.album_shares && album.album_shares.filter(s => s.is_active).length > 0 && (
+                {album.isOwner === false && album.shared_via && album.shared_via.length > 0 && (
+                  <p className="text-xs text-blue-600 mt-1">
+                    via {album.shared_via.map(s => s.circle_name).join(', ')}
+                  </p>
+                )}
+                {album.isOwner && album.album_shares && album.album_shares.filter(s => s.is_active).length > 0 && (
                   <div className="mt-2">
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      Shared
+                      Shared with {album.album_shares.filter(s => s.is_active).length} circle(s)
                     </span>
                   </div>
                 )}
@@ -387,13 +411,13 @@ export const AlbumsManager: React.FC = () => {
                   Album
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Owner
+                  Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Photos
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Shared
+                  Sharing
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Created
@@ -437,21 +461,45 @@ export const AlbumsManager: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {album.profiles?.full_name || album.profiles?.email || 'Unknown'}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {album.isOwner ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                          <path fillRule="evenodd" d="M12.516 2.17a.75.75 0 00-1.032 0 11.209 11.209 0 01-7.877 3.08.75.75 0 00-.722.515A12.74 12.74 0 002.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.749.749 0 00.374 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.39-.223-2.73-.635-3.985a.75.75 0 00-.722-.516 11.209 11.209 0 01-7.877-3.08z" clipRule="evenodd" />
+                        </svg>
+                        Owner
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                          <path fillRule="evenodd" d="M8.25 6.75a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM15.75 9.75a3 3 0 116 0 3 3 0 01-6 0zM2.25 9.75a3 3 0 116 0 3 3 0 01-6 0zM6.31 15.117A6.745 6.745 0 0112 12a6.745 6.745 0 016.709 7.498.75.75 0 01-.372.568A12.696 12.696 0 0112 21.75c-2.305 0-4.47-.612-6.337-1.684a.75.75 0 01-.372-.568 6.787 6.787 0 011.019-4.38z" clipRule="evenodd" />
+                        </svg>
+                        Shared
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {album.album_assets?.length || 0}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {album.album_shares && album.album_shares.filter(s => s.is_active).length > 0 ? (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        {album.album_shares.filter(s => s.is_active).length} circles
-                      </span>
+                    {album.isOwner ? (
+                      album.album_shares && album.album_shares.filter(s => s.is_active).length > 0 ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {album.album_shares.filter(s => s.is_active).length} circle(s)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          Not shared
+                        </span>
+                      )
                     ) : (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        Not shared
-                      </span>
+                      album.shared_via && album.shared_via.length > 0 ? (
+                        <span className="text-xs text-blue-600">
+                          via {album.shared_via.map(s => s.circle_name).join(', ')}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-500">-</span>
+                      )
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -463,21 +511,34 @@ export const AlbumsManager: React.FC = () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedAlbum(album);
-                          setShowShareForm(true);
                         }}
                         className="text-blue-600 hover:text-blue-800"
                       >
-                        Share
+                        View
                       </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteAlbum(album.id);
-                        }}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        Delete
-                      </button>
+                      {album.isOwner && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedAlbum(album);
+                              setShowShareForm(true);
+                            }}
+                            className="text-green-600 hover:text-green-800"
+                          >
+                            Share
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteAlbum(album.id);
+                            }}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -501,13 +562,32 @@ export const AlbumsManager: React.FC = () => {
           <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-6">
               <div>
-                <h3 className="text-2xl font-bold text-gray-900">{selectedAlbum.title}</h3>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-2xl font-bold text-gray-900">{selectedAlbum.title}</h3>
+                  {selectedAlbum.isOwner ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                        <path fillRule="evenodd" d="M12.516 2.17a.75.75 0 00-1.032 0 11.209 11.209 0 01-7.877 3.08.75.75 0 00-.722.515A12.74 12.74 0 002.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.749.749 0 00.374 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.39-.223-2.73-.635-3.985a.75.75 0 00-.722-.516 11.209 11.209 0 01-7.877-3.08z" clipRule="evenodd" />
+                      </svg>
+                      Owner
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                        <path fillRule="evenodd" d="M8.25 6.75a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM15.75 9.75a3 3 0 116 0 3 3 0 01-6 0zM2.25 9.75a3 3 0 116 0 3 3 0 01-6 0zM6.31 15.117A6.745 6.745 0 0112 12a6.745 6.745 0 016.709 7.498.75.75 0 01-.372.568A12.696 12.696 0 0112 21.75c-2.305 0-4.47-.612-6.337-1.684a.75.75 0 01-.372-.568 6.787 6.787 0 011.019-4.38z" clipRule="evenodd" />
+                      </svg>
+                      Shared with you
+                    </span>
+                  )}
+                </div>
                 {selectedAlbum.description && (
                   <p className="text-gray-600 mt-1">{selectedAlbum.description}</p>
                 )}
-                <p className="text-sm text-gray-500 mt-2">
-                  By {selectedAlbum.profiles?.full_name || selectedAlbum.profiles?.email || 'Unknown user'}
-                </p>
+                {selectedAlbum.isOwner === false && selectedAlbum.shared_via && selectedAlbum.shared_via.length > 0 && (
+                  <p className="text-sm text-blue-600 mt-2">
+                    via {selectedAlbum.shared_via.map(s => s.circle_name).join(', ')}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setSelectedAlbum(null)}
@@ -517,39 +597,41 @@ export const AlbumsManager: React.FC = () => {
               </button>
             </div>
 
-            {/* Shared Circles */}
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="font-semibold text-gray-900">Shared with Circles</h4>
-                <button
-                  onClick={() => setShowShareForm(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
-                >
-                  Share with Circle
-                </button>
-              </div>
-              <div className="space-y-2">
-                {selectedAlbum.album_shares?.filter(s => s.is_active).map(share => (
-                  <div key={share.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium">{share.circles.name}</span>
-                      <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(share.role)}`}>
-                        {share.role.replace('_', ' ')}
-                      </span>
+            {/* Shared Circles - Only show for owners */}
+            {selectedAlbum.isOwner && (
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="font-semibold text-gray-900">Shared with Circles</h4>
+                  <button
+                    onClick={() => setShowShareForm(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                  >
+                    Share with Circle
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {selectedAlbum.album_shares?.filter(s => s.is_active).map(share => (
+                    <div key={share.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <span className="font-medium">{share.circles.name}</span>
+                        <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(share.role)}`}>
+                          {share.role.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveShare(share.id)}
+                        className="text-red-600 hover:text-red-800 text-sm"
+                      >
+                        Remove
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleRemoveShare(share.id)}
-                      className="text-red-600 hover:text-red-800 text-sm"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                )) || []}
-                {selectedAlbum.album_shares?.filter(s => s.is_active).length === 0 && (
-                  <p className="text-gray-500 text-sm">Not shared with any circles</p>
-                )}
+                  )) || []}
+                  {selectedAlbum.album_shares?.filter(s => s.is_active).length === 0 && (
+                    <p className="text-gray-500 text-sm">Not shared with any circles</p>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Album Photos */}
             <div>
