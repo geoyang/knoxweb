@@ -28,6 +28,7 @@ interface Album {
     asset_uri: string;
     asset_type: string;
     thumbnail_uri?: string;
+    web_uri?: string;  // Web-compatible JPEG for HEIC files
   }[];
   album_shares?: {
     id: string;
@@ -270,17 +271,16 @@ export const AlbumsManager: React.FC = () => {
     return url.startsWith('http://') || url.startsWith('https://');
   };
 
-  // Convert HEIC/HEIF URLs to web-compatible format using wsrv.nl image proxy
-  const getWebCompatibleImageUrl = (url: string | null): string | null => {
-    if (!url) return null;
-
-    // Check if it's a HEIC/HEIF file that needs conversion
-    if (url.toLowerCase().endsWith('.heic') || url.toLowerCase().endsWith('.heif')) {
-      // Use wsrv.nl to proxy and convert the image to WebP (better compression)
-      // https://wsrv.nl/ is a free, open-source image proxy
-      return `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=webp`;
+  // Get web-compatible image URL - prefer web_uri for HEIC files
+  const getWebCompatibleImageUrl = (url: string | null, webUri?: string | null): string | null => {
+    // If web_uri is available (pre-converted JPEG), use it
+    if (webUri && isWebAccessibleUrl(webUri)) {
+      return webUri;
     }
 
+    if (!url) return null;
+
+    // For non-HEIC files, use the original URL
     return url;
   };
 
@@ -292,15 +292,17 @@ export const AlbumsManager: React.FC = () => {
 
     // Fall back to first web-accessible album asset if available
     if (album.album_assets && album.album_assets.length > 0) {
-      // Filter for web-accessible assets only
+      // Filter for assets with web-accessible URLs
       const webAssets = album.album_assets.filter(asset =>
-        asset.asset_uri && isWebAccessibleUrl(asset.asset_uri)
+        (asset.web_uri && isWebAccessibleUrl(asset.web_uri)) ||
+        (asset.asset_uri && isWebAccessibleUrl(asset.asset_uri))
       );
 
       if (webAssets.length > 0) {
         const firstImage = webAssets.find(asset => asset.asset_type === 'image');
-        const assetUrl = firstImage ? firstImage.asset_uri : webAssets[0].asset_uri;
-        return getWebCompatibleImageUrl(assetUrl);
+        const asset = firstImage || webAssets[0];
+        // Prefer web_uri (JPEG) over asset_uri (might be HEIC)
+        return getWebCompatibleImageUrl(asset.asset_uri, asset.web_uri);
       }
     }
 
@@ -683,9 +685,9 @@ export const AlbumsManager: React.FC = () => {
                       className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative"
                       onClick={() => setSelectedAsset(asset)}
                     >
-                      {isWebAccessibleUrl(asset.asset_uri) ? (
+                      {(asset.web_uri && isWebAccessibleUrl(asset.web_uri)) || isWebAccessibleUrl(asset.asset_uri) ? (
                         <img
-                          src={getWebCompatibleImageUrl(asset.thumbnail_uri || asset.asset_uri) || ''}
+                          src={getWebCompatibleImageUrl(asset.thumbnail_uri || asset.asset_uri, asset.web_uri) || ''}
                           alt="Album photo"
                           className="w-full h-full object-cover"
                         />
@@ -828,10 +830,10 @@ export const AlbumsManager: React.FC = () => {
             
             <div className="bg-white rounded-lg overflow-hidden">
               <div className="aspect-video bg-gray-100">
-                {isWebAccessibleUrl(selectedAsset.asset_uri) ? (
+                {(selectedAsset.web_uri && isWebAccessibleUrl(selectedAsset.web_uri)) || isWebAccessibleUrl(selectedAsset.asset_uri) ? (
                   selectedAsset.asset_type === 'image' ? (
                     <img
-                      src={getWebCompatibleImageUrl(selectedAsset.asset_uri) || ''}
+                      src={getWebCompatibleImageUrl(selectedAsset.asset_uri, selectedAsset.web_uri) || ''}
                       alt="Full size"
                       className="w-full h-full object-contain"
                     />
