@@ -128,12 +128,22 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     e.stopPropagation();
     // Only set to false if we're actually leaving the drop zone
     const rect = e.currentTarget.getBoundingClientRect();
-    const isStillInside = e.clientX >= rect.left && e.clientX <= rect.right && 
+    const isStillInside = e.clientX >= rect.left && e.clientX <= rect.right &&
                           e.clientY >= rect.top && e.clientY <= rect.bottom;
     if (!isStillInside) {
       setIsDragOver(false);
     }
   }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      handleFileSelect(e.dataTransfer.files);
+    }
+  }, [handleFileSelect]);
 
   // Comprehensive drag and drop handling
   React.useEffect(() => {
@@ -322,17 +332,25 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         </div>
 
         {/* Upload Area */}
-        <div className="flex-1 overflow-y-auto p-6" data-drop-zone="true">
+        <div
+          className="flex-1 overflow-y-auto p-6"
+          data-drop-zone="true"
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           {uploadedFiles.length === 0 ? (
             <div
               className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
-                isDragOver 
-                  ? 'border-blue-400 bg-blue-50' 
+                isDragOver
+                  ? 'border-blue-400 bg-blue-50'
                   : 'border-gray-300 hover:border-gray-400'
               }`}
               onDragOver={handleDragOver}
               onDragEnter={handleDragEnter}
               onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             >
               <div className="text-6xl mb-4 opacity-50">📸</div>
               <h3 className="text-lg font-semibold text-gray-700 mb-2">
