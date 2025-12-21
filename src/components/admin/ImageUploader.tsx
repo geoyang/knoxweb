@@ -306,16 +306,13 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       ));
 
       let fileToUpload: File | Blob = fileObj.file;
-      let webUri: string | null = null;
-      let thumbnailUri: string | null = null;
       const isHeic = isHeicFile(fileObj.file);
-      const isImage = fileObj.file.type.startsWith('image/') || isHeic;
 
       // Convert HEIC to JPEG for web compatibility
       if (isHeic) {
         console.log('Processing HEIC file:', fileObj.file.name);
         setUploadedFiles(prev => prev.map(f =>
-          f.id === fileObj.id ? { ...f, progress: 10 } : f
+          f.id === fileObj.id ? { ...f, progress: 20 } : f
         ));
 
         try {
@@ -334,24 +331,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       // Update progress
       setUploadedFiles(prev => prev.map(f =>
-        f.id === fileObj.id ? { ...f, progress: 30 } : f
-      ));
-
-      // Generate thumbnail for images
-      if (isImage) {
-        try {
-          console.log('Generating thumbnail...');
-          thumbnailUri = await generateThumbnail(fileToUpload);
-          console.log('Thumbnail generated, size:', Math.round(thumbnailUri.length / 1024), 'KB');
-        } catch (thumbError) {
-          console.warn('Thumbnail generation failed:', thumbError);
-          // Continue without thumbnail
-        }
-      }
-
-      // Update progress
-      setUploadedFiles(prev => prev.map(f =>
-        f.id === fileObj.id ? { ...f, progress: 50 } : f
+        f.id === fileObj.id ? { ...f, progress: 40 } : f
       ));
 
       // Upload the file (converted JPEG for HEIC, original for others)
@@ -363,11 +343,6 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         console.warn('ImageKit upload failed, trying Supabase:', imagekitError);
         // Fallback to Supabase
         uploadUrl = await uploadToSupabase(fileToUpload as File);
-      }
-
-      // For HEIC files, the converted JPEG becomes the web_uri
-      if (isHeic) {
-        webUri = uploadUrl;
       }
 
       // Update progress to 75% after upload
@@ -385,8 +360,10 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       const displayOrder = (maxOrderData?.[0]?.display_order || 0) + 1;
 
-      // Create album asset entry with thumbnail and web_uri
-      const assetData: Record<string, unknown> = {
+      // Create album asset entry
+      // Note: album_assets is a join table - thumbnail/web_uri live in the assets table
+      // For HEIC files, we've already converted to JPEG so asset_uri is the web-compatible URL
+      const assetData = {
         album_id: targetAlbumId,
         asset_id: generateId(),
         asset_uri: uploadUrl,
@@ -396,15 +373,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         user_id: user!.id
       };
 
-      // Add thumbnail if generated
-      if (thumbnailUri) {
-        assetData.thumbnail_uri = thumbnailUri;
-      }
-
-      // Add web_uri for HEIC files (converted JPEG)
-      if (webUri) {
-        assetData.web_uri = webUri;
-      }
+      console.log('Inserting album asset:', assetData);
 
       const { error: insertError } = await supabase
         .from('album_assets')
