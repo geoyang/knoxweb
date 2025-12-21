@@ -145,48 +145,21 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     }
   }, [handleFileSelect]);
 
-  // Comprehensive drag and drop handling
+  // Prevent browser default drag behavior (opening files)
   React.useEffect(() => {
-    const handleDocumentDragOver = (e: DragEvent) => {
+    const preventDefaults = (e: DragEvent) => {
       e.preventDefault();
-      e.stopPropagation();
     };
 
-    const handleDocumentDrop = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      // Check if we're dropping on our upload area
-      const target = e.target as HTMLElement;
-      const dropZone = target.closest('[data-drop-zone="true"]');
-      
-      if (dropZone && e.dataTransfer?.files) {
-        handleFileSelect(e.dataTransfer.files);
-      }
-    };
-
-    const handleDocumentDragEnter = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    const handleDocumentDragLeave = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    document.addEventListener('dragover', handleDocumentDragOver);
-    document.addEventListener('drop', handleDocumentDrop);
-    document.addEventListener('dragenter', handleDocumentDragEnter);
-    document.addEventListener('dragleave', handleDocumentDragLeave);
+    // Only prevent default, don't stop propagation so React handlers work
+    window.addEventListener('dragover', preventDefaults);
+    window.addEventListener('drop', preventDefaults);
 
     return () => {
-      document.removeEventListener('dragover', handleDocumentDragOver);
-      document.removeEventListener('drop', handleDocumentDrop);
-      document.removeEventListener('dragenter', handleDocumentDragEnter);
-      document.removeEventListener('dragleave', handleDocumentDragLeave);
+      window.removeEventListener('dragover', preventDefaults);
+      window.removeEventListener('drop', preventDefaults);
     };
-  }, [handleFileSelect]);
+  }, []);
 
   // Handle file input change
   const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
