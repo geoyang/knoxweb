@@ -10,6 +10,7 @@ interface Album {
   title: string;
   description: string | null;
   keyphoto: string | null;
+  keyphoto_thumbnail?: string | null;  // Resolved thumbnail for keyphoto
   user_id: string;
   date_created: string;
   date_modified: string;
@@ -304,13 +305,14 @@ export const AlbumsManager: React.FC = () => {
   };
 
   const getDisplayImage = (album: Album): string | null => {
-    // First try the assigned keyphoto if it's web accessible and NOT a HEIC file
-    // (HEIC files can't be displayed in browsers, so skip them)
-    if (hasKeyphoto(album.keyphoto) && isWebAccessibleUrl(album.keyphoto)) {
-      const keyphotoLower = album.keyphoto!.toLowerCase();
-      if (!keyphotoLower.endsWith('.heic') && !keyphotoLower.endsWith('.heif')) {
-        return getWebCompatibleImageUrl(album.keyphoto);
-      }
+    // First try keyphoto_thumbnail (JPEG thumbnail resolved from ph:// reference)
+    if (album.keyphoto_thumbnail && isWebAccessibleUrl(album.keyphoto_thumbnail) && !isHeicUrl(album.keyphoto_thumbnail)) {
+      return album.keyphoto_thumbnail;
+    }
+
+    // Try the keyphoto if it's web accessible and NOT a HEIC file
+    if (hasKeyphoto(album.keyphoto) && isWebAccessibleUrl(album.keyphoto) && !isHeicUrl(album.keyphoto)) {
+      return album.keyphoto;
     }
 
     // Fall back to first web-accessible album asset if available
