@@ -270,15 +270,15 @@ export const AlbumsManager: React.FC = () => {
     return url.startsWith('http://') || url.startsWith('https://');
   };
 
-  // Convert Supabase Storage URLs to use image transformation for HEIC files
+  // Convert HEIC/HEIF URLs to web-compatible format using wsrv.nl image proxy
   const getWebCompatibleImageUrl = (url: string | null): string | null => {
     if (!url) return null;
 
-    // Check if it's a Supabase Storage URL with HEIC format
-    if (url.includes('/storage/v1/object/public/') &&
-        (url.toLowerCase().endsWith('.heic') || url.toLowerCase().endsWith('.heif'))) {
-      // Convert to render endpoint which auto-converts to web-compatible format
-      return url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
+    // Check if it's a HEIC/HEIF file that needs conversion
+    if (url.toLowerCase().endsWith('.heic') || url.toLowerCase().endsWith('.heif')) {
+      // Use wsrv.nl to proxy and convert the image to WebP (better compression)
+      // https://wsrv.nl/ is a free, open-source image proxy
+      return `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=webp`;
     }
 
     return url;
