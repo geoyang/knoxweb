@@ -80,8 +80,9 @@ export const VerifyRegistration: React.FC = () => {
         setCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(timer);
-            // Use the magic link if available, otherwise redirect to dashboard
-            window.location.href = result.redirectUrl!;
+            // Navigate to login page with verified status
+            const url = new URL(result.redirectUrl!);
+            navigate(`${url.pathname}${url.search}`);
             return 0;
           }
           return prev - 1;
@@ -132,15 +133,20 @@ export const VerifyRegistration: React.FC = () => {
 
           <div className="bg-blue-50 rounded-lg p-4 mb-6">
             <p className="text-blue-800">
-              Redirecting to your dashboard in <strong>{countdown}</strong> seconds...
+              Redirecting to sign in in <strong>{countdown}</strong> seconds...
             </p>
           </div>
 
           <button
-            onClick={() => result?.redirectUrl && (window.location.href = result.redirectUrl)}
+            onClick={() => {
+              if (result?.redirectUrl) {
+                const url = new URL(result.redirectUrl);
+                navigate(`${url.pathname}${url.search}`);
+              }
+            }}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
           >
-            Go to Dashboard Now
+            Sign In Now
           </button>
         </div>
       </div>
