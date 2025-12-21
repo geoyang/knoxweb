@@ -61,6 +61,8 @@ export const AlbumsManager: React.FC = () => {
   const [showImageUploader, setShowImageUploader] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const [contextMenu, setContextMenu] = useState<{ asset: NonNullable<Album['album_assets']>[0]; x: number; y: number } | null>(null);
+  const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
 
   const { user } = useAuth();
 
@@ -264,6 +266,71 @@ export const AlbumsManager: React.FC = () => {
 
   const hasKeyphoto = (url: string | null): boolean => {
     return !!(url && url.trim() !== '');
+  };
+
+  // Check if user can edit this album (owner or editor role)
+  const canEditAlbum = (album: Album): boolean => {
+    if (album.isOwner) return true;
+    // Check if user has editor or admin role via shared_via
+    const editRoles = ['editor', 'admin'];
+    return album.shared_via?.some(share => editRoles.includes(share.role)) || false;
+  };
+
+  // Remove asset from album (doesn't delete the image from vault)
+  const handleRemoveFromAlbum = async (assetId: string) => {
+    if (!selectedAlbum) return;
+
+    try {
+      const { error } = await supabase
+        .from('album_assets')
+        .delete()
+        .eq('id', assetId)
+        .eq('album_id', selectedAlbum.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setSelectedAlbum(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          album_assets: prev.album_assets?.filter(a => a.id !== assetId)
+        };
+      });
+
+      setContextMenu(null);
+      await loadAlbums();
+    } catch (err) {
+      console.error('Error removing from album:', err);
+      setError(err instanceof Error ? err.message : 'Failed to remove from album');
+    }
+  };
+
+  // Context menu handlers
+  const handleContextMenu = (e: React.MouseEvent, asset: NonNullable<Album['album_assets']>[0]) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (selectedAlbum && canEditAlbum(selectedAlbum)) {
+      setContextMenu({ asset, x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const handleLongPressStart = (e: React.MouseEvent | React.TouchEvent, asset: NonNullable<Album['album_assets']>[0]) => {
+    if (!selectedAlbum || !canEditAlbum(selectedAlbum)) return;
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+    longPressTimer.current = setTimeout(() => {
+      setContextMenu({ asset, x: clientX, y: clientY });
+    }, 500); // 500ms long press
+  };
+
+  const handleLongPressEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
   };
 
   const isWebAccessibleUrl = (url: string | null): boolean => {
@@ -729,12 +796,25 @@ export const AlbumsManager: React.FC = () => {
                 </div>
               </div>
               {selectedAlbum.album_assets && selectedAlbum.album_assets.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2" onClick={() => setContextMenu(null)}>
                   {selectedAlbum.album_assets.map(asset => (
                     <div
                       key={asset.id}
-                      className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative"
-                      onClick={() => setSelectedAsset(asset)}
+                      className={`w-20 h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative ${
+                        contextMenu?.asset.id === asset.id ? 'ring-2 ring-blue-500' : ''
+                      }`}
+                      onClick={(e) => {
+                        if (!contextMenu) {
+                          setSelectedAsset(asset);
+                        }
+                        setContextMenu(null);
+                      }}
+                      onContextMenu={(e) => handleContextMenu(e, asset)}
+                      onMouseDown={(e) => handleLongPressStart(e, asset)}
+                      onMouseUp={handleLongPressEnd}
+                      onMouseLeave={handleLongPressEnd}
+                      onTouchStart={(e) => handleLongPressStart(e, asset)}
+                      onTouchEnd={handleLongPressEnd}
                     >
                       {(asset.web_uri && isWebAccessibleUrl(asset.web_uri)) ||
                        (asset.thumbnail_uri && isWebAccessibleUrl(asset.thumbnail_uri)) ||
@@ -746,6 +826,7 @@ export const AlbumsManager: React.FC = () => {
                           }) || ''}
                           alt="Album photo"
                           className="w-full h-full object-cover"
+                          draggable={false}
                         />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
@@ -766,6 +847,23 @@ export const AlbumsManager: React.FC = () => {
                       )}
                     </div>
                   ))}
+
+                  {/* Context Menu */}
+                  {contextMenu && canEditAlbum(selectedAlbum) && (
+                    <div
+                      className="fixed bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50"
+                      style={{ left: contextMenu.x, top: contextMenu.y }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => handleRemoveFromAlbum(contextMenu.asset.id)}
+                        className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                      >
+                        <span>🗑️</span>
+                        Remove from Album
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-8">
