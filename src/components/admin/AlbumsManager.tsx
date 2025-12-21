@@ -270,25 +270,40 @@ export const AlbumsManager: React.FC = () => {
     return url.startsWith('http://') || url.startsWith('https://');
   };
 
+  // Convert Supabase Storage URLs to use image transformation for HEIC files
+  const getWebCompatibleImageUrl = (url: string | null): string | null => {
+    if (!url) return null;
+
+    // Check if it's a Supabase Storage URL with HEIC format
+    if (url.includes('/storage/v1/object/public/') &&
+        (url.toLowerCase().endsWith('.heic') || url.toLowerCase().endsWith('.heif'))) {
+      // Convert to render endpoint which auto-converts to web-compatible format
+      return url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
+    }
+
+    return url;
+  };
+
   const getDisplayImage = (album: Album): string | null => {
     // First try the assigned keyphoto if it's web accessible
     if (hasKeyphoto(album.keyphoto) && isWebAccessibleUrl(album.keyphoto)) {
-      return album.keyphoto;
+      return getWebCompatibleImageUrl(album.keyphoto);
     }
-    
+
     // Fall back to first web-accessible album asset if available
     if (album.album_assets && album.album_assets.length > 0) {
       // Filter for web-accessible assets only
-      const webAssets = album.album_assets.filter(asset => 
+      const webAssets = album.album_assets.filter(asset =>
         asset.asset_uri && isWebAccessibleUrl(asset.asset_uri)
       );
-      
+
       if (webAssets.length > 0) {
         const firstImage = webAssets.find(asset => asset.asset_type === 'image');
-        return firstImage ? firstImage.asset_uri : webAssets[0].asset_uri;
+        const assetUrl = firstImage ? firstImage.asset_uri : webAssets[0].asset_uri;
+        return getWebCompatibleImageUrl(assetUrl);
       }
     }
-    
+
     return null;
   };
 
@@ -663,14 +678,14 @@ export const AlbumsManager: React.FC = () => {
               {selectedAlbum.album_assets && selectedAlbum.album_assets.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {selectedAlbum.album_assets.map(asset => (
-                    <div 
-                      key={asset.id} 
+                    <div
+                      key={asset.id}
                       className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative"
                       onClick={() => setSelectedAsset(asset)}
                     >
                       {isWebAccessibleUrl(asset.asset_uri) ? (
                         <img
-                          src={asset.thumbnail_uri || asset.asset_uri}
+                          src={getWebCompatibleImageUrl(asset.thumbnail_uri || asset.asset_uri) || ''}
                           alt="Album photo"
                           className="w-full h-full object-cover"
                         />
@@ -816,7 +831,7 @@ export const AlbumsManager: React.FC = () => {
                 {isWebAccessibleUrl(selectedAsset.asset_uri) ? (
                   selectedAsset.asset_type === 'image' ? (
                     <img
-                      src={selectedAsset.asset_uri}
+                      src={getWebCompatibleImageUrl(selectedAsset.asset_uri) || ''}
                       alt="Full size"
                       className="w-full h-full object-contain"
                     />
