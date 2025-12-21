@@ -309,7 +309,13 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const failedUploads = uploadedFiles.filter(f => f.status === 'error').length;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col" data-drop-zone="true">
         {/* Header */}
         <div className="border-b px-6 py-4 flex items-center justify-between">
