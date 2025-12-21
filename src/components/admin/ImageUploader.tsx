@@ -114,18 +114,29 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    console.log('🔵 handleDragOver triggered', {
+      target: (e.target as HTMLElement).tagName,
+      currentTarget: (e.currentTarget as HTMLElement).tagName,
+      className: (e.currentTarget as HTMLElement).className?.slice(0, 50),
+    });
     setIsDragOver(true);
   }, []);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    console.log('🟢 handleDragEnter triggered', {
+      target: (e.target as HTMLElement).tagName,
+      files: e.dataTransfer?.files?.length,
+      types: e.dataTransfer?.types,
+    });
     setIsDragOver(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    console.log('🟡 handleDragLeave triggered');
     // Only set to false if we're actually leaving the drop zone
     const rect = e.currentTarget.getBoundingClientRect();
     const isStillInside = e.clientX >= rect.left && e.clientX <= rect.right &&
@@ -138,17 +149,28 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    console.log('🔴 handleDrop triggered!', {
+      files: e.dataTransfer?.files?.length,
+      fileNames: e.dataTransfer?.files ? Array.from(e.dataTransfer.files).map(f => f.name) : [],
+      types: e.dataTransfer?.types,
+    });
     setIsDragOver(false);
 
     if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      console.log('✅ Calling handleFileSelect with', e.dataTransfer.files.length, 'files');
       handleFileSelect(e.dataTransfer.files);
+    } else {
+      console.log('❌ No files in dataTransfer');
     }
   }, [handleFileSelect]);
 
   // Prevent browser default drag behavior (opening files)
   React.useEffect(() => {
+    console.log('📦 ImageUploader mounted - setting up drag handlers');
+
     const preventDefaults = (e: DragEvent) => {
       e.preventDefault();
+      console.log('🌐 Window dragover/drop prevented default', e.type);
     };
 
     // Only prevent default, don't stop propagation so React handlers work
@@ -156,6 +178,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     window.addEventListener('drop', preventDefaults);
 
     return () => {
+      console.log('📦 ImageUploader unmounting - removing drag handlers');
       window.removeEventListener('dragover', preventDefaults);
       window.removeEventListener('drop', preventDefaults);
     };
