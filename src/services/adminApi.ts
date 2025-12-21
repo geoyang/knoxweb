@@ -40,21 +40,38 @@ class AdminApiService {
         };
       }
 
-      const { data, error } = await supabase.functions.invoke(functionName, {
-        body: options.body,
+      const method = options.method || 'POST';
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      // Use fetch directly to support different HTTP methods
+      const fetchOptions: RequestInit = {
+        method,
         headers: {
           ...authHeaders,
           'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           ...(options.headers || {}),
-        }
-      });
+        },
+      };
 
-      if (error) {
-        console.error(`API call to ${functionName} failed:`, error);
+      // Only include body for non-GET requests
+      if (method !== 'GET' && options.body) {
+        fetchOptions.body = options.body;
+      }
+
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/${functionName}`,
+        fetchOptions
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(`API call to ${functionName} failed:`, data);
         return {
           success: false,
-          error: error.message || 'API call failed',
-          details: error.details || JSON.stringify(error)
+          error: data.error || 'API call failed',
+          details: data.details || JSON.stringify(data)
         };
       }
 
