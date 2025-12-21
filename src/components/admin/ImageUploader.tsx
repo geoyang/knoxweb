@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import heic2any from 'heic2any';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
@@ -17,6 +18,74 @@ interface UploadedFile {
   url?: string;
   error?: string;
 }
+
+// Check if file is HEIC/HEIF
+const isHeicFile = (file: File): boolean => {
+  const name = file.name.toLowerCase();
+  return name.endsWith('.heic') || name.endsWith('.heif') ||
+    file.type === 'image/heic' || file.type === 'image/heif';
+};
+
+// Convert HEIC to JPEG
+const convertHeicToJpeg = async (file: File): Promise<Blob> => {
+  console.log('Converting HEIC to JPEG:', file.name);
+  const result = await heic2any({
+    blob: file,
+    toType: 'image/jpeg',
+    quality: 0.92
+  });
+  // heic2any can return an array for multi-image HEIC files
+  const blob = Array.isArray(result) ? result[0] : result;
+  console.log('HEIC conversion complete, size:', Math.round(blob.size / 1024), 'KB');
+  return blob;
+};
+
+// Generate thumbnail from image file
+const generateThumbnail = async (file: File | Blob, maxSize: number = 300): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    img.onload = () => {
+      // Calculate thumbnail dimensions
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxSize) {
+          height = (height * maxSize) / width;
+          width = maxSize;
+        }
+      } else {
+        if (height > maxSize) {
+          width = (width * maxSize) / height;
+          height = maxSize;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        resolve(dataUrl);
+      } else {
+        reject(new Error('Could not get canvas context'));
+      }
+
+      URL.revokeObjectURL(img.src);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(img.src);
+      reject(new Error('Failed to load image for thumbnail'));
+    };
+
+    img.src = URL.createObjectURL(file);
+  });
+};
 
 export const ImageUploader: React.FC<ImageUploaderProps> = ({
   targetAlbumId,
@@ -85,28 +154,54 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   };
 
   // Handle file selection
-  const handleFileSelect = useCallback((files: FileList) => {
-    const newFiles: UploadedFile[] = Array.from(files).map(file => {
-      // Validate file type
-      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-        return null;
+  const handleFileSelect = useCallback(async (files: FileList) => {
+    const processedFiles: UploadedFile[] = [];
+
+    for (const file of Array.from(files)) {
+      // Check if it's a HEIC file by extension (type might be wrong/empty)
+      const isHeic = isHeicFile(file);
+
+      // Validate file type - allow image, video, and HEIC
+      if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !isHeic) {
+        console.log('Skipping unsupported file:', file.name, file.type);
+        continue;
       }
-      
+
       // Validate file size (max 50MB)
       if (file.size > 50 * 1024 * 1024) {
-        return null;
+        console.log('Skipping large file:', file.name, file.size);
+        continue;
       }
 
-      return {
+      let preview: string;
+
+      // For HEIC files, convert to get preview
+      if (isHeic) {
+        try {
+          console.log('Converting HEIC for preview:', file.name);
+          const jpegBlob = await convertHeicToJpeg(file);
+          preview = URL.createObjectURL(jpegBlob);
+        } catch (err) {
+          console.warn('Could not create HEIC preview:', err);
+          // Use a placeholder for failed HEIC preview
+          preview = '';
+        }
+      } else {
+        preview = URL.createObjectURL(file);
+      }
+
+      processedFiles.push({
         file,
         id: generateId(),
-        preview: URL.createObjectURL(file),
+        preview,
         status: 'pending' as const,
         progress: 0
-      };
-    }).filter(Boolean) as UploadedFile[];
+      });
+    }
 
-    setUploadedFiles(prev => [...prev, ...newFiles]);
+    if (processedFiles.length > 0) {
+      setUploadedFiles(prev => [...prev, ...processedFiles]);
+    }
   }, []);
 
   // Handle drag and drop
@@ -206,23 +301,77 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const uploadFile = async (fileObj: UploadedFile) => {
     try {
       // Update status to uploading
-      setUploadedFiles(prev => prev.map(f => 
+      setUploadedFiles(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, status: 'uploading', progress: 0 } : f
       ));
 
+      let fileToUpload: File | Blob = fileObj.file;
+      let webUri: string | null = null;
+      let thumbnailUri: string | null = null;
+      const isHeic = isHeicFile(fileObj.file);
+      const isImage = fileObj.file.type.startsWith('image/') || isHeic;
+
+      // Convert HEIC to JPEG for web compatibility
+      if (isHeic) {
+        console.log('Processing HEIC file:', fileObj.file.name);
+        setUploadedFiles(prev => prev.map(f =>
+          f.id === fileObj.id ? { ...f, progress: 10 } : f
+        ));
+
+        try {
+          const jpegBlob = await convertHeicToJpeg(fileObj.file);
+          fileToUpload = new File(
+            [jpegBlob],
+            fileObj.file.name.replace(/\.(heic|heif)$/i, '.jpg'),
+            { type: 'image/jpeg' }
+          );
+          console.log('HEIC converted to JPEG successfully');
+        } catch (heicError) {
+          console.error('HEIC conversion failed:', heicError);
+          throw new Error('Failed to convert HEIC file. Please try a different format.');
+        }
+      }
+
+      // Update progress
+      setUploadedFiles(prev => prev.map(f =>
+        f.id === fileObj.id ? { ...f, progress: 30 } : f
+      ));
+
+      // Generate thumbnail for images
+      if (isImage) {
+        try {
+          console.log('Generating thumbnail...');
+          thumbnailUri = await generateThumbnail(fileToUpload);
+          console.log('Thumbnail generated, size:', Math.round(thumbnailUri.length / 1024), 'KB');
+        } catch (thumbError) {
+          console.warn('Thumbnail generation failed:', thumbError);
+          // Continue without thumbnail
+        }
+      }
+
+      // Update progress
+      setUploadedFiles(prev => prev.map(f =>
+        f.id === fileObj.id ? { ...f, progress: 50 } : f
+      ));
+
+      // Upload the file (converted JPEG for HEIC, original for others)
       let uploadUrl: string;
-      
       try {
         // Try ImageKit first
-        uploadUrl = await uploadToImageKit(fileObj.file);
+        uploadUrl = await uploadToImageKit(fileToUpload as File);
       } catch (imagekitError) {
         console.warn('ImageKit upload failed, trying Supabase:', imagekitError);
         // Fallback to Supabase
-        uploadUrl = await uploadToSupabase(fileObj.file);
+        uploadUrl = await uploadToSupabase(fileToUpload as File);
+      }
+
+      // For HEIC files, the converted JPEG becomes the web_uri
+      if (isHeic) {
+        webUri = uploadUrl;
       }
 
       // Update progress to 75% after upload
-      setUploadedFiles(prev => prev.map(f => 
+      setUploadedFiles(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, progress: 75 } : f
       ));
 
@@ -236,8 +385,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       const displayOrder = (maxOrderData?.[0]?.display_order || 0) + 1;
 
-      // Create album asset entry
-      const assetData = {
+      // Create album asset entry with thumbnail and web_uri
+      const assetData: Record<string, unknown> = {
         album_id: targetAlbumId,
         asset_id: generateId(),
         asset_uri: uploadUrl,
@@ -246,6 +395,16 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         date_added: new Date().toISOString(),
         user_id: user!.id
       };
+
+      // Add thumbnail if generated
+      if (thumbnailUri) {
+        assetData.thumbnail_uri = thumbnailUri;
+      }
+
+      // Add web_uri for HEIC files (converted JPEG)
+      if (webUri) {
+        assetData.web_uri = webUri;
+      }
 
       const { error: insertError } = await supabase
         .from('album_assets')
@@ -256,17 +415,17 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       }
 
       // Update status to success
-      setUploadedFiles(prev => prev.map(f => 
+      setUploadedFiles(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, status: 'success', progress: 100, url: uploadUrl } : f
       ));
 
     } catch (error) {
       console.error('Upload error:', error);
-      setUploadedFiles(prev => prev.map(f => 
-        f.id === fileObj.id ? { 
-          ...f, 
-          status: 'error', 
-          error: error instanceof Error ? error.message : 'Upload failed' 
+      setUploadedFiles(prev => prev.map(f =>
+        f.id === fileObj.id ? {
+          ...f,
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Upload failed'
         } : f
       ));
     }

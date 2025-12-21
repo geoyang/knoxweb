@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "heic2any": "^0.0.4",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-router-dom": "^6.8.0"
