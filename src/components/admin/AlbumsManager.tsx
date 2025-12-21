@@ -307,16 +307,25 @@ export const AlbumsManager: React.FC = () => {
 
     // Fall back to first web-accessible album asset if available
     if (album.album_assets && album.album_assets.length > 0) {
-      // Filter for assets with web-accessible URLs
-      const webAssets = album.album_assets.filter(asset =>
-        (asset.web_uri && isWebAccessibleUrl(asset.web_uri)) ||
-        (asset.thumbnail_uri && isWebAccessibleUrl(asset.thumbnail_uri)) ||
-        (asset.asset_uri && isWebAccessibleUrl(asset.asset_uri))
-      );
+      // Filter for assets that can actually be displayed in browser
+      const displayableAssets = album.album_assets.filter(asset => {
+        // If has web_uri (JPEG conversion), it's displayable
+        if (asset.web_uri && isWebAccessibleUrl(asset.web_uri)) return true;
+        // If has thumbnail, it's displayable
+        if (asset.thumbnail_uri && isWebAccessibleUrl(asset.thumbnail_uri)) return true;
+        // If asset_uri is web accessible and NOT HEIC, it's displayable
+        if (asset.asset_uri && isWebAccessibleUrl(asset.asset_uri)) {
+          const lower = asset.asset_uri.toLowerCase();
+          // HEIC/HEIF without thumbnail can't be displayed
+          if (lower.endsWith('.heic') || lower.endsWith('.heif')) return false;
+          return true;
+        }
+        return false;
+      });
 
-      if (webAssets.length > 0) {
-        const firstImage = webAssets.find(asset => asset.asset_type === 'image');
-        const asset = firstImage || webAssets[0];
+      if (displayableAssets.length > 0) {
+        const firstImage = displayableAssets.find(asset => asset.asset_type === 'image');
+        const asset = firstImage || displayableAssets[0];
         // Use thumbnail for HEIC files
         return getWebCompatibleImageUrl(asset.asset_uri, {
           webUri: asset.web_uri,
