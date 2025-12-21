@@ -271,28 +271,36 @@ export const AlbumsManager: React.FC = () => {
     return url.startsWith('http://') || url.startsWith('https://');
   };
 
+  // Helper to check if URL is HEIC/HEIF (can't be displayed in browsers)
+  const isHeicUrl = (url: string | null | undefined): boolean => {
+    if (!url) return false;
+    const lower = url.toLowerCase();
+    return lower.endsWith('.heic') || lower.endsWith('.heif');
+  };
+
   // Get web-compatible image URL
-  // Priority: web_uri (JPEG) > thumbnail_uri (JPEG) > original (might be HEIC)
+  // Priority: web_uri (JPEG) > thumbnail_uri (JPEG) > original (if not HEIC)
   const getWebCompatibleImageUrl = (
     url: string | null,
     options?: { webUri?: string | null; thumbnailUri?: string | null }
   ): string | null => {
-    // If web_uri is available (pre-converted JPEG), use it
-    if (options?.webUri && isWebAccessibleUrl(options.webUri)) {
+    // If web_uri is available and not HEIC, use it
+    if (options?.webUri && isWebAccessibleUrl(options.webUri) && !isHeicUrl(options.webUri)) {
       return options.webUri;
     }
 
-    // If thumbnail is available and original is HEIC, use thumbnail
-    if (options?.thumbnailUri && isWebAccessibleUrl(options.thumbnailUri)) {
-      if (url?.toLowerCase().endsWith('.heic') || url?.toLowerCase().endsWith('.heif')) {
-        return options.thumbnailUri;
-      }
+    // If thumbnail is available and not HEIC, use it
+    if (options?.thumbnailUri && isWebAccessibleUrl(options.thumbnailUri) && !isHeicUrl(options.thumbnailUri)) {
+      return options.thumbnailUri;
     }
 
-    if (!url) return null;
+    // If original URL is available and not HEIC, use it
+    if (url && isWebAccessibleUrl(url) && !isHeicUrl(url)) {
+      return url;
+    }
 
-    // For non-HEIC files, use the original URL
-    return url;
+    // No displayable URL available
+    return null;
   };
 
   const getDisplayImage = (album: Album): string | null => {
@@ -309,17 +317,12 @@ export const AlbumsManager: React.FC = () => {
     if (album.album_assets && album.album_assets.length > 0) {
       // Filter for assets that can actually be displayed in browser
       const displayableAssets = album.album_assets.filter(asset => {
-        // If has web_uri (JPEG conversion), it's displayable
-        if (asset.web_uri && isWebAccessibleUrl(asset.web_uri)) return true;
-        // If has thumbnail, it's displayable
-        if (asset.thumbnail_uri && isWebAccessibleUrl(asset.thumbnail_uri)) return true;
+        // If has web_uri (JPEG conversion) that's not HEIC, it's displayable
+        if (asset.web_uri && isWebAccessibleUrl(asset.web_uri) && !isHeicUrl(asset.web_uri)) return true;
+        // If has thumbnail that's not HEIC, it's displayable
+        if (asset.thumbnail_uri && isWebAccessibleUrl(asset.thumbnail_uri) && !isHeicUrl(asset.thumbnail_uri)) return true;
         // If asset_uri is web accessible and NOT HEIC, it's displayable
-        if (asset.asset_uri && isWebAccessibleUrl(asset.asset_uri)) {
-          const lower = asset.asset_uri.toLowerCase();
-          // HEIC/HEIF without thumbnail can't be displayed
-          if (lower.endsWith('.heic') || lower.endsWith('.heif')) return false;
-          return true;
-        }
+        if (asset.asset_uri && isWebAccessibleUrl(asset.asset_uri) && !isHeicUrl(asset.asset_uri)) return true;
         return false;
       });
 
