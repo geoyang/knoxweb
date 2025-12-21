@@ -9,6 +9,9 @@ A React-based web application for managing Knox photo circles and providing publ
 - **Role-based Access Control**: Different permission levels (read-only, contributor, editor, admin)
 - **Real-time Data**: Live updates using Supabase real-time subscriptions
 
+## Production Setup
+-  On Vercel linked to git@github.com:geoyang/knoxweb.git
+
 ## Development Setup
 
 ### Prerequisites

@@ -575,11 +575,11 @@ export const AlbumsManager: React.FC = () => {
                 </div>
               </div>
               {selectedAlbum.album_assets && selectedAlbum.album_assets.length > 0 ? (
-                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                <div className="flex flex-wrap gap-2">
                   {selectedAlbum.album_assets.map(asset => (
                     <div 
                       key={asset.id} 
-                      className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative"
+                      className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative"
                       onClick={() => setSelectedAsset(asset)}
                     >
                       {isWebAccessibleUrl(asset.asset_uri) ? (
@@ -590,18 +590,18 @@ export const AlbumsManager: React.FC = () => {
                         />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
-                          <div className="text-2xl mb-1">
+                          <div className="text-sm mb-0.5">
                             {asset.asset_type === 'video' ? '🎥' : '📸'}
                           </div>
-                          <div className="text-xs text-center px-1">
-                            {asset.asset_type === 'video' ? 'Video' : 'Image'} not available in web view
+                          <div className="text-[9px] text-center px-1">
+                            {asset.asset_type === 'video' ? 'Video' : 'Image'}
                           </div>
                         </div>
                       )}
                       {asset.asset_type === 'video' && isWebAccessibleUrl(asset.asset_uri) && (
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="bg-black/50 rounded-full p-2">
-                            <span className="text-white text-xl">▶️</span>
+                          <div className="bg-black/50 rounded-full p-1">
+                            <span className="text-white text-xs">▶️</span>
                           </div>
                         </div>
                       )}
