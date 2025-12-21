@@ -304,7 +304,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   };
 
   // Upload single file - follows mobile app pattern
-  const uploadFile = async (fileObj: UploadedFile) => {
+  // Returns true if successful, false otherwise
+  const uploadFile = async (fileObj: UploadedFile): Promise<boolean> => {
     try {
       // Update status to uploading
       setUploadedFiles(prev => prev.map(f =>
@@ -439,6 +440,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         f.id === fileObj.id ? { ...f, status: 'success', progress: 100, url: webUrl } : f
       ));
 
+      return true; // Success
+
     } catch (error) {
       console.error('Upload error:', error);
       setUploadedFiles(prev => prev.map(f =>
@@ -448,6 +451,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           error: error instanceof Error ? error.message : 'Upload failed'
         } : f
       ));
+      return false; // Failure
     }
   };
 
@@ -457,20 +461,19 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     if (filesToUpload.length === 0) return;
 
     setIsUploading(true);
+    let successCount = 0;
 
     // Upload files in batches of 3 to avoid overwhelming the server
     const batchSize = 3;
     for (let i = 0; i < filesToUpload.length; i += batchSize) {
       const batch = filesToUpload.slice(i, i + batchSize);
-      await Promise.all(batch.map(file => uploadFile(file)));
+      const results = await Promise.all(batch.map(file => uploadFile(file)));
+      successCount += results.filter(Boolean).length;
     }
 
     setIsUploading(false);
     setUploadComplete(true);
 
-    // Count successful uploads
-    const successCount = uploadedFiles.filter(f => f.status === 'success').length;
-    
     // Auto-close after successful upload
     setTimeout(() => {
       onImagesUploaded(successCount);
