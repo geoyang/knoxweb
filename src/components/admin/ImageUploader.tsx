@@ -129,26 +129,21 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     return result.url;
   };
 
-  // Upload to Supabase Storage as fallback
-  const uploadToSupabase = async (file: File): Promise<string> => {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${user!.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+  // Upload to Supabase Storage
+  const uploadToSupabase = async (file: File | Blob, customPath?: string): Promise<string> => {
+    const fileName = customPath || `${user!.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${(file as File).name?.split('.').pop() || 'jpg'}`;
 
     const { data, error } = await supabase.storage
       .from('assets')
-      .upload(fileName, file);
+      .upload(fileName, file, { upsert: true });
 
     if (error) {
       throw error;
     }
 
-    const { data: publicUrlData } = supabase.storage
-      .from('assets')
-      .getPublicUrl(data.path);
-
     // Manual URL construction as workaround for URL duplication bug
     const manualUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/assets/${data.path}`;
-    console.log('Manual URL construction:', { originalUrl: publicUrlData.publicUrl, manualUrl });
+    console.log('Uploaded to:', manualUrl);
 
     return manualUrl;
   };
@@ -297,7 +292,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     });
   };
 
-  // Upload single file
+  // Upload single file - follows mobile app pattern
   const uploadFile = async (fileObj: UploadedFile) => {
     try {
       // Update status to uploading
@@ -305,52 +300,89 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         f.id === fileObj.id ? { ...f, status: 'uploading', progress: 0 } : f
       ));
 
-      let fileToUpload: File | Blob = fileObj.file;
       const isHeic = isHeicFile(fileObj.file);
+      const isImage = fileObj.file.type.startsWith('image/') || isHeic;
+      const timestamp = Date.now();
 
-      // Convert HEIC to JPEG for web compatibility
+      // Step 1: Upload original file (including HEIC - preserves Live Photos etc.)
+      console.log('Uploading original file:', fileObj.file.name);
+      setUploadedFiles(prev => prev.map(f =>
+        f.id === fileObj.id ? { ...f, progress: 10 } : f
+      ));
+
+      const originalPath = `${user!.id}/${timestamp}_${fileObj.file.name}`;
+      const originalUrl = await uploadToSupabase(fileObj.file, originalPath);
+      console.log('Original uploaded:', originalUrl);
+
+      // Step 2: For HEIC, convert and upload web-compatible JPEG
+      let webUrl = originalUrl; // Default to original
       if (isHeic) {
-        console.log('Processing HEIC file:', fileObj.file.name);
+        console.log('Converting HEIC to JPEG for web display...');
         setUploadedFiles(prev => prev.map(f =>
-          f.id === fileObj.id ? { ...f, progress: 20 } : f
+          f.id === fileObj.id ? { ...f, progress: 30 } : f
         ));
 
         try {
           const jpegBlob = await convertHeicToJpeg(fileObj.file);
-          fileToUpload = new File(
-            [jpegBlob],
-            fileObj.file.name.replace(/\.(heic|heif)$/i, '.jpg'),
-            { type: 'image/jpeg' }
-          );
-          console.log('HEIC converted to JPEG successfully');
+          const webFilename = `web_${timestamp}_${fileObj.file.name.replace(/\.(heic|heif)$/i, '.jpg')}`;
+          const webPath = `${user!.id}/web/${webFilename}`;
+          webUrl = await uploadToSupabase(jpegBlob, webPath);
+          console.log('Web version uploaded:', webUrl);
         } catch (heicError) {
-          console.error('HEIC conversion failed:', heicError);
-          throw new Error('Failed to convert HEIC file. Please try a different format.');
+          console.warn('HEIC conversion failed, using original:', heicError);
+          // Continue with original - will show as not displayable
         }
       }
 
-      // Update progress
-      setUploadedFiles(prev => prev.map(f =>
-        f.id === fileObj.id ? { ...f, progress: 40 } : f
-      ));
+      // Step 3: Generate base64 thumbnail
+      let thumbnailData: string | null = null;
+      if (isImage) {
+        setUploadedFiles(prev => prev.map(f =>
+          f.id === fileObj.id ? { ...f, progress: 50 } : f
+        ));
 
-      // Upload the file (converted JPEG for HEIC, original for others)
-      let uploadUrl: string;
-      try {
-        // Try ImageKit first
-        uploadUrl = await uploadToImageKit(fileToUpload as File);
-      } catch (imagekitError) {
-        console.warn('ImageKit upload failed, trying Supabase:', imagekitError);
-        // Fallback to Supabase
-        uploadUrl = await uploadToSupabase(fileToUpload as File);
+        try {
+          // For HEIC, we need to convert first to generate thumbnail
+          const imageForThumbnail = isHeic ? await convertHeicToJpeg(fileObj.file) : fileObj.file;
+          thumbnailData = await generateThumbnail(imageForThumbnail);
+          console.log('Thumbnail generated, size:', Math.round(thumbnailData.length / 1024), 'KB');
+        } catch (thumbError) {
+          console.warn('Thumbnail generation failed:', thumbError);
+        }
       }
 
-      // Update progress to 75% after upload
+      setUploadedFiles(prev => prev.map(f =>
+        f.id === fileObj.id ? { ...f, progress: 60 } : f
+      ));
+
+      // Step 4: Create entry in assets table (following mobile pattern)
+      const assetId = `web_${generateId()}`;
+      const assetEntry = {
+        id: assetId,
+        path: originalUrl,
+        thumbnail: thumbnailData || originalUrl,
+        web_uri: webUrl,
+        user_id: user!.id,
+        created_at: new Date().toISOString(),
+        media_type: fileObj.file.type.startsWith('video/') ? 'video' : 'photo',
+      };
+
+      console.log('Creating assets entry:', assetEntry.id);
+      const { error: assetError } = await supabase
+        .from('assets')
+        .insert(assetEntry);
+
+      if (assetError) {
+        console.error('Failed to create asset entry:', assetError);
+        // Continue anyway - album_assets can still work without assets entry
+      }
+
+      // Update progress to 75% after uploads
       setUploadedFiles(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, progress: 75 } : f
       ));
 
-      // Get the highest display order in the target album
+      // Step 5: Get the highest display order in the target album
       const { data: maxOrderData } = await supabase
         .from('album_assets')
         .select('display_order')
@@ -360,24 +392,23 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       const displayOrder = (maxOrderData?.[0]?.display_order || 0) + 1;
 
-      // Create album asset entry
-      // Note: album_assets is a join table - thumbnail/web_uri live in the assets table
-      // For HEIC files, we've already converted to JPEG so asset_uri is the web-compatible URL
-      const assetData = {
+      // Step 6: Create album asset entry linking to the assets table entry
+      // asset_uri uses web URL for display, asset_id references the assets table
+      const albumAssetData = {
         album_id: targetAlbumId,
-        asset_id: generateId(),
-        asset_uri: uploadUrl,
+        asset_id: assetId, // Links to assets table
+        asset_uri: webUrl, // Web-compatible URL for display
         asset_type: fileObj.file.type.startsWith('video/') ? 'video' : 'image',
         display_order: displayOrder,
         date_added: new Date().toISOString(),
         user_id: user!.id
       };
 
-      console.log('Inserting album asset:', assetData);
+      console.log('Inserting album asset:', albumAssetData);
 
       const { error: insertError } = await supabase
         .from('album_assets')
-        .insert(assetData);
+        .insert(albumAssetData);
 
       if (insertError) {
         throw insertError;
@@ -385,7 +416,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       // Update status to success
       setUploadedFiles(prev => prev.map(f =>
-        f.id === fileObj.id ? { ...f, status: 'success', progress: 100, url: uploadUrl } : f
+        f.id === fileObj.id ? { ...f, status: 'success', progress: 100, url: webUrl } : f
       ));
 
     } catch (error) {
