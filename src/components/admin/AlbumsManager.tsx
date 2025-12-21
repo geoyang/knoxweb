@@ -268,8 +268,8 @@ export const AlbumsManager: React.FC = () => {
 
   const isWebAccessibleUrl = (url: string | null): boolean => {
     if (!url) return false;
-    // Check if URL is web accessible (http/https) and not a local scheme like ph://
-    return url.startsWith('http://') || url.startsWith('https://');
+    // Check if URL is web accessible (http/https, data URI) and not a local scheme like ph://
+    return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:');
   };
 
   // Helper to check if URL is HEIC/HEIF (can't be displayed in browsers)
