@@ -2,19 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
+interface Circle {
+  id: string;
+  name: string;
+  description?: string;
+  owner_id: string;
+}
+
 interface CircleInvite {
   id: string;
-  circle_id: string;
+  circle_id?: string;
   email: string;
   role: string;
   status: string;
   date_invited: string;
-  circles: {
-    id: string;
-    name: string;
-    description: string;
-    owner_id: string;
-  };
+  circle?: Circle;
 }
 
 interface Album {
@@ -26,6 +28,7 @@ interface Album {
   share_role: string;
   date_shared: string;
   assets: AlbumAsset[];
+  keyphotUrl?: string;
 }
 
 interface AlbumAsset {
@@ -36,10 +39,27 @@ interface AlbumAsset {
   asset_type: 'image' | 'video';
   display_order: number;
   date_added: string;
+  path?: string | null;
+  thumbnail?: string | null;
+}
+
+interface UserProfile {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  avatar_url?: string;
+}
+
+interface AccountStatus {
+  requiresAccount: boolean;
+  hasAccount: boolean;
+  profile: UserProfile | null;
 }
 
 interface AlbumData {
   invite: CircleInvite;
+  account: AccountStatus;
   albums: Album[];
   stats: {
     total_albums: number;
@@ -51,119 +71,184 @@ export const AlbumViewer: React.FC = () => {
   const { inviteId } = useParams<{ inviteId: string }>();
   const [albumData, setAlbumData] = useState<AlbumData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
 
-  const isWebAccessibleUrl = (url: string | null): boolean => {
+  // Registration form state
+  const [showRegistration, setShowRegistration] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [registrationSent, setRegistrationSent] = useState(false);
+  const [regForm, setRegForm] = useState({
+    firstName: '',
+    lastName: '',
+    phone: '',
+  });
+  const [regError, setRegError] = useState<string | null>(null);
+
+  const isWebAccessibleUrl = (url: string | null | undefined): boolean => {
     if (!url) return false;
-    // Check if URL is web accessible (http/https) and not a local scheme like ph://
     return url.startsWith('http://') || url.startsWith('https://');
   };
 
+  const getAssetUrl = (asset: AlbumAsset, fullSize: boolean = false): string | null => {
+    if (fullSize) {
+      if (isWebAccessibleUrl(asset.path)) return asset.path!;
+      if (isWebAccessibleUrl(asset.thumbnail)) return asset.thumbnail!;
+    } else {
+      if (isWebAccessibleUrl(asset.thumbnail)) return asset.thumbnail!;
+      if (isWebAccessibleUrl(asset.path)) return asset.path!;
+    }
+    if (isWebAccessibleUrl(asset.asset_uri)) return asset.asset_uri;
+    return null;
+  };
+
+  // Get keyphoto URL for an album
+  const getKeyphotoUrl = (album: Album): string | null => {
+    // If keyphoto is an asset ID, find the first asset's thumbnail
+    if (album.keyphotUrl) return album.keyphotUrl;
+    // Fall back to first asset in album
+    if (album.assets.length > 0) {
+      return getAssetUrl(album.assets[0], false);
+    }
+    return null;
+  };
+
+  const loadAlbumData = async (isRefresh = false) => {
+    if (!inviteId) {
+      setError('No invitation ID provided');
+      setLoading(false);
+      return;
+    }
+
+    if (isRefresh) {
+      setRefreshing(true);
+    }
+
+    try {
+      // Call the edge function to securely fetch album data
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/public-album-view?inviteId=${inviteId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to load album data');
+      }
+
+      const responseData = await response.json();
+      console.log('Edge function response:', responseData);
+
+      // Validate response has invite data
+      if (!responseData.invite) {
+        console.error('Missing invite data:', responseData);
+        throw new Error('Invalid response from server');
+      }
+
+      // Map the response to match our expected format
+      setAlbumData({
+        invite: {
+          id: responseData.invite.id,
+          circle_id: responseData.invite.circle?.id,
+          email: responseData.invite.email,
+          role: responseData.invite.role,
+          status: responseData.invite.status,
+          date_invited: responseData.invite.date_invited,
+          circle: responseData.invite.circle,
+        },
+        account: responseData.account || {
+          requiresAccount: false,
+          hasAccount: false,
+          profile: null,
+        },
+        albums: responseData.albums || [],
+        stats: responseData.stats || { total_albums: 0, total_photos: 0 },
+      });
+      setError(null);
+
+      // Show registration if account is required but not created
+      if (responseData.account?.requiresAccount && !responseData.account?.hasAccount) {
+        setShowRegistration(true);
+      } else {
+        setShowRegistration(false);
+      }
+    } catch (err) {
+      console.error('Error loading album data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load album');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    loadAlbumData(true);
+  };
+
+  const handleRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError(null);
+
+    // Validation
+    if (!regForm.firstName.trim() || !regForm.lastName.trim()) {
+      setRegError('First and last name are required');
+      return;
+    }
+    if (!regForm.phone.trim()) {
+      setRegError('Phone number is required');
+      return;
+    }
+
+    setRegistering(true);
+
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/create-circle-account`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            inviteId,
+            firstName: regForm.firstName.trim(),
+            lastName: regForm.lastName.trim(),
+            phone: regForm.phone.trim(),
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create account');
+      }
+
+      // Success - show verification sent message
+      setRegistrationSent(true);
+    } catch (err) {
+      setRegError(err instanceof Error ? err.message : 'Failed to create account');
+    } finally {
+      setRegistering(false);
+    }
+  };
+
   useEffect(() => {
-    const loadAlbumData = async () => {
-      if (!inviteId) {
-        setError('No invitation ID provided');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        // Get invite details with circle and owner information
-        const { data: inviteData, error: inviteError } = await supabase
-          .from('circle_users')
-          .select(`
-            id,
-            circle_id,
-            email,
-            role,
-            status,
-            date_invited,
-            circles!inner(
-              id,
-              name,
-              description,
-              owner_id
-            )
-          `)
-          .eq('id', inviteId)
-          .single();
-
-        if (inviteError || !inviteData) {
-          throw new Error('Invalid or expired invitation link');
-        }
-
-        // Get all albums shared with this circle
-        const { data: albumShares, error: sharesError } = await supabase
-          .from('album_shares')
-          .select(`
-            album_id,
-            role,
-            date_shared,
-            albums!inner(
-              id,
-              title,
-              description,
-              keyphoto,
-              date_created
-            )
-          `)
-          .eq('circle_id', inviteData.circle_id)
-          .eq('is_active', true);
-
-        let allAssets: AlbumAsset[] = [];
-        if (albumShares && albumShares.length > 0) {
-          const albumIds = albumShares.map(share => share.album_id);
-          
-          const { data: assetsData, error: assetsError } = await supabase
-            .from('album_assets')
-            .select(`
-              id,
-              album_id,
-              asset_id,
-              asset_uri,
-              asset_type,
-              display_order,
-              date_added
-            `)
-            .in('album_id', albumIds)
-            .order('album_id')
-            .order('display_order');
-
-          if (!assetsError) {
-            allAssets = assetsData || [];
-          }
-        }
-
-        // Prepare data for rendering
-        const albums: Album[] = albumShares?.map(share => ({
-          ...share.albums,
-          share_role: share.role,
-          date_shared: share.date_shared,
-          assets: allAssets.filter(asset => asset.album_id === share.album_id)
-        })) || [];
-
-        // Count only web-accessible assets for stats
-        const webAccessibleAssets = allAssets.filter(asset => isWebAccessibleUrl(asset.asset_uri));
-        
-        const stats = {
-          total_albums: albums.length,
-          total_photos: webAccessibleAssets.length
-        };
-
-        setAlbumData({
-          invite: inviteData,
-          albums,
-          stats
-        });
-      } catch (err) {
-        console.error('Error loading album data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load album');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadAlbumData();
   }, [inviteId]);
 
@@ -172,7 +257,7 @@ export const AlbumViewer: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
         <div className="bg-white/10 backdrop-blur-lg rounded-lg p-8 text-center text-white">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-lg">Loading shared album...</p>
+          <p className="text-lg">Loading shared albums...</p>
         </div>
       </div>
     );
@@ -183,7 +268,7 @@ export const AlbumViewer: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center">
         <div className="bg-white/10 backdrop-blur-lg rounded-lg p-8 text-center text-white max-w-md">
           <div className="text-6xl mb-4">⚠️</div>
-          <h2 className="text-2xl font-bold mb-2">Unable to Load Album</h2>
+          <h2 className="text-2xl font-bold mb-2">Unable to Load Albums</h2>
           <p className="text-lg">{error}</p>
         </div>
       </div>
@@ -200,105 +285,397 @@ export const AlbumViewer: React.FC = () => {
     );
   }
 
-  const { invite, albums, stats } = albumData;
+  const { invite, account, albums, stats } = albumData;
+  const isReadOnly = invite.role === 'read_only';
+  const canEdit = !isReadOnly && account?.hasAccount;
 
+  // Registration Form View
+  if (showRegistration && account?.requiresAccount && !account?.hasAccount) {
+    // Show verification sent confirmation
+    if (registrationSent) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
+            <div className="text-6xl mb-4">📧</div>
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">Check Your Email</h1>
+            <p className="text-gray-600 mb-4">
+              We've sent a verification link to:
+            </p>
+            <p className="font-semibold text-blue-600 text-lg mb-6">{invite.email}</p>
+            <div className="bg-blue-50 rounded-lg p-4 mb-6">
+              <p className="text-sm text-blue-800">
+                Click the link in the email to complete your registration and access <strong>{invite.circle?.name}</strong>.
+              </p>
+            </div>
+            <p className="text-sm text-gray-500">
+              Didn't receive the email? Check your spam folder or{' '}
+              <button
+                onClick={() => setRegistrationSent(false)}
+                className="text-blue-600 hover:underline"
+              >
+                try again
+              </button>
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // Show registration form
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+          <div className="text-center mb-6">
+            <div className="text-5xl mb-3">👋</div>
+            <h1 className="text-2xl font-bold text-gray-800">Create Your Knox Account</h1>
+            <p className="text-gray-600 mt-2">
+              You've been invited to <strong>{invite.circle?.name || 'a circle'}</strong> as an <strong className="capitalize">{invite.role?.replace('_', ' ')}</strong>
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              Complete your profile to access editing features
+            </p>
+          </div>
+
+          <form onSubmit={handleRegistration} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                <input
+                  type="text"
+                  value={regForm.firstName}
+                  onChange={(e) => setRegForm({ ...regForm, firstName: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="John"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
+                <input
+                  type="text"
+                  value={regForm.lastName}
+                  onChange={(e) => setRegForm({ ...regForm, lastName: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Doe"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
+              <input
+                type="tel"
+                value={regForm.phone}
+                onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="+1 (555) 123-4567"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                value={invite.email}
+                disabled
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">We'll send a verification link to this email</p>
+            </div>
+
+            {regError && (
+              <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">
+                {regError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={registering}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {registering ? (
+                <>
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Sending Verification...
+                </>
+              ) : (
+                'Send Verification Email'
+              )}
+            </button>
+          </form>
+
+          <p className="text-center text-sm text-gray-500 mt-6">
+            By creating an account, you agree to Knox's Terms of Service and Privacy Policy
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Album Detail View
+  if (selectedAlbum) {
+    const accessibleAssets = selectedAlbum.assets.filter(asset => getAssetUrl(asset) !== null);
+
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Album Header */}
+        <div className="bg-white shadow-sm sticky top-0 z-10">
+          <div className="max-w-6xl mx-auto px-4 py-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setSelectedAlbum(null)}
+                className="text-blue-600 hover:text-blue-800 flex items-center gap-2"
+              >
+                <span className="text-xl">←</span>
+                <span>Back to Albums</span>
+              </button>
+              <div className="flex-1">
+                <h1 className="text-xl font-bold text-gray-800">{selectedAlbum.title}</h1>
+                {selectedAlbum.description && (
+                  <p className="text-sm text-gray-500">{selectedAlbum.description}</p>
+                )}
+              </div>
+              <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
+                {accessibleAssets.length} photos
+              </span>
+
+              {/* Editor Controls */}
+              {canEdit && (
+                <button
+                  className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 flex items-center gap-2 transition-colors text-sm font-medium"
+                  onClick={() => alert('Add Photo feature coming soon! This will allow you to upload photos to this album.')}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Photos
+                </button>
+              )}
+
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="bg-gray-100 hover:bg-gray-200 rounded-full p-2 transition-all disabled:opacity-50"
+                title="Refresh"
+              >
+                <svg
+                  className={`w-5 h-5 text-gray-600 ${refreshing ? 'animate-spin' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Photos Grid */}
+        <div className="max-w-6xl mx-auto px-4 py-6">
+          {accessibleAssets.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="text-6xl mb-4 opacity-50">📷</div>
+              <h3 className="text-xl font-bold text-gray-700 mb-2">No Photos Available</h3>
+              <p className="text-gray-500">This album doesn't have any viewable photos yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {selectedAlbum.assets.map(asset => {
+                const thumbnailUrl = getAssetUrl(asset, false);
+                const fullSizeUrl = getAssetUrl(asset, true);
+                if (!thumbnailUrl) return null;
+                return (
+                  <div
+                    key={asset.id}
+                    className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative shadow-md"
+                    onClick={() => fullSizeUrl && setSelectedImage(fullSizeUrl)}
+                  >
+                    <img
+                      src={thumbnailUrl}
+                      alt="Photo"
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    {asset.asset_type === 'video' && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="bg-black/50 rounded-full p-3">
+                          <span className="text-white text-2xl">▶️</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Image Modal */}
+        {selectedImage && (
+          <div
+            className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
+            onClick={() => setSelectedImage(null)}
+          >
+            <div className="relative max-w-5xl max-h-full">
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="absolute -top-12 right-0 text-white text-3xl hover:text-gray-300"
+              >
+                ×
+              </button>
+              <img
+                src={selectedImage}
+                alt="Full size"
+                className="max-w-full max-h-[90vh] rounded-lg"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Albums Grid View (Main View)
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-        <div className="max-w-6xl mx-auto px-4 py-12">
-          <div className="text-center">
-            <div className="text-6xl mb-4">👥</div>
-            <h1 className="text-4xl font-bold mb-2">{invite.circles.name}</h1>
-            {invite.circles.description && (
-              <p className="text-xl opacity-90 mb-6">{invite.circles.description}</p>
-            )}
-            
-            <div className="bg-white/10 backdrop-blur-lg rounded-lg p-4 mb-6 inline-block">
-              <p className="text-sm opacity-90 mb-1">Shared by Knox User</p>
-              <p className="font-semibold">👁️ View-only access</p>
-            </div>
-
-            <a
-              href={`https://quqlovduekdasldqadge.supabase.co/signup?invite=${invite.id}`}
-              className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg inline-flex items-center gap-2 transition-colors"
+        <div className="max-w-6xl mx-auto px-4 py-10 relative">
+          {/* Refresh Button */}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 rounded-full p-3 transition-all disabled:opacity-50"
+            title="Refresh"
+          >
+            <svg
+              className={`w-5 h-5 text-white ${refreshing ? 'animate-spin' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              ➕ Join Knox for Full Access
-            </a>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          </button>
+
+          <div className="text-center">
+            <div className="text-5xl mb-3">👥</div>
+            <h1 className="text-3xl font-bold mb-2">{invite.circle?.name || 'Shared Album'}</h1>
+            {invite.circle?.description && (
+              <p className="text-lg opacity-90 mb-4">{invite.circle.description}</p>
+            )}
+
+            <div className="bg-white/10 backdrop-blur-lg rounded-lg px-4 py-2 inline-block">
+              <p className="text-sm font-medium">
+                {isReadOnly ? '👁️ View-only access' : canEdit ? '✏️ Editor access' : '👤 Member access'}
+              </p>
+            </div>
+            {canEdit && account?.profile && (
+              <p className="text-sm mt-2 opacity-75">
+                Signed in as {account.profile.first_name} {account.profile.last_name}
+              </p>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex justify-center gap-12 mb-8">
-          <div className="bg-white rounded-lg p-6 shadow-lg text-center">
-            <div className="text-3xl font-bold text-blue-600 mb-2">{stats.total_albums}</div>
-            <div className="text-gray-600">Albums</div>
+      {/* Stats and Editor Controls */}
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <div className="flex justify-center items-center gap-8 mb-8">
+          <div className="bg-white rounded-lg px-6 py-4 shadow-md text-center">
+            <div className="text-2xl font-bold text-blue-600">{stats.total_albums}</div>
+            <div className="text-gray-600 text-sm">Albums</div>
           </div>
-          <div className="bg-white rounded-lg p-6 shadow-lg text-center">
-            <div className="text-3xl font-bold text-blue-600 mb-2">{stats.total_photos}</div>
-            <div className="text-gray-600">Photos</div>
+          <div className="bg-white rounded-lg px-6 py-4 shadow-md text-center">
+            <div className="text-2xl font-bold text-blue-600">{stats.total_photos}</div>
+            <div className="text-gray-600 text-sm">Photos</div>
           </div>
+
+          {/* Add Album Button for Editors */}
+          {canEdit && (
+            <button
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-6 py-4 shadow-md flex items-center gap-2 transition-colors"
+              onClick={() => alert('Add Album feature coming soon! This will allow you to create new albums.')}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="font-medium">Add Album</span>
+            </button>
+          )}
         </div>
 
-        {/* Albums */}
+        {/* Albums Grid */}
         {albums.length === 0 ? (
           <div className="text-center py-16">
-            <div className="text-6xl mb-4 opacity-50">📷</div>
-            <h3 className="text-2xl font-bold text-gray-700 mb-2">No Photos Shared Yet</h3>
-            <p className="text-gray-500">Photos will appear here when they're added to shared albums.</p>
+            <div className="text-6xl mb-4 opacity-50">📁</div>
+            <h3 className="text-2xl font-bold text-gray-700 mb-2">No Albums Shared Yet</h3>
+            <p className="text-gray-500">Albums will appear here when they're shared with this circle.</p>
           </div>
         ) : (
-          <div className="space-y-12">
-            {albums.map(album => (
-              <div key={album.id} className="bg-white rounded-lg shadow-lg overflow-hidden">
-                <div className="bg-gray-50 px-6 py-4 border-b flex items-center gap-3">
-                  <span className="text-blue-600 text-xl">📁</span>
-                  <h3 className="text-xl font-bold text-gray-800 flex-1">{album.title}</h3>
-                  <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
-                    {album.assets.filter(asset => isWebAccessibleUrl(asset.asset_uri)).length} photos
-                  </span>
-                </div>
-                
-                {album.assets.length > 0 && (
-                  <div className="p-6">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                      {album.assets.map(asset => (
-                        <div
-                          key={asset.id}
-                          className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative"
-                          onClick={() => isWebAccessibleUrl(asset.asset_uri) && setSelectedImage(asset.asset_uri)}
-                        >
-                          {isWebAccessibleUrl(asset.asset_uri) ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {albums.map(album => {
+              const keyphotoUrl = getKeyphotoUrl(album);
+              const photoCount = album.assets.filter(a => getAssetUrl(a) !== null).length;
+
+              return (
+                <div
+                  key={album.id}
+                  className="cursor-pointer group"
+                  onClick={() => setSelectedAlbum(album)}
+                >
+                  {/* Album Cover */}
+                  <div className="relative aspect-square bg-gray-100 rounded-2xl overflow-hidden shadow-lg group-hover:shadow-xl transition-all group-hover:scale-[1.02]">
+                    {keyphotoUrl ? (
+                      <>
+                        {/* Folder icon background */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="text-8xl text-yellow-400 drop-shadow-lg">📁</div>
+                        </div>
+                        {/* Photo inside folder */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-[55%] h-[55%] rounded-lg overflow-hidden border-2 border-white/80 shadow-md mt-2">
                             <img
-                              src={asset.asset_uri}
-                              alt="Photo"
+                              src={keyphotoUrl}
+                              alt={album.title}
                               className="w-full h-full object-cover"
                               loading="lazy"
                             />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 bg-gray-200">
-                              <div className="text-3xl mb-2">{asset.asset_type === 'video' ? '🎥' : '📸'}</div>
-                              <div className="text-xs text-center px-2">
-                                Media not available
-                              </div>
-                            </div>
-                          )}
-                          {asset.asset_type === 'video' && isWebAccessibleUrl(asset.asset_uri) && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="bg-black/50 rounded-full p-2">
-                                <span className="text-white text-xl">▶️</span>
-                              </div>
-                            </div>
-                          )}
+                          </div>
                         </div>
-                      ))}
-                    </div>
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="text-8xl text-yellow-400 drop-shadow-lg">📁</div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {/* Album Info */}
+                  <div className="mt-3 text-center">
+                    <h3 className="font-semibold text-gray-800 truncate">{album.title}</h3>
+                    <p className="text-sm text-gray-500">{photoCount} photos</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -307,31 +684,15 @@ export const AlbumViewer: React.FC = () => {
           <p className="text-gray-600">
             Powered by <span className="font-bold text-blue-600">Knox</span>
           </p>
-          <p className="text-gray-500">Secure photo sharing for families and teams</p>
+          <p className="text-gray-500 text-sm">Secure photo sharing for families and teams</p>
+          <a
+            href="https://knox.eoyang.com"
+            className="inline-block mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
+          >
+            Get Knox for Free
+          </a>
         </div>
       </div>
-
-      {/* Image Modal */}
-      {selectedImage && isWebAccessibleUrl(selectedImage) && (
-        <div 
-          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
-          onClick={() => setSelectedImage(null)}
-        >
-          <div className="relative max-w-4xl max-h-full">
-            <button
-              onClick={() => setSelectedImage(null)}
-              className="absolute -top-12 right-0 text-white text-2xl hover:text-gray-300"
-            >
-              ×
-            </button>
-            <img
-              src={selectedImage}
-              alt="Full size"
-              className="max-w-full max-h-full rounded-lg"
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

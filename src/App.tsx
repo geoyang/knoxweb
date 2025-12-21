@@ -4,6 +4,8 @@ import { AlbumViewer } from './components/AlbumViewer';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Login } from './components/Login';
 import { AuthCallback } from './components/AuthCallback';
+import { VerifyRegistration } from './components/VerifyRegistration';
+import { Dashboard } from './components/Dashboard';
 
 function App() {
   return (
@@ -11,14 +13,20 @@ function App() {
       <Routes>
         {/* Public route for album viewing without authentication */}
         <Route path="/album/:inviteId" element={<AlbumViewer />} />
-        
+
+        {/* Registration verification route */}
+        <Route path="/verify" element={<VerifyRegistration />} />
+
+        {/* User dashboard (for circle members) */}
+        <Route path="/dashboard" element={<Dashboard />} />
+
         {/* Authentication routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
-        
+
         {/* Admin routes (require authentication) */}
         <Route path="/admin/*" element={<AdminDashboard />} />
-        
+
         {/* Default route */}
         <Route path="/" element={<Navigate to="/admin" replace />} />
       </Routes>
