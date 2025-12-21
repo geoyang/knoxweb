@@ -100,7 +100,7 @@ class AdminApiService {
   }
 
   // Albums API
-  async getAlbums(): Promise<ApiResponse<{ albums: any[], count: number }>> {
+  async getAlbums(): Promise<ApiResponse<{ albums: any[], count: number, stats?: { owned: number, shared: number } }>> {
     return this.makeApiCall('admin-albums-api', {
       method: 'GET'
     });
