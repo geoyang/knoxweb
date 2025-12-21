@@ -9,7 +9,7 @@ interface User {
   date_created: string;
   date_modified: string;
   created_at: string;
-  last_sign_in_at: string | null;
+  last_sign_in_at: string | null | undefined;
   circle_memberships?: {
     id: string;
     role: string;
@@ -17,7 +17,7 @@ interface User {
     circles: {
       id: string;
       name: string;
-    };
+    } | any;
   }[];
   album_count?: number;
 }

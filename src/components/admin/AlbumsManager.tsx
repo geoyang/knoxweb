@@ -45,7 +45,7 @@ export const AlbumsManager: React.FC = () => {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [circles, setCircles] = useState<Circle[]>([]);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
-  const [selectedAsset, setSelectedAsset] = useState<Album['album_assets'][0] | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<NonNullable<Album['album_assets']>[0] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showShareForm, setShowShareForm] = useState(false);

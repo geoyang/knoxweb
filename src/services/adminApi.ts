@@ -27,13 +27,13 @@ class AdminApiService {
   }
 
   private async makeApiCall<T>(
-    functionName: string, 
-    options: RequestInit = {}
+    functionName: string,
+    options: { body?: any; headers?: Record<string, string>; method?: string } = {}
   ): Promise<ApiResponse<T>> {
     try {
-      const headers = await this.getAuthHeaders();
-      
-      if (!headers) {
+      const authHeaders = await this.getAuthHeaders();
+
+      if (!authHeaders) {
         return {
           success: false,
           error: 'Authentication required'
@@ -41,11 +41,11 @@ class AdminApiService {
       }
 
       const { data, error } = await supabase.functions.invoke(functionName, {
-        ...options,
+        body: options.body,
         headers: {
-          ...headers,
+          ...authHeaders,
           'Content-Type': 'application/json',
-          ...options.headers,
+          ...(options.headers || {}),
         }
       });
 

@@ -10,11 +10,7 @@ interface Asset {
   asset_type: 'image' | 'video';
   display_order: number;
   date_added: string;
-  albums: {
-    id: string;
-    title: string;
-    user_id: string;
-  };
+  albums: any;
 }
 
 interface Album {

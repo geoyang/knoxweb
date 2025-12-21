@@ -153,7 +153,7 @@ export const DebugSupabase: React.FC = () => {
         setDetails({
           url,
           hasKey: !!key,
-          session: authData.session ? 'Active' : 'None',
+          session: 'Checked',
           dbAccess: 'OK'
         });
 
