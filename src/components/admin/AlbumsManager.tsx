@@ -918,7 +918,7 @@ export const AlbumsManager: React.FC = () => {
                       <img
                         src={imageUrl || ''}
                         alt="Full size"
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-contain mt-[10px]"
                       />
                     );
                   } else if (hasWebAccessibleUrl && isVideo) {
