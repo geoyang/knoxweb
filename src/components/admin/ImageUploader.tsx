@@ -129,8 +129,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     return result.url;
   };
 
-  // Upload to Supabase Storage
-  const uploadToSupabase = async (file: File | Blob, customPath?: string): Promise<string> => {
+  // Upload to Supabase Storage - returns URL and storage object ID
+  const uploadToSupabase = async (file: File | Blob, customPath?: string): Promise<{ url: string; objectId: string }> => {
     const fileName = customPath || `${user!.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${(file as File).name?.split('.').pop() || 'jpg'}`;
 
     const { data, error } = await supabase.storage
@@ -143,9 +143,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
     // Manual URL construction as workaround for URL duplication bug
     const manualUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/assets/${data.path}`;
-    console.log('Uploaded to:', manualUrl);
+    console.log('Uploaded to:', manualUrl, 'objectId:', data.id);
 
-    return manualUrl;
+    return { url: manualUrl, objectId: data.id };
   };
 
   // Handle file selection
@@ -311,7 +311,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       ));
 
       const originalPath = `${user!.id}/${timestamp}_${fileObj.file.name}`;
-      const originalUrl = await uploadToSupabase(fileObj.file, originalPath);
+      const originalUpload = await uploadToSupabase(fileObj.file, originalPath);
+      const originalUrl = originalUpload.url;
+      const objectId = originalUpload.objectId;
       console.log('Original uploaded:', originalUrl);
 
       // Step 2: For HEIC, convert and upload web-compatible JPEG
@@ -326,7 +328,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           const jpegBlob = await convertHeicToJpeg(fileObj.file);
           const webFilename = `web_${timestamp}_${fileObj.file.name.replace(/\.(heic|heif)$/i, '.jpg')}`;
           const webPath = `${user!.id}/web/${webFilename}`;
-          webUrl = await uploadToSupabase(jpegBlob, webPath);
+          const webUpload = await uploadToSupabase(jpegBlob, webPath);
+          webUrl = webUpload.url;
           console.log('Web version uploaded:', webUrl);
         } catch (heicError) {
           console.warn('HEIC conversion failed, using original:', heicError);
@@ -362,19 +365,25 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         path: originalUrl,
         thumbnail: thumbnailData || originalUrl,
         web_uri: webUrl,
+        object_id: objectId, // Storage object ID from Supabase
         user_id: user!.id,
         created_at: new Date().toISOString(),
         media_type: fileObj.file.type.startsWith('video/') ? 'video' : 'photo',
       };
 
-      console.log('Creating assets entry:', assetEntry.id);
-      const { error: assetError } = await supabase
+      console.log('Creating assets entry:', assetEntry);
+      const { data: insertedAsset, error: assetError } = await supabase
         .from('assets')
-        .insert(assetEntry);
+        .insert(assetEntry)
+        .select()
+        .single();
 
       if (assetError) {
         console.error('Failed to create asset entry:', assetError);
+        console.error('Asset entry data was:', JSON.stringify(assetEntry, null, 2));
         // Continue anyway - album_assets can still work without assets entry
+      } else {
+        console.log('Asset entry created successfully:', insertedAsset?.id);
       }
 
       // Update progress to 75% after uploads
