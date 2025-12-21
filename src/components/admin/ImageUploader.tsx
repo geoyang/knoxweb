@@ -129,6 +129,15 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     return result.url;
   };
 
+  // Generate UUID v4
+  const generateUUID = (): string => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   // Upload to Supabase Storage - returns URL and storage object ID
   const uploadToSupabase = async (file: File | Blob, customPath?: string): Promise<{ url: string; objectId: string }> => {
     const fileName = customPath || `${user!.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${(file as File).name?.split('.').pop() || 'jpg'}`;
@@ -143,9 +152,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
     // Manual URL construction as workaround for URL duplication bug
     const manualUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/assets/${data.path}`;
-    console.log('Uploaded to:', manualUrl, 'objectId:', data.id);
+    // Use storage id if available, otherwise generate a UUID
+    const objectId = data.id || generateUUID();
+    console.log('Uploaded to:', manualUrl, 'objectId:', objectId, '(from storage:', !!data.id, ')');
 
-    return { url: manualUrl, objectId: data.id };
+    return { url: manualUrl, objectId };
   };
 
   // Handle file selection
