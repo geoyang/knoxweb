@@ -329,7 +329,7 @@ export const AlbumsManager: React.FC = () => {
       });
 
       if (displayableAssets.length > 0) {
-        const firstImage = displayableAssets.find(asset => asset.asset_type === 'image');
+        const firstImage = displayableAssets.find(asset => asset.asset_type !== 'video');
         const asset = firstImage || displayableAssets[0];
         // Use thumbnail for HEIC files
         return getWebCompatibleImageUrl(asset.asset_uri, {
@@ -400,21 +400,39 @@ export const AlbumsManager: React.FC = () => {
               className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
               onClick={() => setSelectedAlbum(album)}
             >
-              <div className="aspect-square bg-gray-100 rounded-t-lg overflow-hidden">
+              <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 rounded-t-lg overflow-hidden flex items-center justify-center">
                 {(() => {
                   const displayImage = getDisplayImage(album);
-                  return displayImage && !failedImages.has(album.id) ? (
-                    <img
-                      src={displayImage}
-                      alt={album.title}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      crossOrigin="anonymous"
-                      onError={() => handleImageError(album.id, displayImage)}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400">
-                      <span className="text-4xl">📷</span>
+                  return (
+                    <div className="relative flex items-center justify-center">
+                      {/* Folder icon - sharp edges */}
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 48 48"
+                        className="w-32 h-32 md:w-40 md:h-40"
+                      >
+                        <path fill="#FFA000" d="M40 12H22l-4-4H8c-2.2 0-4 1.8-4 4v8h40v-4c0-2.2-1.8-4-4-4z"/>
+                        <path fill="#FFCA28" d="M40 12H8c-2.2 0-4 1.8-4 4v20c0 2.2 1.8 4 4 4h32c2.2 0 4-1.8 4-4V16c0-2.2-1.8-4-4-4z"/>
+                      </svg>
+                      {/* Keyphoto overlay */}
+                      {displayImage && !failedImages.has(album.id) ? (
+                        <div className="absolute inset-0 flex items-center justify-center pt-4">
+                          <img
+                            src={displayImage}
+                            alt={album.title}
+                            className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-md border-2 border-white shadow-md"
+                            loading="lazy"
+                            crossOrigin="anonymous"
+                            onError={() => handleImageError(album.id, displayImage)}
+                          />
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center pt-4">
+                          <div className="w-16 h-16 md:w-20 md:h-20 bg-amber-100 rounded-md border-2 border-white shadow-md flex items-center justify-center">
+                            <span className="text-2xl">📷</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -858,7 +876,7 @@ export const AlbumsManager: React.FC = () => {
           className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedAsset(null)}
         >
-          <div className="relative max-w-4xl max-h-full">
+          <div className="relative max-w-4xl max-h-full my-12">
             <button
               onClick={() => setSelectedAsset(null)}
               className="absolute -top-12 right-0 text-white text-2xl hover:text-gray-300"
@@ -868,38 +886,65 @@ export const AlbumsManager: React.FC = () => {
             
             <div className="bg-white rounded-lg overflow-hidden">
               <div className="aspect-video bg-gray-100">
-                {(selectedAsset.web_uri && isWebAccessibleUrl(selectedAsset.web_uri)) ||
-                 (selectedAsset.thumbnail_uri && isWebAccessibleUrl(selectedAsset.thumbnail_uri)) ||
-                 isWebAccessibleUrl(selectedAsset.asset_uri) ? (
-                  selectedAsset.asset_type === 'image' ? (
-                    <img
-                      src={getWebCompatibleImageUrl(selectedAsset.asset_uri, {
-                        webUri: selectedAsset.web_uri,
-                        thumbnailUri: selectedAsset.thumbnail_uri
-                      }) || ''}
-                      alt="Full size"
-                      className="w-full h-full object-contain"
-                    />
-                  ) : (
-                    // For videos, show a placeholder with link
-                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
-                      <div className="text-6xl mb-4">🎥</div>
-                      <div className="text-xl font-semibold mb-2">Video Playback</div>
-                      <div className="text-sm text-center max-w-md">
-                        Video playback in albums requires additional implementation.
-                        <br />
-                        <a 
-                          href={selectedAsset.asset_uri} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 underline mt-2 inline-block"
-                        >
-                          Open video in new tab
-                        </a>
+                {(() => {
+                  // Debug logging
+                  console.log('Selected asset:', {
+                    id: selectedAsset.id,
+                    asset_type: selectedAsset.asset_type,
+                    asset_uri: selectedAsset.asset_uri,
+                    web_uri: selectedAsset.web_uri,
+                    thumbnail_uri: selectedAsset.thumbnail_uri,
+                  });
+
+                  const hasWebAccessibleUrl =
+                    (selectedAsset.web_uri && isWebAccessibleUrl(selectedAsset.web_uri)) ||
+                    (selectedAsset.thumbnail_uri && isWebAccessibleUrl(selectedAsset.thumbnail_uri)) ||
+                    isWebAccessibleUrl(selectedAsset.asset_uri);
+
+                  // Determine if this is a video based on asset_type OR file extension
+                  const isVideo = selectedAsset.asset_type === 'video' ||
+                    selectedAsset.asset_uri?.toLowerCase().match(/\.(mp4|mov|avi|webm|mkv)$/);
+
+                  console.log('Is video?', isVideo, 'Has web URL?', hasWebAccessibleUrl);
+
+                  if (hasWebAccessibleUrl && !isVideo) {
+                    // Show image
+                    const imageUrl = getWebCompatibleImageUrl(selectedAsset.asset_uri, {
+                      webUri: selectedAsset.web_uri,
+                      thumbnailUri: selectedAsset.thumbnail_uri
+                    });
+                    console.log('Displaying image with URL:', imageUrl);
+                    return (
+                      <img
+                        src={imageUrl || ''}
+                        alt="Full size"
+                        className="w-full h-full object-contain"
+                      />
+                    );
+                  } else if (hasWebAccessibleUrl && isVideo) {
+                    // Show video placeholder
+                    return (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
+                        <div className="text-6xl mb-4">🎥</div>
+                        <div className="text-xl font-semibold mb-2">Video Playback</div>
+                        <div className="text-sm text-center max-w-md">
+                          Video playback in albums requires additional implementation.
+                          <br />
+                          <a
+                            href={selectedAsset.asset_uri}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 underline mt-2 inline-block"
+                          >
+                            Open video in new tab
+                          </a>
+                        </div>
                       </div>
-                    </div>
-                  )
-                ) : (
+                    );
+                  } else {
+                    return null; // Fall through to "Not Available" below
+                  }
+                })() || (
                   <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
                     <div className="text-6xl mb-4">
                       {selectedAsset.asset_type === 'video' ? '🎥' : '📸'}
@@ -924,22 +969,32 @@ export const AlbumsManager: React.FC = () => {
                 </h3>
                 <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
                   <div>
-                    <span className="font-medium">Type:</span> {selectedAsset.asset_type}
+                    <span className="font-medium">Type:</span> {selectedAsset.asset_type || 'unknown'}
                   </div>
                   <div>
                     <span className="font-medium">ID:</span> {selectedAsset.id}
                   </div>
                 </div>
-                
+
                 <div className="mt-4 flex space-x-2">
-                  <a
-                    href={selectedAsset.asset_uri}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                  >
-                    Open Original
-                  </a>
+                  {isHeicUrl(selectedAsset.asset_uri) ? (
+                    <a
+                      href={selectedAsset.asset_uri}
+                      download
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                    >
+                      Download Original (HEIC)
+                    </a>
+                  ) : (
+                    <a
+                      href={selectedAsset.asset_uri}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                    >
+                      Open Original
+                    </a>
+                  )}
                 </div>
               </div>
             </div>

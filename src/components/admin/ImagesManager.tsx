@@ -516,11 +516,11 @@ export const ImagesManager: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      asset.asset_type === 'image' 
-                        ? 'bg-blue-100 text-blue-800' 
+                      asset.asset_type !== 'video'
+                        ? 'bg-blue-100 text-blue-800'
                         : 'bg-purple-100 text-purple-800'
                     }`}>
-                      {asset.asset_type === 'image' ? '🖼️ Image' : '🎥 Video'}
+                      {asset.asset_type !== 'video' ? '🖼️ Image' : '🎥 Video'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -588,7 +588,8 @@ export const ImagesManager: React.FC = () => {
             <div className="bg-white rounded-lg overflow-hidden">
               <div className="aspect-video bg-gray-100">
                 {isWebAccessibleUrl(selectedAsset.asset_uri) ? (
-                  selectedAsset.asset_type === 'image' ? (
+                  // Check for NOT video (covers 'image', 'photo', undefined, null)
+                  selectedAsset.asset_type !== 'video' ? (
                     <AuthenticatedImage
                       asset={selectedAsset}
                       alt="Full size"
@@ -603,9 +604,9 @@ export const ImagesManager: React.FC = () => {
                       <div className="text-sm text-center max-w-md">
                         Video playback in authenticated storage requires additional implementation.
                         <br />
-                        <a 
-                          href={selectedAsset.asset_uri} 
-                          target="_blank" 
+                        <a
+                          href={selectedAsset.asset_uri}
+                          target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800 underline mt-2 inline-block"
                         >
