@@ -180,7 +180,7 @@ class AdminApiService {
   async inviteUserToCircle(circleId: string, inviteData: {
     email: string;
     role: string;
-  }): Promise<ApiResponse<{ invitation: any }>> {
+  }): Promise<ApiResponse<{ invitation: any; emailSent?: boolean }>> {
     return this.makeApiCall(`admin-circles-api?circle_id=${circleId}`, {
       method: 'POST',
       body: JSON.stringify(inviteData)
