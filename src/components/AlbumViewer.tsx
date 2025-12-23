@@ -35,6 +35,7 @@ interface AlbumAsset {
   album_id: string;
   asset_id: string;
   asset_uri: string;
+  web_uri: string;
   asset_type: 'image' | 'video';
   display_order: number;
   date_added: string;
@@ -72,7 +73,7 @@ export const AlbumViewer: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<AlbumAsset | null>(null);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
 
   // Registration form state
@@ -88,28 +89,55 @@ export const AlbumViewer: React.FC = () => {
 
   const isWebAccessibleUrl = (url: string | null | undefined): boolean => {
     if (!url) return false;
-    return url.startsWith('http://') || url.startsWith('https://');
+    // Include data: URIs for base64 thumbnails
+    return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:');
   };
 
-  const getAssetUrl = (asset: AlbumAsset, fullSize: boolean = false): string | null => {
-    if (fullSize) {
-      if (isWebAccessibleUrl(asset.path)) return asset.path!;
-      if (isWebAccessibleUrl(asset.thumbnail)) return asset.thumbnail!;
-    } else {
-      if (isWebAccessibleUrl(asset.thumbnail)) return asset.thumbnail!;
-      if (isWebAccessibleUrl(asset.path)) return asset.path!;
+  // Get URL for displaying in the web viewer (highest quality web-compatible image)
+  const getDisplayUrl = (asset: AlbumAsset): string | null => {
+    // Priority 1: path (highest quality web URL)
+    if (asset.web_uri && (asset.web_uri.startsWith('http://') || asset.web_uri.startsWith('https://'))) {
+      return asset.web_uri;
     }
+    // // Priority 2: asset_uri
+    // if (asset.asset_uri && (asset.asset_uri.startsWith('http://') || asset.asset_uri.startsWith('https://'))) {
+    //   return asset.asset_uri;
+    // }
+    // Priority 3: thumbnail as fallback
+    if (asset.thumbnail && isWebAccessibleUrl(asset.thumbnail)) {
+      return asset.thumbnail;
+    }
+    return null;
+  };
+
+  // Get URL for downloading the original file (could be HEIC, video, etc.)
+  const getOriginalUrl = (asset: AlbumAsset): string | null => {
+    // path contains the original file URL (HEIC, video, etc.)
+    if (asset.path && isWebAccessibleUrl(asset.path)) return asset.path;
+    // Fall back to asset_uri if path is not available
     if (isWebAccessibleUrl(asset.asset_uri)) return asset.asset_uri;
     return null;
   };
 
+  // Get thumbnail URL for grid display
+  const getThumbnailUrl = (asset: AlbumAsset): string | null => {
+    // Prefer base64 thumbnail first (fastest loading)
+    if (asset.thumbnail?.startsWith('data:')) return asset.thumbnail;
+    // Then try thumbnail URL
+    if (isWebAccessibleUrl(asset.thumbnail)) return asset.thumbnail!;
+    // Fall back to display URL
+    return getDisplayUrl(asset);
+  };
+
   // Get keyphoto URL for an album
   const getKeyphotoUrl = (album: Album): string | null => {
-    // If keyphoto is an asset ID, find the first asset's thumbnail
-    if (album.keyphotUrl) return album.keyphotUrl;
+    // If keyphoto URL is provided and is accessible (including base64)
+    if (album.keyphotUrl && isWebAccessibleUrl(album.keyphotUrl)) {
+      return album.keyphotUrl;
+    }
     // Fall back to first asset in album
     if (album.assets.length > 0) {
-      return getAssetUrl(album.assets[0], false);
+      return getThumbnailUrl(album.assets[0]);
     }
     return null;
   };
@@ -419,7 +447,7 @@ export const AlbumViewer: React.FC = () => {
 
   // Album Detail View
   if (selectedAlbum) {
-    const accessibleAssets = selectedAlbum.assets.filter(asset => getAssetUrl(asset) !== null);
+    const accessibleAssets = selectedAlbum.assets.filter(asset => getThumbnailUrl(asset) !== null);
 
     return (
       <div className="min-h-screen bg-gray-50">
@@ -492,14 +520,14 @@ export const AlbumViewer: React.FC = () => {
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {selectedAlbum.assets.map(asset => {
-                const thumbnailUrl = getAssetUrl(asset, false);
-                const fullSizeUrl = getAssetUrl(asset, true);
+                const thumbnailUrl = getThumbnailUrl(asset);
+                const displayUrl = getDisplayUrl(asset);
                 if (!thumbnailUrl) return null;
                 return (
                   <div
                     key={asset.id}
                     className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative shadow-md"
-                    onClick={() => fullSizeUrl && setSelectedImage(fullSizeUrl)}
+                    onClick={() => displayUrl && setSelectedAsset(asset)}
                   >
                     <img
                       src={thumbnailUrl}
@@ -522,23 +550,55 @@ export const AlbumViewer: React.FC = () => {
         </div>
 
         {/* Image Modal */}
-        {selectedImage && (
+        {selectedAsset && (
           <div
             className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
-            onClick={() => setSelectedImage(null)}
+            onClick={() => setSelectedAsset(null)}
           >
-            <div className="relative max-w-5xl max-h-full">
+            <div className="relative max-w-5xl max-h-full" onClick={(e) => e.stopPropagation()}>
+              {/* Close button */}
               <button
-                onClick={() => setSelectedImage(null)}
+                onClick={() => setSelectedAsset(null)}
                 className="absolute -top-12 right-0 text-white text-3xl hover:text-gray-300"
               >
                 ×
               </button>
-              <img
-                src={selectedImage}
-                alt="Full size"
-                className="max-w-full max-h-[90vh] rounded-lg"
-              />
+
+              {/* Display image - use high quality web-compatible JPEG */}
+              {selectedAsset.asset_type === 'video' ? (
+                <div className="bg-gray-900 rounded-lg p-8 text-center">
+                  <div className="text-6xl mb-4">🎬</div>
+                  <p className="text-white text-lg mb-4">Video Preview</p>
+                  <p className="text-gray-400 text-sm mb-6">
+                    Download the original to play this video
+                  </p>
+                </div>
+              ) : (
+                <img
+                  src={getDisplayUrl(selectedAsset) || ''}
+                  alt="Full size"
+                  className="max-w-full max-h-[80vh] rounded-lg mt-[10px]"
+                />
+              )}
+
+              {/* Download Original button */}
+              {getOriginalUrl(selectedAsset) && (
+                <div className="mt-4 flex justify-center">
+                  <a
+                    href={getOriginalUrl(selectedAsset)!}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-6 rounded-lg flex items-center gap-2 transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download Original
+                  </a>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -632,7 +692,7 @@ export const AlbumViewer: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {albums.map(album => {
               const keyphotoUrl = getKeyphotoUrl(album);
-              const photoCount = album.assets.filter(a => getAssetUrl(a) !== null).length;
+              const photoCount = album.assets.filter(a => getThumbnailUrl(a) !== null).length;
 
               return (
                 <div

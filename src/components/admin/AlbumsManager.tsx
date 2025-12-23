@@ -79,30 +79,30 @@ export const AlbumsManager: React.FC = () => {
     }
   }, [user?.id]);
 
-  const loadAlbums = async () => {
+  const loadAlbums = async (): Promise<Album[]> => {
     if (!user?.id) {
       console.warn('No user ID available for filtering albums');
       setAlbums([]);
       setLoading(false);
-      return;
+      return [];
     }
 
     try {
       setLoading(true);
       setError(null);
-      
+
       // Check authentication state first
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
+
       if (sessionError || !session?.access_token) {
         console.error('Authentication issue:', sessionError);
         setError('Please log in again to continue.');
         setLoading(false);
-        return;
+        return [];
       }
-      
+
       const result = await adminApi.getAlbums();
-      
+
       if (!result.success) {
         throw new Error(adminApi.handleApiError(result));
       }
@@ -124,12 +124,14 @@ export const AlbumsManager: React.FC = () => {
           assets: album.album_assets?.slice(0, 2) // Log first 2 assets for debugging
         });
       });
-      
+
       setFailedImages(new Set()); // Reset failed images when data reloads
       setError(null);
+      return enrichedAlbums;
     } catch (err) {
       console.error('Error loading albums:', err);
       setError(err instanceof Error ? err.message : 'Failed to load albums');
+      return [];
     } finally {
       setLoading(false);
     }
@@ -276,10 +278,10 @@ export const AlbumsManager: React.FC = () => {
     console.log(`Added ${count} photos to album`);
     setShowPhotoPicker(false);
     // Reload albums to get updated asset counts
-    await loadAlbums();
+    const freshAlbums = await loadAlbums();
     // If we have a selected album, refresh it to show new photos
     if (selectedAlbum) {
-      const updatedAlbum = albums.find(album => album.id === selectedAlbum.id);
+      const updatedAlbum = freshAlbums.find(album => album.id === selectedAlbum.id);
       if (updatedAlbum) {
         setSelectedAlbum(updatedAlbum);
       }
@@ -290,10 +292,10 @@ export const AlbumsManager: React.FC = () => {
     console.log(`Uploaded ${count} new images to album`);
     setShowImageUploader(false);
     // Reload albums to get updated asset counts
-    await loadAlbums();
+    const freshAlbums = await loadAlbums();
     // If we have a selected album, refresh it to show new photos
     if (selectedAlbum) {
-      const updatedAlbum = albums.find(album => album.id === selectedAlbum.id);
+      const updatedAlbum = freshAlbums.find(album => album.id === selectedAlbum.id);
       if (updatedAlbum) {
         setSelectedAlbum(updatedAlbum);
       }
@@ -342,6 +344,42 @@ export const AlbumsManager: React.FC = () => {
     }
   };
 
+  // Set asset as key photo for album
+  const handleSetAsKeyPhoto = async (asset: NonNullable<Album['album_assets']>[0]) => {
+    if (!selectedAlbum) return;
+
+    try {
+      // Get the thumbnail or asset URI to use as keyphoto
+      const keyphotoValue = asset.thumbnail_uri || asset.web_uri || asset.asset_uri;
+
+      const { error } = await supabase
+        .from('albums')
+        .update({
+          keyphoto: keyphotoValue,
+        })
+        .eq('id', selectedAlbum.id)
+        .eq('user_id', user!.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setSelectedAlbum(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          keyphoto: keyphotoValue,
+          keyphoto_thumbnail: asset.thumbnail_uri || null,
+        };
+      });
+
+      setContextMenu(null);
+      await loadAlbums();
+    } catch (err) {
+      console.error('Error setting key photo:', err);
+      setError(err instanceof Error ? err.message : 'Failed to set key photo');
+    }
+  };
+
   // Context menu handlers
   const handleContextMenu = (e: React.MouseEvent, asset: NonNullable<Album['album_assets']>[0]) => {
     e.preventDefault();
@@ -383,17 +421,55 @@ export const AlbumsManager: React.FC = () => {
   };
 
   // Get web-compatible image URL
-  // Priority: web_uri (JPEG) > thumbnail_uri (JPEG) > original (if not HEIC)
+  // Priority: base64 thumbnail > web_uri (JPEG) > thumbnail_uri (URL) > original (if not HEIC)
   const getWebCompatibleImageUrl = (
     url: string | null,
     options?: { webUri?: string | null; thumbnailUri?: string | null }
   ): string | null => {
+ 
     // If web_uri is available and not HEIC, use it
     if (options?.webUri && isWebAccessibleUrl(options.webUri) && !isHeicUrl(options.webUri)) {
       return options.webUri;
     }
 
-    // If thumbnail is available and not HEIC, use it
+    // If original URL is available and not HEIC, use it
+    if (url && isWebAccessibleUrl(url) && !isHeicUrl(url)) {
+      return url;
+    }
+
+  
+    // If thumbnail is base64 data URI, use it first (most reliable)
+    if (options?.thumbnailUri && options.thumbnailUri.startsWith('data:')) {
+      return options.thumbnailUri;
+    }
+
+    // If thumbnail is a URL (not base64) and not HEIC, use it
+    if (options?.thumbnailUri && isWebAccessibleUrl(options.thumbnailUri) && !isHeicUrl(options.thumbnailUri)) {
+      return options.thumbnailUri;
+    }
+
+  
+    // No displayable URL available
+    return null;
+  };
+  
+    // Get web-compatible image URL
+  // Priority: base64 thumbnail > web_uri (JPEG) > thumbnail_uri (URL) > original (if not HEIC)
+  const getThumbnail = (
+    url: string | null,
+    options?: { webUri?: string | null; thumbnailUri?: string | null }
+  ): string | null => {
+    // If thumbnail is base64 data URI, use it first (most reliable)
+    if (options?.thumbnailUri && options.thumbnailUri.startsWith('data:')) {
+      return options.thumbnailUri;
+    }
+
+    // If web_uri is available and not HEIC, use it
+    if (options?.webUri && isWebAccessibleUrl(options.webUri) && !isHeicUrl(options.webUri)) {
+      return options.webUri;
+    }
+
+    // If thumbnail is a URL (not base64) and not HEIC, use it
     if (options?.thumbnailUri && isWebAccessibleUrl(options.thumbnailUri) && !isHeicUrl(options.thumbnailUri)) {
       return options.thumbnailUri;
     }
@@ -406,9 +482,15 @@ export const AlbumsManager: React.FC = () => {
     // No displayable URL available
     return null;
   };
+  
 
   const getDisplayImage = (album: Album): string | null => {
-    // First try keyphoto_thumbnail (JPEG thumbnail resolved from ph:// reference)
+    // First try keyphoto_thumbnail - check if it's base64 data URI
+    if (album.keyphoto_thumbnail?.startsWith('data:')) {
+      return album.keyphoto_thumbnail;
+    }
+
+    // Then try keyphoto_thumbnail as URL
     if (album.keyphoto_thumbnail && isWebAccessibleUrl(album.keyphoto_thumbnail) && !isHeicUrl(album.keyphoto_thumbnail)) {
       return album.keyphoto_thumbnail;
     }
@@ -422,6 +504,8 @@ export const AlbumsManager: React.FC = () => {
     if (album.album_assets && album.album_assets.length > 0) {
       // Filter for assets that can actually be displayed in browser
       const displayableAssets = album.album_assets.filter(asset => {
+        // If has base64 thumbnail, it's displayable
+        if (asset.thumbnail_uri?.startsWith('data:')) return true;
         // If has web_uri (JPEG conversion) that's not HEIC, it's displayable
         if (asset.web_uri && isWebAccessibleUrl(asset.web_uri) && !isHeicUrl(asset.web_uri)) return true;
         // If has thumbnail that's not HEIC, it's displayable
@@ -434,7 +518,7 @@ export const AlbumsManager: React.FC = () => {
       if (displayableAssets.length > 0) {
         const firstImage = displayableAssets.find(asset => asset.asset_type !== 'video');
         const asset = firstImage || displayableAssets[0];
-        // Use thumbnail for HEIC files
+        // Use thumbnail for HEIC files - base64 thumbnail is now prioritized in getWebCompatibleImageUrl
         return getWebCompatibleImageUrl(asset.asset_uri, {
           webUri: asset.web_uri,
           thumbnailUri: asset.thumbnail_uri
@@ -863,7 +947,7 @@ export const AlbumsManager: React.FC = () => {
                        (asset.thumbnail_uri && isWebAccessibleUrl(asset.thumbnail_uri)) ||
                        isWebAccessibleUrl(asset.asset_uri) ? (
                         <img
-                          src={getWebCompatibleImageUrl(asset.asset_uri, {
+                          src={getThumbnail(asset.asset_uri, {
                             webUri: asset.web_uri,
                             thumbnailUri: asset.thumbnail_uri
                           }) || ''}
@@ -898,6 +982,13 @@ export const AlbumsManager: React.FC = () => {
                       style={{ left: contextMenu.x, top: contextMenu.y }}
                       onClick={(e) => e.stopPropagation()}
                     >
+                      <button
+                        onClick={() => handleSetAsKeyPhoto(contextMenu.asset)}
+                        className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2"
+                      >
+                        <span>⭐</span>
+                        Set as Key Photo
+                      </button>
                       <button
                         onClick={() => handleRemoveFromAlbum(contextMenu.asset.id)}
                         className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"

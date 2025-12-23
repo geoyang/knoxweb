@@ -4,18 +4,11 @@ import { useAuth } from '../../context/AuthContext';
 
 interface Asset {
   id: string;
-  album_id: string;
-  asset_id: string;
-  asset_uri: string;
-  asset_type: 'image' | 'video';
-  display_order: number;
-  date_added: string;
-  albums: any;
-}
-
-interface Album {
-  id: string;
-  title: string;
+  path: string;
+  thumbnail: string | null;
+  web_uri: string | null;
+  media_type: 'photo' | 'video';
+  created_at: string;
   user_id: string;
 }
 
@@ -37,10 +30,8 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'image' | 'video'>('all');
-  const [sortBy, setSortBy] = useState<'date_added' | 'album' | 'type'>('date_added');
-  const [sourceAlbumFilter, setSourceAlbumFilter] = useState<string>('all');
-  const [sourceAlbums, setSourceAlbums] = useState<Album[]>([]);
+  const [filterType, setFilterType] = useState<'all' | 'photo' | 'video'>('all');
+  const [sortBy, setSortBy] = useState<'date' | 'type'>('date');
 
   const { user } = useAuth();
 
@@ -60,52 +51,29 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
       setLoading(true);
       setError(null);
 
-      // Get all albums owned by the user
-      const { data: albumsData, error: albumsError } = await supabase
-        .from('albums')
-        .select('id, title, user_id')
-        .eq('user_id', user!.id);
-
-      if (albumsError) throw albumsError;
-
-      setSourceAlbums(albumsData || []);
-
-      if (!albumsData || albumsData.length === 0) {
-        setAvailableAssets([]);
-        setAllAssets([]);
-        setLoading(false);
-        return;
-      }
-
-      // Get all assets from user's albums
-      const albumIds = albumsData.map(album => album.id);
+      // Get all assets owned by the user from the assets table
       const { data: assetsData, error: assetsError } = await supabase
-        .from('album_assets')
-        .select(`
-          id,
-          album_id,
-          asset_id,
-          asset_uri,
-          asset_type,
-          display_order,
-          date_added,
-          albums!inner(
-            id,
-            title,
-            user_id
-          )
-        `)
-        .in('album_id', albumIds)
-        .order('date_added', { ascending: false });
+        .from('assets')
+        .select('id, path, thumbnail, web_uri, media_type, created_at, user_id')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false });
 
       if (assetsError) throw assetsError;
 
       const assets = assetsData || [];
       setAllAssets(assets);
 
+      // Get asset IDs already in the target album
+      const { data: existingAssets } = await supabase
+        .from('album_assets')
+        .select('asset_id')
+        .eq('album_id', targetAlbumId);
+
+      const existingAssetIds = new Set((existingAssets || []).map(a => a.asset_id));
+
       // Filter out assets that are already in the target album
-      const availableAssets = assets.filter(asset => asset.album_id !== targetAlbumId);
-      setAvailableAssets(availableAssets);
+      const available = assets.filter(asset => !existingAssetIds.has(asset.id));
+      setAvailableAssets(available);
 
     } catch (err) {
       console.error('Error loading assets:', err);
@@ -115,44 +83,55 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
     }
   };
 
+  // Get display URL for an asset (prefer web_uri, then path)
+  const getDisplayUrl = (asset: Asset): string | null => {
+    if (asset.web_uri && isWebAccessibleUrl(asset.web_uri)) return asset.web_uri;
+    if (asset.path && isWebAccessibleUrl(asset.path)) return asset.path;
+    if (asset.thumbnail && isWebAccessibleUrl(asset.thumbnail)) return asset.thumbnail;
+    return null;
+  };
+
+  // Get thumbnail URL for grid display
+  const getThumbnailUrl = (asset: Asset): string | null => {
+    // Prefer base64 thumbnail for fast loading
+    if (asset.thumbnail?.startsWith('data:')) return asset.thumbnail;
+    // Then web_uri (converted JPEG)
+    if (asset.web_uri && isWebAccessibleUrl(asset.web_uri)) return asset.web_uri;
+    // Then path
+    if (asset.path && isWebAccessibleUrl(asset.path)) return asset.path;
+    return null;
+  };
+
   const filteredAssets = React.useMemo(() => {
     let filtered = availableAssets;
 
-    // Apply search filter
+    // Apply search filter (search by ID)
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(asset => 
-        asset.albums.title.toLowerCase().includes(searchLower) ||
-        asset.asset_id.toLowerCase().includes(searchLower)
+      filtered = filtered.filter(asset =>
+        asset.id.toLowerCase().includes(searchLower)
       );
     }
 
     // Apply type filter
     if (filterType !== 'all') {
-      filtered = filtered.filter(asset => asset.asset_type === filterType);
-    }
-
-    // Apply source album filter
-    if (sourceAlbumFilter !== 'all') {
-      filtered = filtered.filter(asset => asset.album_id === sourceAlbumFilter);
+      filtered = filtered.filter(asset => asset.media_type === filterType);
     }
 
     // Apply sorting
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case 'date_added':
-          return new Date(b.date_added).getTime() - new Date(a.date_added).getTime();
-        case 'album':
-          return a.albums.title.localeCompare(b.albums.title);
+        case 'date':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         case 'type':
-          return a.asset_type.localeCompare(b.asset_type);
+          return a.media_type.localeCompare(b.media_type);
         default:
           return 0;
       }
     });
 
     return filtered;
-  }, [availableAssets, searchTerm, filterType, sortBy, sourceAlbumFilter]);
+  }, [availableAssets, searchTerm, filterType, sortBy]);
 
   const handleAssetToggle = (assetId: string) => {
     const newSelected = new Set(selectedAssetIds);
@@ -165,11 +144,11 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
   };
 
   const handleSelectAll = () => {
-    const webAccessibleAssets = filteredAssets.filter(asset => isWebAccessibleUrl(asset.asset_uri));
-    if (selectedAssetIds.size === webAccessibleAssets.length) {
+    const displayableAssets = filteredAssets.filter(asset => getThumbnailUrl(asset) !== null);
+    if (selectedAssetIds.size === displayableAssets.length) {
       setSelectedAssetIds(new Set());
     } else {
-      setSelectedAssetIds(new Set(webAccessibleAssets.map(asset => asset.id)));
+      setSelectedAssetIds(new Set(displayableAssets.map(asset => asset.id)));
     }
   };
 
@@ -180,9 +159,9 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
       setAdding(true);
       setError(null);
 
-      // Get the assets to be copied
+      // Get the assets to be added
       const selectedAssets = allAssets.filter(asset => selectedAssetIds.has(asset.id));
-      
+
       // Find the highest display order in the target album
       const { data: maxOrderData } = await supabase
         .from('album_assets')
@@ -196,11 +175,12 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
       // Create new album_asset entries for the target album
       const newAssetEntries = selectedAssets.map((asset, index) => ({
         album_id: targetAlbumId,
-        asset_id: asset.asset_id,
-        asset_uri: asset.asset_uri,
-        asset_type: asset.asset_type,
+        asset_id: asset.id,  // Reference to assets table
+        asset_uri: asset.web_uri || asset.path,  // Use web_uri for display
+        asset_type: asset.media_type === 'video' ? 'video' : 'image',
         display_order: startOrder + index,
-        date_added: new Date().toISOString()
+        date_added: new Date().toISOString(),
+        user_id: user!.id
       }));
 
       const { error: insertError } = await supabase
@@ -241,7 +221,7 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Add Photos to Album</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Select photos from your other albums ({filteredAssets.length} available)
+              Select from your photo library ({filteredAssets.length} available)
             </p>
           </div>
           <button
@@ -265,7 +245,7 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
             <div className="flex-1 min-w-64">
               <input
                 type="text"
-                placeholder="Search by album name or photo ID..."
+                placeholder="Search by photo ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -279,25 +259,8 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Types</option>
-              <option value="image">Images Only</option>
+              <option value="photo">Photos Only</option>
               <option value="video">Videos Only</option>
-            </select>
-
-            {/* Source Album filter */}
-            <select
-              value={sourceAlbumFilter}
-              onChange={(e) => setSourceAlbumFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Albums</option>
-              {sourceAlbums
-                .filter(album => album.id !== targetAlbumId)
-                .map(album => (
-                  <option key={album.id} value={album.id}>
-                    {album.title}
-                  </option>
-                ))
-              }
             </select>
 
             {/* Sort */}
@@ -306,8 +269,7 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
               onChange={(e) => setSortBy(e.target.value as any)}
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="date_added">Latest First</option>
-              <option value="album">By Album</option>
+              <option value="date">Latest First</option>
               <option value="type">By Type</option>
             </select>
           </div>
@@ -319,7 +281,7 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
                 onClick={handleSelectAll}
                 className="text-blue-600 hover:text-blue-800 text-sm font-medium"
               >
-                {selectedAssetIds.size === filteredAssets.filter(a => isWebAccessibleUrl(a.asset_uri)).length ? 'Deselect All' : 'Select All'}
+                {selectedAssetIds.size === filteredAssets.filter(a => getThumbnailUrl(a) !== null).length ? 'Deselect All' : 'Select All'}
               </button>
               <span className="text-sm text-gray-600">
                 {selectedAssetIds.size} selected
@@ -345,25 +307,26 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
               {filteredAssets.map(asset => {
                 const isSelected = selectedAssetIds.has(asset.id);
-                const isWebAccessible = isWebAccessibleUrl(asset.asset_uri);
-                
+                const thumbnailUrl = getThumbnailUrl(asset);
+                const isDisplayable = thumbnailUrl !== null;
+
                 return (
                   <div
                     key={asset.id}
                     className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer transition-all ${
-                      isWebAccessible ? 'hover:scale-105' : 'opacity-50 cursor-not-allowed'
+                      isDisplayable ? 'hover:scale-105' : 'opacity-50 cursor-not-allowed'
                     } ${
                       isSelected ? 'ring-4 ring-blue-500 ring-offset-2' : ''
                     }`}
-                    onClick={() => isWebAccessible && handleAssetToggle(asset.id)}
+                    onClick={() => isDisplayable && handleAssetToggle(asset.id)}
                   >
                     {/* Selection overlay */}
-                    {isWebAccessible && (
+                    {isDisplayable && (
                       <div className={`absolute inset-0 z-10 ${isSelected ? 'bg-blue-500/20' : ''}`}>
                         <div className="absolute top-2 left-2">
                           <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                            isSelected 
-                              ? 'bg-blue-500 border-blue-500' 
+                            isSelected
+                              ? 'bg-blue-500 border-blue-500'
                               : 'bg-white/80 border-white'
                           }`}>
                             {isSelected && (
@@ -377,16 +340,16 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
                     )}
 
                     {/* Image */}
-                    {isWebAccessible ? (
+                    {isDisplayable ? (
                       <img
-                        src={asset.asset_uri}
+                        src={thumbnailUrl}
                         alt="Photo"
                         className="w-full h-full object-cover"
                         loading="lazy"
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center bg-gray-200 text-gray-500">
-                        <div className="text-2xl mb-1">{asset.asset_type === 'video' ? '🎥' : '📸'}</div>
+                        <div className="text-2xl mb-1">{asset.media_type === 'video' ? '🎥' : '📸'}</div>
                         <div className="text-xs text-center px-1">
                           Not available
                         </div>
@@ -394,20 +357,13 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
                     )}
 
                     {/* Video indicator */}
-                    {asset.asset_type === 'video' && isWebAccessible && (
+                    {asset.media_type === 'video' && isDisplayable && (
                       <div className="absolute bottom-2 right-2">
                         <div className="bg-black/50 rounded px-1 py-0.5">
                           <span className="text-white text-xs">▶️</span>
                         </div>
                       </div>
                     )}
-
-                    {/* Album info */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
-                      <p className="text-white text-xs truncate">
-                        {asset.albums.title}
-                      </p>
-                    </div>
                   </div>
                 );
               })}

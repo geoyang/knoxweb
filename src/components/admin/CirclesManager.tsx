@@ -38,6 +38,13 @@ export const CirclesManager: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showNewCircleForm, setShowNewCircleForm] = useState(false);
   const [showInviteForm, setShowInviteForm] = useState(false);
+  const [pendingInvites, setPendingInvites] = useState<{email: string; role: string}[]>([]);
+  const [sendingInvites, setSendingInvites] = useState(false);
+  const [showEditCircleForm, setShowEditCircleForm] = useState(false);
+  const [editingCircle, setEditingCircle] = useState<Circle | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const { user } = useAuth();
 
@@ -135,29 +142,117 @@ export const CirclesManager: React.FC = () => {
     }
   };
 
-  const handleInviteUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCircle) return;
+  const handleDoubleClickCircle = (circle: Circle) => {
+    setEditingCircle(circle);
+    setEditName(circle.name);
+    setEditDescription(circle.description || '');
+    setShowEditCircleForm(true);
+  };
 
+  const handleSaveCircleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCircle || !editName.trim()) return;
+
+    try {
+      setSavingEdit(true);
+
+      const { error: updateError } = await supabase
+        .from('circles')
+        .update({
+          name: editName.trim(),
+          description: editDescription.trim() || null,
+          date_modified: new Date().toISOString()
+        })
+        .eq('id', editingCircle.id)
+        .eq('owner_id', user!.id);
+
+      if (updateError) throw updateError;
+
+      setShowEditCircleForm(false);
+      setEditingCircle(null);
+      await loadCircles();
+
+      // Update selected circle if it was the one being edited
+      if (selectedCircle?.id === editingCircle.id) {
+        setSelectedCircle({
+          ...selectedCircle,
+          name: editName.trim(),
+          description: editDescription.trim() || null
+        });
+      }
+    } catch (err) {
+      console.error('Error updating circle:', err);
+      alert(`Failed to update circle: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleAddToInviteList = (e: React.FormEvent) => {
+    e.preventDefault();
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
-    
+    const email = (formData.get('email') as string).trim().toLowerCase();
+    const role = formData.get('role') as string;
+
+    // Check if already in list
+    if (pendingInvites.some(inv => inv.email === email)) {
+      alert('This email is already in the invite list');
+      return;
+    }
+
+    // Check if already a member
+    if (circleUsers.some(u => u.email?.toLowerCase() === email)) {
+      alert('This user is already a member of the circle');
+      return;
+    }
+
+    setPendingInvites(prev => [...prev, { email, role }]);
+    form.reset();
+  };
+
+  const handleRemoveFromInviteList = (email: string) => {
+    setPendingInvites(prev => prev.filter(inv => inv.email !== email));
+  };
+
+  const handleSendInvitations = async () => {
+    if (!selectedCircle || pendingInvites.length === 0) return;
+
     try {
-      const result = await adminApi.inviteUserToCircle(selectedCircle.id, {
-        email: formData.get('email') as string,
-        role: formData.get('role') as string,
-      });
-      
-      if (!result.success) {
-        throw new Error(adminApi.handleApiError(result));
+      setSendingInvites(true);
+
+      // Send all invitations
+      const results = await Promise.all(
+        pendingInvites.map(invite =>
+          adminApi.inviteUserToCircle(selectedCircle.id, {
+            email: invite.email,
+            role: invite.role,
+          })
+        )
+      );
+
+      const failures = results.filter(r => !r.success);
+      const emailsSent = results.filter(r => r.success && r.data?.emailSent).length;
+      const emailsFailed = results.filter(r => r.success && !r.data?.emailSent).length;
+
+      if (failures.length > 0) {
+        alert(`${pendingInvites.length - failures.length} invitation(s) created. ${failures.length} failed.`);
+      } else if (emailsFailed > 0) {
+        alert(`${pendingInvites.length} invitation(s) created. ${emailsSent} email(s) sent, ${emailsFailed} email(s) failed to send.`);
+      } else {
+        alert(`${pendingInvites.length} invitation(s) sent successfully! (${emailsSent} emails sent)`);
       }
 
+      console.log('Invitation results:', results.map(r => ({ success: r.success, emailSent: r.data?.emailSent })));
+
+      setPendingInvites([]);
       setShowInviteForm(false);
-      form.reset();
       await loadCircleUsers(selectedCircle.id);
     } catch (err) {
-      console.error('Error inviting user:', err);
-      alert(`Failed to invite user: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      console.error('Error sending invitations:', err);
+      alert(`Failed to send invitations: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSendingInvites(false);
     }
   };
 
@@ -232,6 +327,7 @@ export const CirclesManager: React.FC = () => {
                     selectedCircle?.id === circle.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
                   }`}
                   onClick={() => handleCircleSelect(circle)}
+                  onDoubleClick={() => handleDoubleClickCircle(circle)}
                 >
                   <h4 className="font-semibold text-gray-900">{circle.name}</h4>
                   {circle.description && (
@@ -239,6 +335,7 @@ export const CirclesManager: React.FC = () => {
                   )}
                   <p className="text-xs text-gray-500 mt-2">
                     Created {new Date(circle.date_created).toLocaleDateString()}
+                    <span className="ml-2 text-gray-400">(double-click to edit)</span>
                   </p>
                 </div>
               ))
@@ -369,9 +466,11 @@ export const CirclesManager: React.FC = () => {
       {/* Invite User Modal */}
       {showInviteForm && selectedCircle && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">Invite User to {selectedCircle.name}</h3>
-            <form onSubmit={handleInviteUser} className="space-y-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4">Invite Users to {selectedCircle.name}</h3>
+
+            {/* Add to invite list form */}
+            <form onSubmit={handleAddToInviteList} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Email Address
@@ -390,7 +489,7 @@ export const CirclesManager: React.FC = () => {
                 </label>
                 <select
                   name="role"
-                  required
+                  defaultValue="read_only"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="read_only">Read Only</option>
@@ -399,16 +498,109 @@ export const CirclesManager: React.FC = () => {
                   <option value="admin">Admin</option>
                 </select>
               </div>
+              <button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md font-medium transition-colors"
+              >
+                + Add to Invite List
+              </button>
+            </form>
+
+            {/* Pending invites list */}
+            {pendingInvites.length > 0 && (
+              <div className="mt-6 border-t pt-4">
+                <h4 className="font-medium text-gray-900 mb-3">
+                  Pending Invitations ({pendingInvites.length})
+                </h4>
+                <div className="space-y-2 mb-4">
+                  {pendingInvites.map((invite, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <div>
+                        <span className="text-sm font-medium">{invite.email}</span>
+                        <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${getRoleColor(invite.role)}`}>
+                          {invite.role.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveFromInviteList(invite.email)}
+                        className="text-red-600 hover:text-red-800 text-sm"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={handleSendInvitations}
+                  disabled={sendingInvites}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white py-2 px-4 rounded-md font-medium transition-colors"
+                >
+                  {sendingInvites ? 'Sending...' : `Send ${pendingInvites.length} Invitation(s)`}
+                </button>
+              </div>
+            )}
+
+            <div className="mt-4 pt-4 border-t">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowInviteForm(false);
+                  setPendingInvites([]);
+                }}
+                className="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-md font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Circle Modal */}
+      {showEditCircleForm && editingCircle && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Edit Circle</h3>
+            <form onSubmit={handleSaveCircleEdit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Circle Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Family, Friends, etc."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Describe what this circle is for..."
+                />
+              </div>
               <div className="flex space-x-3 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md font-medium transition-colors"
+                  disabled={savingEdit || !editName.trim()}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-2 px-4 rounded-md font-medium transition-colors"
                 >
-                  Send Invitation
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowInviteForm(false)}
+                  onClick={() => {
+                    setShowEditCircleForm(false);
+                    setEditingCircle(null);
+                  }}
                   className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-md font-medium transition-colors"
                 >
                   Cancel

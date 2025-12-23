@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { StandaloneImageUploader } from './StandaloneImageUploader';
+import { ImageUploader } from './ImageUploader';
 import { adminApi } from '../../services/adminApi';
 import { supabase } from '../../lib/supabase';
 
@@ -42,31 +42,43 @@ export const ImagesManager: React.FC = () => {
   const [sortBy, setSortBy] = useState<'date_added' | 'album' | 'type'>('date_added');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showImageUploader, setShowImageUploader] = useState(false);
+  const [selectedUploadAlbumId, setSelectedUploadAlbumId] = useState<string | null>(null);
   const imageUrlsRef = useRef<Map<string, string>>(new Map());
 
   const { user } = useAuth();
 
   const isWebAccessibleUrl = (url: string | null): boolean => {
     if (!url) return false;
-    // Check if URL is web accessible (http/https) and not a local scheme like ph://
-    return url.startsWith('http://') || url.startsWith('https://');
+    // Check if URL is web accessible (http/https, data URI) and not a local scheme like ph://
+    return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:');
+  };
+
+  // Check if URL is a base64 data URI
+  const isBase64DataUri = (url: string | null): boolean => {
+    if (!url) return false;
+    return url.startsWith('data:');
   };
 
   // Get thumbnail URL - use stored thumbnail_uri if available
   const getThumbnailUrl = (asset: Asset): string => {
-    // Use stored thumbnail if available
+    // Use base64 thumbnail if available (highest priority)
+    if (asset.thumbnail_uri && isBase64DataUri(asset.thumbnail_uri)) {
+      return asset.thumbnail_uri;
+    }
+
+    // Use stored thumbnail if it's a web URL
     if (asset.thumbnail_uri && isWebAccessibleUrl(asset.thumbnail_uri)) {
       return asset.thumbnail_uri;
     }
-    
+
     // Legacy fallback: If it's an ImageKit URL, add thumbnail transformation
-    if (asset.asset_uri.includes('imagekit.io')) {
+    if (asset.asset_uri?.includes('imagekit.io')) {
       const url = new URL(asset.asset_uri);
       // Add ImageKit transformation for 80x80 thumbnail
       url.searchParams.set('tr', 'w-80,h-80,c-at_max');
       return url.toString();
     }
-    
+
     // For Supabase storage without stored thumbnail, use original
     return asset.asset_uri;
   };
@@ -104,11 +116,17 @@ export const ImagesManager: React.FC = () => {
   // Get authenticated image URL using fetch with auth headers, return as blob URL
   const getAuthenticatedImageBlob = useCallback(async (asset: Asset, useThumbnail: boolean = false): Promise<string> => {
     const cacheKey = `${asset.id}_${useThumbnail ? 'thumb' : 'full'}`;
-    
+
     // Check cache first
     const cached = imageUrlsRef.current.get(cacheKey);
     if (cached) {
       return cached;
+    }
+
+    // For thumbnails, check for base64 data URI first (highest priority)
+    if (useThumbnail && asset.thumbnail_uri && isBase64DataUri(asset.thumbnail_uri)) {
+      imageUrlsRef.current.set(cacheKey, asset.thumbnail_uri);
+      return asset.thumbnail_uri;
     }
 
     // For thumbnails, use the stored thumbnail_uri if available
@@ -118,7 +136,7 @@ export const ImagesManager: React.FC = () => {
         imageUrlsRef.current.set(cacheKey, asset.thumbnail_uri);
         return asset.thumbnail_uri;
       }
-      
+
       // Supabase thumbnail - needs auth fetch
       if (asset.thumbnail_uri.includes('supabase.co/storage')) {
         const urlParts = asset.thumbnail_uri.split('/storage/v1/object/public/assets/');
@@ -180,30 +198,42 @@ export const ImagesManager: React.FC = () => {
       }
 
       const loadImage = async () => {
+        // For thumbnails, check if we have a base64 data URI first - these work even if asset_uri is not web accessible
+        if (useThumbnail && asset.thumbnail_uri && isBase64DataUri(asset.thumbnail_uri)) {
+          console.log('Using base64 thumbnail for asset:', asset.id);
+          setImageSrc(asset.thumbnail_uri);
+          setHasLoaded(true);
+          imageUrlsRef.current.set(cacheKey, asset.thumbnail_uri);
+          setImageLoading(false);
+          return;
+        }
+
+        // Check if asset_uri is web accessible for other cases
         if (!isWebAccessibleUrl(asset.asset_uri)) {
+          console.log('Asset URI not web accessible:', asset.asset_uri);
           setImageLoading(false);
           return;
         }
 
         try {
           console.log(`Loading ${useThumbnail ? 'thumbnail' : 'full-size'} image for asset:`, asset.id);
-          
+
           // Use the authenticated blob method
           const imageUrl = await getAuthenticatedImageBlob(asset, useThumbnail);
           setImageSrc(imageUrl);
           setHasLoaded(true);
-          
+
           console.log(`${useThumbnail ? 'Thumbnail' : 'Full-size'} image loaded:`, imageUrl.substring(0, 50) + '...');
         } catch (error) {
           console.error('Failed to load authenticated image:', error);
           setImageError(true);
         }
-        
+
         setImageLoading(false);
       };
 
       loadImage();
-    }, [asset.id, asset.asset_uri, useThumbnail]); // Remove dependencies that cause loops
+    }, [asset.id, asset.asset_uri, asset.thumbnail_uri, useThumbnail]); // Include thumbnail_uri in dependencies
 
     if (imageLoading) {
       return (
@@ -215,7 +245,8 @@ export const ImagesManager: React.FC = () => {
       );
     }
 
-    if (!isWebAccessibleUrl(asset.asset_uri) || imageError) {
+    // Show error fallback only if we have an error OR if we don't have an imageSrc and asset_uri isn't web accessible
+    if (imageError || (!imageSrc && !isWebAccessibleUrl(asset.asset_uri))) {
       return (
         <div className={`w-full h-full flex flex-col items-center justify-center text-gray-500 ${className || ''}`} style={style}>
           <div className="text-3xl mb-2">{asset.asset_type === 'video' ? '🎥' : '📸'}</div>
@@ -271,10 +302,17 @@ export const ImagesManager: React.FC = () => {
   }, []);
 
   const handleImagesUploaded = async (count: number) => {
-    console.log(`Uploaded ${count} new images`);
+    console.log(`Uploaded ${count} new images to library`);
     setShowImageUploader(false);
+    setSelectedUploadAlbumId(null);
     // Reload assets to show newly uploaded images
     await loadAssets();
+  };
+
+  const handleUploadClick = () => {
+    // Open uploader directly - no album by default (uploads to assets only)
+    setSelectedUploadAlbumId(null);
+    setShowImageUploader(true);
   };
 
   const loadAssets = async () => {
@@ -304,6 +342,8 @@ export const ImagesManager: React.FC = () => {
       console.log('Loaded assets:', enrichedAssets.map(asset => ({
         id: asset.id,
         asset_uri: asset.asset_uri,
+        thumbnail_uri: asset.thumbnail_uri ? (asset.thumbnail_uri.substring(0, 50) + '...') : null,
+        hasBase64Thumbnail: isBase64DataUri(asset.thumbnail_uri),
         isWebAccessible: isWebAccessibleUrl(asset.asset_uri)
       })));
 
@@ -354,7 +394,7 @@ export const ImagesManager: React.FC = () => {
         <h2 className="text-2xl font-bold text-gray-900">Images & Videos</h2>
         <div className="flex items-center space-x-4">
           <button
-            onClick={() => setShowImageUploader(true)}
+            onClick={handleUploadClick}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
           >
             <span>📷</span>
@@ -561,7 +601,7 @@ export const ImagesManager: React.FC = () => {
           </p>
           {filterType === 'all' && (
             <button
-              onClick={() => setShowImageUploader(true)}
+              onClick={handleUploadClick}
               className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 mx-auto"
             >
               <span>📷</span>
@@ -672,11 +712,15 @@ export const ImagesManager: React.FC = () => {
         </div>
       )}
 
-      {/* Standalone Image Uploader Modal */}
+      {/* Image Uploader Modal - no album by default, uploads to assets only */}
       {showImageUploader && (
-        <StandaloneImageUploader
+        <ImageUploader
+          targetAlbumId={selectedUploadAlbumId}
           onImagesUploaded={handleImagesUploaded}
-          onClose={() => setShowImageUploader(false)}
+          onClose={() => {
+            setShowImageUploader(false);
+            setSelectedUploadAlbumId(null);
+          }}
         />
       )}
     </div>
