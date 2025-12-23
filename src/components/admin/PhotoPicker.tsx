@@ -37,7 +37,7 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
 
   const isWebAccessibleUrl = (url: string | null): boolean => {
     if (!url) return false;
-    return url.startsWith('http://') || url.startsWith('https://');
+    return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:');
   };
 
   useEffect(() => {
@@ -93,8 +93,10 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
 
   // Get thumbnail URL for grid display
   const getThumbnailUrl = (asset: Asset): string | null => {
-    // Prefer base64 thumbnail for fast loading
+    // Prefer base64 thumbnail for fast loading (data URI)
     if (asset.thumbnail?.startsWith('data:')) return asset.thumbnail;
+    // Then thumbnail URL if it's web accessible
+    if (asset.thumbnail && isWebAccessibleUrl(asset.thumbnail)) return asset.thumbnail;
     // Then web_uri (converted JPEG)
     if (asset.web_uri && isWebAccessibleUrl(asset.web_uri)) return asset.web_uri;
     // Then path
