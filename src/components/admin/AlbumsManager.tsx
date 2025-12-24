@@ -4,6 +4,8 @@ import { PhotoPicker } from './PhotoPicker';
 import { ImageUploader } from './ImageUploader';
 import { adminApi } from '../../services/adminApi';
 import { supabase } from '../../lib/supabase';
+import { MemoriesPanel } from '../MemoriesPanel';
+import { memoriesApi } from '../../services/memoriesApi';
 
 interface Album {
   id: string;
@@ -26,6 +28,7 @@ interface Album {
   };
   album_assets?: {
     id: string;
+    asset_id: string;  // ID from assets table (for memories)
     asset_uri: string;
     asset_type: string;
     thumbnail_uri?: string;
@@ -68,6 +71,10 @@ export const AlbumsManager: React.FC = () => {
   const [contextMenu, setContextMenu] = useState<{ asset: NonNullable<Album['album_assets']>[0]; x: number; y: number } | null>(null);
   const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
 
+  // Memories state
+  const [memoriesAssetId, setMemoriesAssetId] = useState<string | null>(null);
+  const [memoryCounts, setMemoryCounts] = useState<Record<string, number>>({});
+
   const { user } = useAuth();
 
   useEffect(() => {
@@ -78,6 +85,27 @@ export const AlbumsManager: React.FC = () => {
       setLoading(false);
     }
   }, [user?.id]);
+
+  // Load memory counts when album is selected
+  useEffect(() => {
+    const loadMemoryCounts = async () => {
+      if (!selectedAlbum || !selectedAlbum.album_assets || selectedAlbum.album_assets.length === 0) return;
+
+      console.log('Album assets:', selectedAlbum.album_assets);
+      const assetIds = selectedAlbum.album_assets.map(a => a.asset_id).filter(Boolean);
+      console.log('Looking up memory counts for asset IDs:', assetIds);
+      if (assetIds.length === 0) {
+        console.log('No valid asset IDs found');
+        return;
+      }
+
+      const counts = await memoriesApi.getMemoryCounts(assetIds);
+      console.log('Memory counts:', counts);
+      setMemoryCounts(counts);
+    };
+
+    loadMemoryCounts();
+  }, [selectedAlbum]);
 
   const loadAlbums = async (): Promise<Album[]> => {
     if (!user?.id) {
@@ -550,7 +578,7 @@ export const AlbumsManager: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Albums Management</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Albums</h2>
         <div className="flex items-center space-x-4">
           <button
             onClick={() => setShowCreateAlbum(true)}
@@ -587,7 +615,7 @@ export const AlbumsManager: React.FC = () => {
       )}
 
       {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {albums.map(album => (
             <div
               key={album.id}
@@ -603,27 +631,27 @@ export const AlbumsManager: React.FC = () => {
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 48 48"
-                        className="w-32 h-32 md:w-40 md:h-40"
+                        className="w-24 h-24 md:w-28 md:h-28"
                       >
                         <path fill="#FFA000" d="M40 12H22l-4-4H8c-2.2 0-4 1.8-4 4v8h40v-4c0-2.2-1.8-4-4-4z"/>
                         <path fill="#FFCA28" d="M40 12H8c-2.2 0-4 1.8-4 4v20c0 2.2 1.8 4 4 4h32c2.2 0 4-1.8 4-4V16c0-2.2-1.8-4-4-4z"/>
                       </svg>
                       {/* Keyphoto overlay */}
                       {displayImage && !failedImages.has(album.id) ? (
-                        <div className="absolute inset-0 flex items-center justify-center pt-4">
+                        <div className="absolute inset-0 flex items-center justify-center pt-3">
                           <img
                             src={displayImage}
                             alt={album.title}
-                            className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-md border-2 border-white shadow-md"
+                            className="w-12 h-12 md:w-14 md:h-14 object-cover rounded border-2 border-white shadow-md"
                             loading="lazy"
                             crossOrigin="anonymous"
                             onError={() => handleImageError(album.id, displayImage)}
                           />
                         </div>
                       ) : (
-                        <div className="absolute inset-0 flex items-center justify-center pt-4">
-                          <div className="w-16 h-16 md:w-20 md:h-20 bg-amber-100 rounded-md border-2 border-white shadow-md flex items-center justify-center">
-                            <span className="text-2xl">📷</span>
+                        <div className="absolute inset-0 flex items-center justify-center pt-3">
+                          <div className="w-12 h-12 md:w-14 md:h-14 bg-amber-100 rounded border-2 border-white shadow-md flex items-center justify-center">
+                            <span className="text-xl">📷</span>
                           </div>
                         </div>
                       )}
@@ -631,38 +659,29 @@ export const AlbumsManager: React.FC = () => {
                   );
                 })()}
               </div>
-              <div className="p-4">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-gray-900 truncate flex-1">{album.title}</h3>
+              <div className="p-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <h3 className="font-semibold text-gray-900 truncate flex-1 text-sm">{album.title}</h3>
                   {album.isOwner ? (
-                    <span className="flex-shrink-0 text-amber-500" title="You own this album">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                    <span className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
                         <path fillRule="evenodd" d="M12.516 2.17a.75.75 0 00-1.032 0 11.209 11.209 0 01-7.877 3.08.75.75 0 00-.722.515A12.74 12.74 0 002.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.749.749 0 00.374 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.39-.223-2.73-.635-3.985a.75.75 0 00-.722-.516 11.209 11.209 0 01-7.877-3.08z" clipRule="evenodd" />
                       </svg>
+                      Owner
                     </span>
                   ) : (
-                    <span className="flex-shrink-0 text-blue-500" title={`Shared via ${album.shared_via?.map(s => s.circle_name).join(', ')}`}>
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                        <path fillRule="evenodd" d="M8.25 6.75a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM15.75 9.75a3 3 0 116 0 3 3 0 01-6 0zM2.25 9.75a3 3 0 116 0 3 3 0 01-6 0zM6.31 15.117A6.745 6.745 0 0112 12a6.745 6.745 0 016.709 7.498.75.75 0 01-.372.568A12.696 12.696 0 0112 21.75c-2.305 0-4.47-.612-6.337-1.684a.75.75 0 01-.372-.568 6.787 6.787 0 011.019-4.38z" clipRule="evenodd" />
-                        <path d="M5.082 14.254a8.287 8.287 0 00-1.308 5.135 9.687 9.687 0 01-1.764-.44l-.115-.04a.563.563 0 01-.373-.487l-.01-.121a3.75 3.75 0 013.57-4.047zM20.226 19.389a8.287 8.287 0 00-1.308-5.135 3.75 3.75 0 013.57 4.047l-.01.121a.563.563 0 01-.373.486l-.115.04c-.567.2-1.156.349-1.764.441z" />
-                      </svg>
+                    <span className={`flex-shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getRoleColor(album.shared_via?.[0]?.role || 'read_only')}`}>
+                      Guest
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-600 mt-1">
-                  {album.album_assets?.length || 0} photos
+                <p className="text-xs text-gray-500">
+                  {album.album_assets?.length || 0} photos • {new Date(album.date_created).toLocaleDateString()}
                 </p>
                 {album.isOwner === false && album.shared_via && album.shared_via.length > 0 && (
-                  <p className="text-xs text-blue-600 mt-1">
+                  <p className="text-[10px] text-blue-600 mt-0.5 truncate">
                     via {album.shared_via.map(s => s.circle_name).join(', ')}
                   </p>
-                )}
-                {album.isOwner && album.album_shares && album.album_shares.filter(s => s.is_active).length > 0 && (
-                  <div className="mt-2">
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      Shared with {album.album_shares.filter(s => s.is_active).length} circle(s)
-                    </span>
-                  </div>
                 )}
               </div>
             </div>
@@ -736,11 +755,8 @@ export const AlbumsManager: React.FC = () => {
                         Owner
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                          <path fillRule="evenodd" d="M8.25 6.75a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM15.75 9.75a3 3 0 116 0 3 3 0 01-6 0zM2.25 9.75a3 3 0 116 0 3 3 0 01-6 0zM6.31 15.117A6.745 6.745 0 0112 12a6.745 6.745 0 016.709 7.498.75.75 0 01-.372.568A12.696 12.696 0 0112 21.75c-2.305 0-4.47-.612-6.337-1.684a.75.75 0 01-.372-.568 6.787 6.787 0 011.019-4.38z" clipRule="evenodd" />
-                        </svg>
-                        Shared
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(album.shared_via?.[0]?.role || 'read_only')}`}>
+                        Guest • {(album.shared_via?.[0]?.role || 'read_only').replace('_', ' ')}
                       </span>
                     )}
                   </td>
@@ -838,11 +854,8 @@ export const AlbumsManager: React.FC = () => {
                       Owner
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                        <path fillRule="evenodd" d="M8.25 6.75a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM15.75 9.75a3 3 0 116 0 3 3 0 01-6 0zM2.25 9.75a3 3 0 116 0 3 3 0 01-6 0zM6.31 15.117A6.745 6.745 0 0112 12a6.745 6.745 0 016.709 7.498.75.75 0 01-.372.568A12.696 12.696 0 0112 21.75c-2.305 0-4.47-.612-6.337-1.684a.75.75 0 01-.372-.568 6.787 6.787 0 011.019-4.38z" clipRule="evenodd" />
-                      </svg>
-                      Shared with you
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(selectedAlbum.shared_via?.[0]?.role || 'read_only')}`}>
+                      Guest • {(selectedAlbum.shared_via?.[0]?.role || 'read_only').replace('_', ' ')}
                     </span>
                   )}
                 </div>
@@ -971,6 +984,23 @@ export const AlbumsManager: React.FC = () => {
                             <span className="text-white text-xs">▶️</span>
                           </div>
                         </div>
+                      )}
+                      {/* Memory indicator */}
+                      {memoryCounts[asset.asset_id] > 0 && (
+                        <button
+                          className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 rounded-full p-1 flex items-center gap-0.5 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMemoriesAssetId(asset.asset_id);
+                          }}
+                        >
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                          {memoryCounts[asset.asset_id] > 1 && (
+                            <span className="text-white text-[10px] font-medium">{memoryCounts[asset.asset_id]}</span>
+                          )}
+                        </button>
                       )}
                     </div>
                   ))}
@@ -1104,18 +1134,18 @@ export const AlbumsManager: React.FC = () => {
 
       {/* Asset Detail Modal */}
       {selectedAsset && (
-        <div 
-          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
+        <div
+          className="fixed inset-0 bg-black/90 flex items-start justify-center z-50 p-4 pt-8 overflow-y-auto"
           onClick={() => setSelectedAsset(null)}
         >
-          <div className="relative max-w-4xl max-h-full my-12">
+          <div className="relative max-w-4xl w-full mb-8" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setSelectedAsset(null)}
-              className="absolute -top-12 right-0 text-white text-2xl hover:text-gray-300"
+              className="absolute top-2 right-2 z-10 bg-black/50 hover:bg-black/70 text-white text-xl w-8 h-8 rounded-full flex items-center justify-center"
             >
               ×
             </button>
-            
+
             <div className="bg-white rounded-lg overflow-hidden">
               <div className="aspect-video bg-gray-100">
                 {(() => {
@@ -1209,6 +1239,22 @@ export const AlbumsManager: React.FC = () => {
                 </div>
 
                 <div className="mt-4 flex space-x-2">
+                  {/* Memories button */}
+                  <button
+                    onClick={() => setMemoriesAssetId(selectedAsset.asset_id)}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    Memories
+                    {memoryCounts[selectedAsset.asset_id] > 0 && (
+                      <span className="bg-white/20 text-white text-xs px-1.5 py-0.5 rounded-full">
+                        {memoryCounts[selectedAsset.asset_id]}
+                      </span>
+                    )}
+                  </button>
+
                   {isHeicUrl(selectedAsset.asset_uri) ? (
                     <a
                       href={selectedAsset.asset_uri}
@@ -1315,6 +1361,24 @@ export const AlbumsManager: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Memories Panel */}
+      {memoriesAssetId && (
+        <MemoriesPanel
+          assetId={memoriesAssetId}
+          onClose={() => setMemoriesAssetId(null)}
+          onMemoriesUpdated={async () => {
+            // Refresh memory count for this asset
+            const result = await memoriesApi.getMemoryCount(memoriesAssetId);
+            if (result.data) {
+              setMemoryCounts(prev => ({
+                ...prev,
+                [memoriesAssetId]: result.data!.count
+              }));
+            }
+          }}
+        />
       )}
     </div>
   );

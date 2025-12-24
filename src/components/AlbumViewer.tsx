@@ -1,5 +1,66 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import type { Memory } from '../services/memoriesApi';
+
+// Public memories API helper (no auth required, uses invite ID for access)
+const publicMemoriesApi = {
+  async getMemories(inviteId: string, assetId: string): Promise<{ success: boolean; memories?: Memory[]; error?: string }> {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/public-memories?invite_id=${inviteId}&asset_id=${assetId}`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Failed to load memories' };
+      }
+      return { success: true, memories: data.memories || [] };
+    } catch (error) {
+      console.error('Error fetching public memories:', error);
+      return { success: false, error: 'Network error' };
+    }
+  },
+
+  async getMemoryCount(inviteId: string, assetId: string): Promise<number> {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/public-memories?invite_id=${inviteId}&asset_id=${assetId}&count=true`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+      const data = await response.json();
+      return data.count || 0;
+    } catch (error) {
+      console.error('Error fetching memory count:', error);
+      return 0;
+    }
+  },
+
+  async getMemoryCounts(inviteId: string, assetIds: string[]): Promise<Record<string, number>> {
+    const counts: Record<string, number> = {};
+    const batchSize = 10;
+    for (let i = 0; i < assetIds.length; i += batchSize) {
+      const batch = assetIds.slice(i, i + batchSize);
+      const results = await Promise.all(
+        batch.map(async (id) => {
+          const count = await publicMemoriesApi.getMemoryCount(inviteId, id);
+          return { id, count };
+        })
+      );
+      results.forEach(({ id, count }) => {
+        counts[id] = count;
+      });
+    }
+    return counts;
+  },
+};
 
 interface Circle {
   id: string;
@@ -75,6 +136,42 @@ export const AlbumViewer: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<AlbumAsset | null>(null);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
+
+  // Memories state
+  const [memoriesAssetId, setMemoriesAssetId] = useState<string | null>(null);
+  const [memoryCounts, setMemoryCounts] = useState<Record<string, number>>({});
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [loadingMemories, setLoadingMemories] = useState(false);
+
+  // Load memories when panel is opened
+  useEffect(() => {
+    const loadMemories = async () => {
+      if (!memoriesAssetId || !inviteId) return;
+      setLoadingMemories(true);
+      const result = await publicMemoriesApi.getMemories(inviteId, memoriesAssetId);
+      if (result.success && result.memories) {
+        setMemories(result.memories);
+      } else {
+        setMemories([]);
+      }
+      setLoadingMemories(false);
+    };
+    loadMemories();
+  }, [memoriesAssetId, inviteId]);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
 
   // Registration form state
   const [showRegistration, setShowRegistration] = useState(false);
@@ -278,6 +375,19 @@ export const AlbumViewer: React.FC = () => {
   useEffect(() => {
     loadAlbumData();
   }, [inviteId]);
+
+  // Load memory counts when album is selected
+  useEffect(() => {
+    const loadMemoryCounts = async () => {
+      if (!selectedAlbum || selectedAlbum.assets.length === 0 || !inviteId) return;
+
+      const assetIds = selectedAlbum.assets.map(a => a.asset_id);
+      const counts = await publicMemoriesApi.getMemoryCounts(inviteId, assetIds);
+      setMemoryCounts(counts);
+    };
+
+    loadMemoryCounts();
+  }, [selectedAlbum, inviteId]);
 
   if (loading) {
     return (
@@ -542,6 +652,23 @@ export const AlbumViewer: React.FC = () => {
                         </div>
                       </div>
                     )}
+                    {/* Memory indicator */}
+                    {memoryCounts[asset.asset_id] > 0 && (
+                      <button
+                        className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 rounded-full p-1.5 flex items-center gap-1 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMemoriesAssetId(asset.asset_id);
+                        }}
+                      >
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        {memoryCounts[asset.asset_id] > 1 && (
+                          <span className="text-white text-xs font-medium pr-0.5">{memoryCounts[asset.asset_id]}</span>
+                        )}
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -581,9 +708,29 @@ export const AlbumViewer: React.FC = () => {
                 />
               )}
 
-              {/* Download Original button */}
-              {getOriginalUrl(selectedAsset) && (
-                <div className="mt-4 flex justify-center">
+              {/* Action buttons */}
+              <div className="mt-4 flex justify-center gap-3">
+                {/* Memories button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMemoriesAssetId(selectedAsset.asset_id);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  Memories
+                  {memoryCounts[selectedAsset.asset_id] > 0 && (
+                    <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">
+                      {memoryCounts[selectedAsset.asset_id]}
+                    </span>
+                  )}
+                </button>
+
+                {/* Download Original button */}
+                {getOriginalUrl(selectedAsset) && (
                   <a
                     href={getOriginalUrl(selectedAsset)!}
                     download
@@ -597,8 +744,100 @@ export const AlbumViewer: React.FC = () => {
                     </svg>
                     Download Original
                   </a>
-                </div>
-              )}
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Public Memories Panel */}
+        {memoriesAssetId && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setMemoriesAssetId(null)}>
+            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b">
+                <h2 className="text-xl font-bold text-gray-800">Memories</h2>
+                <button onClick={() => setMemoriesAssetId(null)} className="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {loadingMemories ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : memories.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <div className="text-4xl mb-2">💭</div>
+                    <p>No memories yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {memories.map((memory) => (
+                      <div key={memory.id} className="bg-gray-50 rounded-lg p-4">
+                        {/* Memory header */}
+                        <div className="flex items-center gap-3 mb-2">
+                          {memory.user.avatar_url ? (
+                            <img src={memory.user.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
+                              {(memory.user.name || memory.user.email || '?')[0].toUpperCase()}
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-800">{memory.user.name || memory.user.email || 'Unknown'}</div>
+                            <div className="text-xs text-gray-500">{formatDate(memory.created_at)}</div>
+                          </div>
+                        </div>
+
+                        {/* Memory content */}
+                        {memory.memory_type === 'text' && memory.content_text && (
+                          <p className="text-gray-700 whitespace-pre-wrap">{memory.content_text}</p>
+                        )}
+                        {memory.memory_type === 'image' && memory.content_url && (
+                          <img src={memory.content_url} alt="" className="max-w-full rounded-lg mt-2" />
+                        )}
+                        {memory.memory_type === 'video' && memory.content_url && (
+                          <video src={memory.content_url} controls className="max-w-full rounded-lg mt-2" />
+                        )}
+                        {memory.memory_type === 'audio' && memory.content_url && (
+                          <audio src={memory.content_url} controls className="w-full mt-2" />
+                        )}
+
+                        {/* Replies */}
+                        {memory.replies && memory.replies.length > 0 && (
+                          <div className="mt-3 pl-4 border-l-2 border-gray-200 space-y-3">
+                            {memory.replies.map((reply) => (
+                              <div key={reply.id} className="bg-white rounded-lg p-3">
+                                <div className="flex items-center gap-2 mb-1">
+                                  {reply.user.avatar_url ? (
+                                    <img src={reply.user.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
+                                  ) : (
+                                    <div className="w-6 h-6 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs font-medium">
+                                      {(reply.user.name || reply.user.email || '?')[0].toUpperCase()}
+                                    </div>
+                                  )}
+                                  <span className="font-medium text-sm text-gray-700">{reply.user.name || reply.user.email}</span>
+                                  <span className="text-xs text-gray-500">{formatDate(reply.created_at)}</span>
+                                </div>
+                                {reply.memory_type === 'text' && reply.content_text && (
+                                  <p className="text-gray-600 text-sm">{reply.content_text}</p>
+                                )}
+                                {reply.memory_type === 'image' && reply.content_url && (
+                                  <img src={reply.content_url} alt="" className="max-w-full rounded-lg mt-1" />
+                                )}
+                                {reply.memory_type === 'video' && reply.content_url && (
+                                  <video src={reply.content_url} controls className="max-w-full rounded-lg mt-1" />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

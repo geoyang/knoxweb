@@ -4,6 +4,8 @@ import { AlbumViewer } from './components/AlbumViewer';
 import { ViewCircle } from './components/ViewCircle';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Login } from './components/Login';
+import { Signup } from './components/Signup';
+import { SignupSuccess } from './components/SignupSuccess';
 import { AuthCallback } from './components/AuthCallback';
 import { VerifyRegistration } from './components/VerifyRegistration';
 import { Dashboard } from './components/Dashboard';
@@ -26,6 +28,8 @@ function App() {
 
         {/* Authentication routes */}
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/signup-success" element={<SignupSuccess />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
 
         {/* Admin routes (require authentication) */}

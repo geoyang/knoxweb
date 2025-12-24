@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { TokenManager } from '../utils/tokenManager';
@@ -7,6 +7,7 @@ interface UserProfile {
   id: string;
   full_name: string | null;
   email: string | null;
+  avatar_url?: string | null;
 }
 
 interface AuthContextType {
@@ -17,7 +18,7 @@ interface AuthContextType {
   isSuperAdmin: boolean;
   signInWithMagicLink: (email: string) => Promise<{ error: any }>;
   signInWithCode: (email: string) => Promise<{ error: any; code?: string }>;
-  verifyCode: (email: string, code: string) => Promise<{ error: any; success?: boolean }>;
+  verifyCode: (email: string, code: string) => Promise<{ error: any; success?: boolean; profile?: UserProfile | null }>;
   checkUserExists: (email: string) => Promise<{ exists: boolean; error?: any }>;
   signOut: () => Promise<void>;
 }
@@ -43,13 +44,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
+  // Ref to track current profile ID for closure access in callbacks
+  const userProfileRef = useRef<string | null>(null);
+
   const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
     try {
       // Add timeout to profile fetch to prevent hanging
       const { data: profile, error } = await Promise.race([
         supabase
           .from('profiles')
-          .select('id, full_name, email')
+          .select('id, full_name, email, avatar_url')
           .eq('id', userId)
           .single(),
         new Promise((_, reject) => 
@@ -64,6 +68,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           id: userId,
           full_name: null,
           email: null,
+          avatar_url: null,
         };
       }
 
@@ -75,6 +80,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         id: userId,
         full_name: null,
         email: null,
+        avatar_url: null,
       };
     }
   };
@@ -168,20 +174,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             fetchUserProfile(session.user.id),
             fetchSuperAdminStatus(session.user.id)
           ]);
-          
+
           console.log('Profile fetched:', profile);
           console.log('Super admin status:', superAdminStatus);
-          
+
           setUserProfile(profile);
+          userProfileRef.current = profile?.id || null;
           setIsSuperAdmin(superAdminStatus);
         } catch (profileErr) {
           console.warn('Error fetching profile, using defaults:', profileErr);
           setUserProfile(null);
+          userProfileRef.current = null;
           setIsSuperAdmin(false);
         }
       } else {
         console.log('No session user, setting profile to null');
         setUserProfile(null);
+        userProfileRef.current = null;
         setIsSuperAdmin(false);
       }
       
@@ -195,6 +204,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setSession(null);
       setUser(null);
       setUserProfile(null);
+      userProfileRef.current = null;
       setIsSuperAdmin(false);
       setLoading(false);
     }
@@ -210,31 +220,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           console.log('Auth state change:', event, !!session);
           setSession(session);
           setUser(session?.user || null);
-          
+
           if (session?.user) {
-            console.log('Fetching profile for user on auth change:', session.user.id);
-            
-            const [profile, superAdminStatus] = await Promise.all([
-              fetchUserProfile(session.user.id),
-              fetchSuperAdminStatus(session.user.id)
-            ]);
-            
-            console.log('Profile fetched on auth change:', profile);
-            console.log('Super admin status on auth change:', superAdminStatus);
-            
-            setUserProfile(profile);
-            setIsSuperAdmin(superAdminStatus);
+            // Skip profile fetch if we already have the profile for this user
+            // (e.g., from edge function during code verification)
+            const currentProfileId = userProfileRef.current;
+            const shouldSkipProfileFetch = currentProfileId === session.user.id;
+
+            if (shouldSkipProfileFetch) {
+              console.log('Profile already loaded for user, skipping fetch:', session.user.id);
+              // Still fetch super admin status
+              const superAdminStatus = await fetchSuperAdminStatus(session.user.id);
+              setIsSuperAdmin(superAdminStatus);
+            } else {
+              console.log('Fetching profile for user on auth change:', session.user.id);
+
+              const [profile, superAdminStatus] = await Promise.all([
+                fetchUserProfile(session.user.id),
+                fetchSuperAdminStatus(session.user.id)
+              ]);
+
+              console.log('Profile fetched on auth change:', profile);
+              console.log('Super admin status on auth change:', superAdminStatus);
+
+              setUserProfile(profile);
+              userProfileRef.current = profile?.id || null;
+              setIsSuperAdmin(superAdminStatus);
+            }
           } else {
             console.log('No session user on auth change, setting profile to null');
             setUserProfile(null);
+            userProfileRef.current = null;
             setIsSuperAdmin(false);
           }
-          
+
           setLoading(false);
         } catch (err) {
           console.error('Error in auth state change handler:', err);
           setUser(null);
           setUserProfile(null);
+          userProfileRef.current = null;
           setIsSuperAdmin(false);
           setLoading(false);
         }
@@ -376,11 +401,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('Auth Edge Function succeeded', authResponse);
 
-      // Handle the response from Edge Function
+      // Extract profile from edge function response
+      const profileFromServer = authResponse.profile || null;
+      if (profileFromServer) {
+        console.log('Profile received from server:', profileFromServer);
+        setUserProfile(profileFromServer);
+        userProfileRef.current = profileFromServer.id;
+      }
+
+      // Handle the response from Edge Function - temp password approach (same as mobile app)
       if (authResponse.temp_auth?.temp_password) {
         // Got temporary password - sign in client-side to create proper session
-        console.log('Received temporary password from Edge Function');
-        
+        console.log('Received temporary credentials from Edge Function');
+
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email: authResponse.temp_auth.email,
           password: authResponse.temp_auth.temp_password
@@ -388,31 +421,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         if (signInError) {
           console.error('Error signing in with temporary password', signInError);
-          return { error: new Error('Failed to sign in with temporary credentials.') };
+          return { error: new Error('Failed to sign in: ' + signInError.message) };
         }
 
         if (signInData.session && signInData.user) {
-          console.log('Successfully authenticated with temporary password');
-          
-          // Clear the temporary password for security (async, don't wait)
-          supabase.functions.invoke('clear-temp-password', {
-            body: {
-              user_id: authResponse.temp_auth.user_id,
-              temp_password: authResponse.temp_auth.temp_password
-            }
-          }).catch(error => console.warn('Note: Could not clear temp password', error));
-          
-          await TokenManager.setCustomTokenExpiry(signInData.user.id);
-          
-          return { error: null, success: true };
+          console.log('Successfully authenticated');
+          return { error: null, success: true, profile: profileFromServer };
         } else {
-          return { error: new Error('Temporary password sign-in succeeded but no session established.') };
+          return { error: new Error('Sign in succeeded but no session established.') };
         }
-        
+
       } else if (authResponse.session?.access_token && authResponse.session?.refresh_token) {
         // Got direct session tokens - use them immediately
         console.log('Received session tokens from Edge Function');
-        
+
         const { data: sessionData, error: setSessionError } = await supabase.auth.setSession({
           access_token: authResponse.session.access_token,
           refresh_token: authResponse.session.refresh_token
@@ -425,14 +447,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         if (sessionData.session && sessionData.user) {
           console.log('Successfully authenticated with direct session tokens');
-          await TokenManager.setCustomTokenExpiry(sessionData.user.id);
-          return { error: null, success: true };
+          return { error: null, success: true, profile: profileFromServer };
         } else {
           return { error: new Error('Token setting succeeded but no session established.') };
         }
       }
 
-      return { error: new Error('Server error: No session tokens received after verification.') };
+      return { error: new Error('Server error: No authentication credentials received.'), profile: profileFromServer };
       
     } catch (error) {
       console.error('Code verification exception', error);

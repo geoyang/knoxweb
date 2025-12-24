@@ -11,20 +11,30 @@ interface Circle {
   photo_count: number;
 }
 
+interface AlbumAsset {
+  id: string;
+  asset_id: string;
+  asset_uri: string;
+  asset_type: string;
+  thumbnail_uri?: string;
+  web_uri?: string;
+}
+
 interface Album {
   id: string;
   title: string;
   description?: string;
   keyphoto?: string;
+  keyphoto_thumbnail?: string;
   photo_count: number;
   circle_id: string;
   circle_name: string;
+  album_assets?: AlbumAsset[];
 }
 
 interface UserProfile {
   id: string;
-  first_name: string;
-  last_name: string;
+  full_name: string;
   email: string;
   avatar_url?: string;
 }
@@ -37,6 +47,9 @@ export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCircle, setSelectedCircle] = useState<string | null>(null);
+  const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<AlbumAsset | null>(null);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadUserData();
@@ -57,7 +70,7 @@ export const Dashboard: React.FC = () => {
       // Load user profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, email, avatar_url')
+        .select('id, full_name, email, avatar_url')
         .eq('id', userId)
         .single();
 
@@ -71,8 +84,7 @@ export const Dashboard: React.FC = () => {
       if (!profileData && session.user) {
         setUser({
           id: session.user.id,
-          first_name: session.user.user_metadata?.first_name || 'User',
-          last_name: session.user.user_metadata?.last_name || '',
+          full_name: session.user.user_metadata?.full_name || 'User',
           email: session.user.email || '',
         });
       }
@@ -135,7 +147,15 @@ export const Dashboard: React.FC = () => {
               id,
               title,
               description,
-              keyphoto
+              keyphoto,
+              album_assets (
+                id,
+                asset_id,
+                asset_uri,
+                asset_type,
+                thumbnail_uri,
+                web_uri
+              )
             ),
             circles (
               name
@@ -153,20 +173,15 @@ export const Dashboard: React.FC = () => {
           const album = share.albums as any;
           const circle = share.circles as any;
           if (album) {
-            // Get photo count for this album
-            const { count: photoCount } = await supabase
-              .from('album_assets')
-              .select('*', { count: 'exact', head: true })
-              .eq('album_id', album.id);
-
             processedAlbums.push({
               id: album.id,
               title: album.title,
               description: album.description,
               keyphoto: album.keyphoto,
-              photo_count: photoCount || 0,
+              photo_count: album.album_assets?.length || 0,
               circle_id: share.circle_id,
               circle_name: circle?.name || 'Unknown Circle',
+              album_assets: album.album_assets || [],
             });
           }
         }
@@ -186,6 +201,98 @@ export const Dashboard: React.FC = () => {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate('/login');
+  };
+
+  const handleImageError = (albumId: string) => {
+    setFailedImages(prev => new Set([...prev, albumId]));
+  };
+
+  const isWebAccessibleUrl = (url: string | null): boolean => {
+    if (!url) return false;
+    return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:');
+  };
+
+  const isHeicUrl = (url: string | null | undefined): boolean => {
+    if (!url) return false;
+    const lower = url.toLowerCase();
+    return lower.endsWith('.heic') || lower.endsWith('.heif');
+  };
+
+  const hasKeyphoto = (url: string | null | undefined): boolean => {
+    return !!(url && url.trim() !== '');
+  };
+
+  const getWebCompatibleImageUrl = (
+    url: string | null,
+    options?: { webUri?: string | null; thumbnailUri?: string | null }
+  ): string | null => {
+    if (options?.webUri && isWebAccessibleUrl(options.webUri) && !isHeicUrl(options.webUri)) {
+      return options.webUri;
+    }
+    if (url && isWebAccessibleUrl(url) && !isHeicUrl(url)) {
+      return url;
+    }
+    if (options?.thumbnailUri && options.thumbnailUri.startsWith('data:')) {
+      return options.thumbnailUri;
+    }
+    if (options?.thumbnailUri && isWebAccessibleUrl(options.thumbnailUri) && !isHeicUrl(options.thumbnailUri)) {
+      return options.thumbnailUri;
+    }
+    return null;
+  };
+
+  const getThumbnail = (
+    url: string | null,
+    options?: { webUri?: string | null; thumbnailUri?: string | null }
+  ): string | null => {
+    if (options?.thumbnailUri && options.thumbnailUri.startsWith('data:')) {
+      return options.thumbnailUri;
+    }
+    if (options?.webUri && isWebAccessibleUrl(options.webUri) && !isHeicUrl(options.webUri)) {
+      return options.webUri;
+    }
+    if (options?.thumbnailUri && isWebAccessibleUrl(options.thumbnailUri) && !isHeicUrl(options.thumbnailUri)) {
+      return options.thumbnailUri;
+    }
+    if (url && isWebAccessibleUrl(url) && !isHeicUrl(url)) {
+      return url;
+    }
+    return null;
+  };
+
+  const getDisplayImage = (album: Album): string | null => {
+    // First try keyphoto_thumbnail - check if it's base64 data URI
+    if (album.keyphoto_thumbnail?.startsWith('data:')) {
+      return album.keyphoto_thumbnail;
+    }
+    // Then try keyphoto_thumbnail as URL
+    if (album.keyphoto_thumbnail && isWebAccessibleUrl(album.keyphoto_thumbnail) && !isHeicUrl(album.keyphoto_thumbnail)) {
+      return album.keyphoto_thumbnail;
+    }
+    // Try the keyphoto if it's web accessible and NOT a HEIC file
+    if (hasKeyphoto(album.keyphoto) && isWebAccessibleUrl(album.keyphoto!) && !isHeicUrl(album.keyphoto)) {
+      return album.keyphoto!;
+    }
+    // Fall back to first web-accessible album asset if available
+    if (album.album_assets && album.album_assets.length > 0) {
+      const displayableAssets = album.album_assets.filter(asset => {
+        if (asset.thumbnail_uri?.startsWith('data:')) return true;
+        if (asset.web_uri && isWebAccessibleUrl(asset.web_uri) && !isHeicUrl(asset.web_uri)) return true;
+        if (asset.thumbnail_uri && isWebAccessibleUrl(asset.thumbnail_uri) && !isHeicUrl(asset.thumbnail_uri)) return true;
+        if (asset.asset_uri && isWebAccessibleUrl(asset.asset_uri) && !isHeicUrl(asset.asset_uri)) return true;
+        return false;
+      });
+
+      if (displayableAssets.length > 0) {
+        const firstImage = displayableAssets.find(asset => asset.asset_type !== 'video');
+        const asset = firstImage || displayableAssets[0];
+        return getWebCompatibleImageUrl(asset.asset_uri, {
+          webUri: asset.web_uri,
+          thumbnailUri: asset.thumbnail_uri
+        });
+      }
+    }
+    return null;
   };
 
   const filteredAlbums = selectedCircle
@@ -233,7 +340,7 @@ export const Dashboard: React.FC = () => {
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="font-medium text-gray-800">
-                {user?.first_name} {user?.last_name}
+                {user?.full_name}
               </p>
               <p className="text-sm text-gray-500">{user?.email}</p>
             </div>
@@ -251,7 +358,7 @@ export const Dashboard: React.FC = () => {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-800">
-            Welcome back, {user?.first_name}! 👋
+            Welcome back, {user?.full_name?.split(' ')[0]}! 👋
           </h2>
           <p className="text-gray-600 mt-1">
             Here are your circles and shared albums.
@@ -330,32 +437,56 @@ export const Dashboard: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-              {filteredAlbums.map((album) => (
-                <div
-                  key={album.id}
-                  className="cursor-pointer group"
-                  onClick={() => {
-                    // Find the invite ID for this circle to navigate to album viewer
-                    // For now, we'll just show an alert
-                    alert(`Album: ${album.title}\nPhotos: ${album.photo_count}\nCircle: ${album.circle_name}`);
-                  }}
-                >
-                  {/* Album Cover */}
-                  <div className="relative aspect-square bg-gray-100 rounded-2xl overflow-hidden shadow-lg group-hover:shadow-xl transition-all group-hover:scale-[1.02]">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-8xl text-yellow-400 drop-shadow-lg">📁</div>
+              {filteredAlbums.map((album) => {
+                const displayImage = getDisplayImage(album);
+                return (
+                  <div
+                    key={album.id}
+                    className="cursor-pointer group"
+                    onClick={() => setSelectedAlbum(album)}
+                  >
+                    {/* Album Cover */}
+                    <div className="relative aspect-square bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl overflow-hidden shadow-lg group-hover:shadow-xl transition-all group-hover:scale-[1.02] flex items-center justify-center">
+                      {/* Folder icon */}
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 48 48"
+                        className="w-32 h-32 md:w-40 md:h-40"
+                      >
+                        <path fill="#FFA000" d="M40 12H22l-4-4H8c-2.2 0-4 1.8-4 4v8h40v-4c0-2.2-1.8-4-4-4z"/>
+                        <path fill="#FFCA28" d="M40 12H8c-2.2 0-4 1.8-4 4v20c0 2.2 1.8 4 4 4h32c2.2 0 4-1.8 4-4V16c0-2.2-1.8-4-4-4z"/>
+                      </svg>
+                      {/* Keyphoto overlay */}
+                      {displayImage && !failedImages.has(album.id) ? (
+                        <div className="absolute inset-0 flex items-center justify-center pt-4">
+                          <img
+                            src={displayImage}
+                            alt={album.title}
+                            className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-md border-2 border-white shadow-md"
+                            loading="lazy"
+                            crossOrigin="anonymous"
+                            onError={() => handleImageError(album.id)}
+                          />
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center pt-4">
+                          <div className="w-16 h-16 md:w-20 md:h-20 bg-amber-100 rounded-md border-2 border-white shadow-md flex items-center justify-center">
+                            <span className="text-2xl">📷</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Album Info */}
+                    <div className="mt-3">
+                      <h4 className="font-semibold text-gray-800 truncate">{album.title}</h4>
+                      <p className="text-sm text-gray-500">
+                        {album.photo_count} photos • {album.circle_name}
+                      </p>
                     </div>
                   </div>
-
-                  {/* Album Info */}
-                  <div className="mt-3">
-                    <h4 className="font-semibold text-gray-800 truncate">{album.title}</h4>
-                    <p className="text-sm text-gray-500">
-                      {album.photo_count} photos • {album.circle_name}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

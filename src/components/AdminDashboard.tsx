@@ -9,7 +9,7 @@ import { InvitesManager } from './admin/InvitesManager';
 import { AccountScreen } from './admin/AccountScreen';
 
 export const AdminDashboard: React.FC = () => {
-  const { user, signOut, loading, isSuperAdmin } = useAuth();
+  const { user, userProfile, signOut, loading, isSuperAdmin } = useAuth();
   const location = useLocation();
   const [showAccountScreen, setShowAccountScreen] = useState(false);
   
@@ -56,7 +56,7 @@ export const AdminDashboard: React.FC = () => {
             
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">
-                Welcome, {user.email}
+                Welcome, {userProfile?.full_name || user.email}
                 {isSuperAdmin && (
                   <span className="ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium">
                     Super Admin
@@ -65,12 +65,24 @@ export const AdminDashboard: React.FC = () => {
               </span>
               <button
                 onClick={() => setShowAccountScreen(true)}
-                className="w-10 h-10 bg-blue-100 hover:bg-blue-200 rounded-full flex items-center justify-center transition-colors group"
+                className="w-10 h-10 bg-blue-100 hover:bg-blue-200 rounded-full flex items-center justify-center transition-colors group overflow-hidden"
                 title="Account Settings"
               >
-                <span className="text-lg text-blue-600 group-hover:text-blue-700">
-                  {user?.email?.[0]?.toUpperCase() || 'U'}
-                </span>
+                {userProfile?.avatar_url ? (
+                  <img
+                    src={userProfile.avatar_url}
+                    alt="Avatar"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Hide image on error and show fallback
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <span className="text-lg text-blue-600 group-hover:text-blue-700">
+                    {userProfile?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -112,13 +124,13 @@ export const AdminDashboard: React.FC = () => {
                 <Link
                   to="/admin/images"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
-                    location.pathname.includes('/admin/images') 
-                      ? 'bg-blue-100 text-blue-700 font-medium' 
+                    location.pathname.includes('/admin/images')
+                      ? 'bg-blue-100 text-blue-700 font-medium'
                       : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
                   }`}
                 >
                   <span className="mr-3">🖼️</span>
-                  Images
+                  My Images and Videos
                 </Link>
               </li>
               <li>

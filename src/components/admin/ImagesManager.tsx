@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ImageUploader } from './ImageUploader';
+import { MemoriesPanel } from '../MemoriesPanel';
 import { adminApi } from '../../services/adminApi';
+import { memoriesApi } from '../../services/memoriesApi';
 import { supabase } from '../../lib/supabase';
 
 interface Asset {
@@ -44,6 +46,10 @@ export const ImagesManager: React.FC = () => {
   const [showImageUploader, setShowImageUploader] = useState(false);
   const [selectedUploadAlbumId, setSelectedUploadAlbumId] = useState<string | null>(null);
   const imageUrlsRef = useRef<Map<string, string>>(new Map());
+
+  // Memories state
+  const [memoryCounts, setMemoryCounts] = useState<Record<string, number>>({});
+  const [memoriesAssetId, setMemoriesAssetId] = useState<string | null>(null);
 
   const { user } = useAuth();
 
@@ -301,6 +307,13 @@ export const ImagesManager: React.FC = () => {
     };
   }, []);
 
+  const loadMemoryCounts = useCallback(async (assetList: Asset[]) => {
+    if (assetList.length === 0) return;
+    const assetIds = assetList.map((a) => a.asset_id);
+    const counts = await memoriesApi.getMemoryCounts(assetIds);
+    setMemoryCounts(counts);
+  }, []);
+
   const handleImagesUploaded = async (count: number) => {
     console.log(`Uploaded ${count} new images to library`);
     setShowImageUploader(false);
@@ -351,6 +364,9 @@ export const ImagesManager: React.FC = () => {
       setStats(statsData);
       setError(null);
 
+      // Load memory counts
+      loadMemoryCounts(enrichedAssets);
+
     } catch (err) {
       console.error('Error loading assets:', err);
       setError(err instanceof Error ? err.message : 'Failed to load images');
@@ -391,7 +407,7 @@ export const ImagesManager: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Images & Videos</h2>
+        <h2 className="text-2xl font-bold text-gray-900">My Images and Videos</h2>
         <div className="flex items-center space-x-4">
           <button
             onClick={handleUploadClick}
@@ -484,30 +500,46 @@ export const ImagesManager: React.FC = () => {
       {/* Assets Display */}
       {viewMode === 'grid' ? (
         <div className="flex flex-wrap gap-2">
-          {filteredAssets.map(asset => (
-            <div
-              key={asset.id}
-              className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative group"
-              onClick={() => setSelectedAsset(asset)}
-            >
-              <AuthenticatedImage
-                asset={asset}
-                alt={`Asset from ${asset.album?.title || 'Unknown Album'}`}
-                className="w-full h-full object-cover"
-                useThumbnail={true}
-              />
-              {asset.asset_type === 'video' && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="bg-black/50 rounded-full p-1">
-                    <span className="text-white text-xs">▶️</span>
+          {filteredAssets.map(asset => {
+            const memoryCount = memoryCounts[asset.asset_id] || 0;
+            return (
+              <div
+                key={asset.id}
+                className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative group"
+                onClick={() => setSelectedAsset(asset)}
+              >
+                <AuthenticatedImage
+                  asset={asset}
+                  alt={`Asset from ${asset.album?.title || 'Unknown Album'}`}
+                  className="w-full h-full object-cover"
+                  useThumbnail={true}
+                />
+                {asset.asset_type === 'video' && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="bg-black/50 rounded-full p-1">
+                      <span className="text-white text-xs">▶️</span>
+                    </div>
                   </div>
+                )}
+                {/* Memory indicator */}
+                {memoryCount > 0 && (
+                  <button
+                    className="absolute top-1 right-1 bg-black/60 rounded-full p-1 flex items-center gap-0.5 hover:bg-black/80 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); setMemoriesAssetId(asset.asset_id); }}
+                    title={`${memoryCount} ${memoryCount === 1 ? 'memory' : 'memories'}`}
+                  >
+                    <span className="text-white text-[10px]">💬</span>
+                    {memoryCount > 1 && (
+                      <span className="text-white text-[9px] font-medium pr-0.5">{memoryCount}</span>
+                    )}
+                  </button>
+                )}
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <p className="text-white text-[9px] truncate px-1">{asset.album?.title}</p>
                 </div>
-              )}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <p className="text-white text-[9px] truncate px-1">{asset.album?.title}</p>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -692,6 +724,15 @@ export const ImagesManager: React.FC = () => {
                 
                 <div className="mt-4 flex space-x-2">
                   <button
+                    onClick={() => {
+                      setSelectedAsset(null);
+                      setMemoriesAssetId(selectedAsset.asset_id);
+                    }}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1"
+                  >
+                    💬 Memories {memoryCounts[selectedAsset.asset_id] ? `(${memoryCounts[selectedAsset.asset_id]})` : ''}
+                  </button>
+                  <button
                     onClick={() => handleDeleteAsset(selectedAsset.id)}
                     className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
                   >
@@ -721,6 +762,16 @@ export const ImagesManager: React.FC = () => {
             setShowImageUploader(false);
             setSelectedUploadAlbumId(null);
           }}
+        />
+      )}
+
+      {/* Memories Panel Modal */}
+      {memoriesAssetId && (
+        <MemoriesPanel
+          assetId={memoriesAssetId}
+          canAddMemory={true}
+          onClose={() => setMemoriesAssetId(null)}
+          onMemoriesUpdated={() => loadMemoryCounts(assets)}
         />
       )}
     </div>

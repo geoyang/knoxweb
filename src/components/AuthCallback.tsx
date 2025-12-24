@@ -31,9 +31,22 @@ export const AuthCallback: React.FC = () => {
 
         if (error) {
           console.error('Auth callback error:', error, errorDescription);
-          setError(`Authentication failed: ${errorDescription || error}`);
+
+          // Handle specific error cases with user-friendly messages
+          let errorMessage = errorDescription || error;
+          if (error === 'otp_expired' || errorDescription?.includes('expired')) {
+            errorMessage = 'This link has expired. Please request a new one.';
+          } else if (error === 'access_denied') {
+            errorMessage = 'Access was denied. Please try again.';
+          }
+
+          setError(errorMessage);
           setStatus('Authentication failed');
-          setTimeout(() => navigate('/login'), 3000);
+
+          // Redirect to signup if there's an invite, otherwise to login
+          const inviteId = searchParams.get('invite');
+          const redirectPath = inviteId ? `/signup?invite=${inviteId}` : '/login';
+          setTimeout(() => navigate(redirectPath), 3000);
           return;
         }
 
@@ -64,10 +77,16 @@ export const AuthCallback: React.FC = () => {
 
         console.log('Session established:', data);
         setStatus('Authentication successful! Redirecting...');
-        
-        // Wait a moment then redirect to admin
+
+        // Check if there's an invite parameter to redirect to
+        const inviteId = searchParams.get('invite');
+        const redirectPath = inviteId ? `/view-circle/${inviteId}` : '/admin';
+
+        console.log('Redirecting to:', redirectPath);
+
+        // Wait a moment then redirect
         setTimeout(() => {
-          navigate('/admin', { replace: true });
+          navigate(redirectPath, { replace: true });
         }, 1000);
 
       } catch (err) {
