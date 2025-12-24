@@ -79,6 +79,13 @@ interface CircleInvite {
   circle?: Circle;
 }
 
+interface AlbumOwner {
+  id: string;
+  full_name?: string;
+  email?: string;
+  avatar_url?: string;
+}
+
 interface Album {
   id: string;
   title: string;
@@ -89,6 +96,7 @@ interface Album {
   date_shared: string;
   assets: AlbumAsset[];
   keyphotUrl?: string;
+  owner?: AlbumOwner;
 }
 
 interface AlbumAsset {
@@ -970,6 +978,25 @@ export const AlbumViewer: React.FC = () => {
                   <div className="mt-3 text-center">
                     <h3 className="font-semibold text-gray-800 truncate">{album.title}</h3>
                     <p className="text-sm text-gray-500">{photoCount} photos</p>
+                    {/* Owner info */}
+                    {album.owner && (
+                      <div className="flex items-center justify-center gap-2 mt-2">
+                        {album.owner.avatar_url ? (
+                          <img
+                            src={album.owner.avatar_url}
+                            alt={album.owner.full_name || 'Owner'}
+                            className="w-5 h-5 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-medium">
+                            {(album.owner.full_name || album.owner.email || '?')[0].toUpperCase()}
+                          </div>
+                        )}
+                        <span className="text-xs text-gray-500 truncate max-w-[100px]">
+                          {album.owner.full_name || album.owner.email || 'Unknown'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

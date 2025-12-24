@@ -25,6 +25,7 @@ interface Album {
   profiles?: {
     full_name: string | null;
     email: string | null;
+    avatar_url?: string | null;
   };
   album_assets?: {
     id: string;
@@ -74,6 +75,14 @@ export const AlbumsManager: React.FC = () => {
   // Memories state
   const [memoriesAssetId, setMemoriesAssetId] = useState<string | null>(null);
   const [memoryCounts, setMemoryCounts] = useState<Record<string, number>>({});
+
+  // Title editing state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+
+  // Album detail view mode (grid vs carousel)
+  const [albumDetailViewMode, setAlbumDetailViewMode] = useState<'grid' | 'carousel'>('grid');
+  const [carouselIndex, setCarouselIndex] = useState(0);
 
   const { user } = useAuth();
 
@@ -193,6 +202,26 @@ export const AlbumsManager: React.FC = () => {
     } catch (err) {
       console.error('Error loading circles:', err);
       setCircles([]);
+    }
+  };
+
+  const handleUpdateAlbumTitle = async () => {
+    if (!selectedAlbum || !editedTitle.trim()) return;
+
+    try {
+      const result = await adminApi.updateAlbum({ album_id: selectedAlbum.id, title: editedTitle.trim() });
+
+      if (!result.success) {
+        throw new Error(adminApi.handleApiError(result));
+      }
+
+      // Update local state
+      setSelectedAlbum({ ...selectedAlbum, title: editedTitle.trim() });
+      setIsEditingTitle(false);
+      await loadAlbums();
+    } catch (err) {
+      console.error('Error updating album title:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update album title');
     }
   };
 
@@ -627,31 +656,45 @@ export const AlbumsManager: React.FC = () => {
                   const displayImage = getDisplayImage(album);
                   return (
                     <div className="relative flex items-center justify-center">
-                      {/* Folder icon - sharp edges */}
+                      {/* Photo album icon - stacked photos style */}
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 48 48"
-                        className="w-24 h-24 md:w-28 md:h-28"
+                        viewBox="0 0 64 64"
+                        className="w-64 h-64 md:w-80 md:h-80"
                       >
-                        <path fill="#FFA000" d="M40 12H22l-4-4H8c-2.2 0-4 1.8-4 4v8h40v-4c0-2.2-1.8-4-4-4z"/>
-                        <path fill="#FFCA28" d="M40 12H8c-2.2 0-4 1.8-4 4v20c0 2.2 1.8 4 4 4h32c2.2 0 4-1.8 4-4V16c0-2.2-1.8-4-4-4z"/>
+                        {/* Back photo - tilted left */}
+                        <g transform="rotate(-8 32 32)">
+                          <rect x="12" y="14" width="40" height="36" rx="2" fill="#e0e0e0" stroke="#bdbdbd" strokeWidth="1"/>
+                          <rect x="15" y="17" width="34" height="26" fill="#f5f5f5"/>
+                        </g>
+                        {/* Middle photo - tilted right */}
+                        <g transform="rotate(5 32 32)">
+                          <rect x="12" y="14" width="40" height="36" rx="2" fill="#eeeeee" stroke="#bdbdbd" strokeWidth="1"/>
+                          <rect x="15" y="17" width="34" height="26" fill="#fafafa"/>
+                        </g>
+                        {/* Front photo - main */}
+                        <rect x="12" y="14" width="40" height="36" rx="2" fill="#ffffff" stroke="#9e9e9e" strokeWidth="1.5"/>
+                        <rect x="15" y="17" width="34" height="26" rx="1" fill="#f0f0f0"/>
+                        {/* Mountain/landscape icon placeholder */}
+                        <path d="M15 40 L25 30 L32 36 L42 24 L49 32 L49 43 L15 43 Z" fill="#a5d6a7"/>
+                        <circle cx="22" cy="24" r="4" fill="#ffeb3b"/>
                       </svg>
                       {/* Keyphoto overlay */}
                       {displayImage && !failedImages.has(album.id) ? (
-                        <div className="absolute inset-0 flex items-center justify-center pt-3">
+                        <div className="absolute inset-0 flex items-center justify-center">
                           <img
                             src={displayImage}
                             alt={album.title}
-                            className="w-12 h-12 md:w-14 md:h-14 object-cover rounded border-2 border-white shadow-md"
+                            className="w-28 h-28 md:w-36 md:h-36 object-cover rounded-lg border-2 border-white shadow-lg"
                             loading="lazy"
                             crossOrigin="anonymous"
                             onError={() => handleImageError(album.id, displayImage)}
                           />
                         </div>
                       ) : (
-                        <div className="absolute inset-0 flex items-center justify-center pt-3">
-                          <div className="w-12 h-12 md:w-14 md:h-14 bg-amber-100 rounded border-2 border-white shadow-md flex items-center justify-center">
-                            <span className="text-xl">📷</span>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-28 h-28 md:w-36 md:h-36 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg border-2 border-white shadow-lg flex items-center justify-center">
+                            <span className="text-4xl">📷</span>
                           </div>
                         </div>
                       )}
@@ -671,7 +714,7 @@ export const AlbumsManager: React.FC = () => {
                     </span>
                   ) : (
                     <span className={`flex-shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getRoleColor(album.shared_via?.[0]?.role || 'read_only')}`}>
-                      Guest
+                      {(album.shared_via?.[0]?.role || 'read_only').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                     </span>
                   )}
                 </div>
@@ -682,6 +725,25 @@ export const AlbumsManager: React.FC = () => {
                   <p className="text-[10px] text-blue-600 mt-0.5 truncate">
                     via {album.shared_via.map(s => s.circle_name).join(', ')}
                   </p>
+                )}
+                {/* Owner info for shared albums */}
+                {album.isOwner === false && album.profiles && (
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    {album.profiles.avatar_url ? (
+                      <img
+                        src={album.profiles.avatar_url}
+                        alt={album.profiles.full_name || 'Owner'}
+                        className="w-4 h-4 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center text-white text-[8px] font-medium">
+                        {(album.profiles.full_name || album.profiles.email || '?')[0].toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-[10px] text-gray-500 truncate">
+                      {album.profiles.full_name || album.profiles.email || 'Unknown'}
+                    </span>
+                  </div>
                 )}
               </div>
             </div>
@@ -756,7 +818,7 @@ export const AlbumsManager: React.FC = () => {
                       </span>
                     ) : (
                       <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(album.shared_via?.[0]?.role || 'read_only')}`}>
-                        Guest • {(album.shared_via?.[0]?.role || 'read_only').replace('_', ' ')}
+                        {(album.shared_via?.[0]?.role || 'read_only').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                       </span>
                     )}
                   </td>
@@ -775,13 +837,31 @@ export const AlbumsManager: React.FC = () => {
                         </span>
                       )
                     ) : (
-                      album.shared_via && album.shared_via.length > 0 ? (
-                        <span className="text-xs text-blue-600">
-                          via {album.shared_via.map(s => s.circle_name).join(', ')}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-500">-</span>
-                      )
+                      <div className="space-y-1">
+                        {album.shared_via && album.shared_via.length > 0 && (
+                          <span className="text-xs text-blue-600 block">
+                            via {album.shared_via.map(s => s.circle_name).join(', ')}
+                          </span>
+                        )}
+                        {album.profiles && (
+                          <div className="flex items-center gap-1.5">
+                            {album.profiles.avatar_url ? (
+                              <img
+                                src={album.profiles.avatar_url}
+                                alt={album.profiles.full_name || 'Owner'}
+                                className="w-5 h-5 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-[10px] font-medium">
+                                {(album.profiles.full_name || album.profiles.email || '?')[0].toUpperCase()}
+                              </div>
+                            )}
+                            <span className="text-xs text-gray-500">
+                              {album.profiles.full_name || album.profiles.email || 'Unknown'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -840,12 +920,60 @@ export const AlbumsManager: React.FC = () => {
 
       {/* Album Details Modal */}
       {selectedAlbum && !showShareForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 pt-4 overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-6xl mb-4">
             <div className="flex justify-between items-start mb-6">
-              <div>
+              <div className="flex-1">
                 <div className="flex items-center gap-3">
-                  <h3 className="text-2xl font-bold text-gray-900">{selectedAlbum.title}</h3>
+                  {/* Editable title for owners */}
+                  {selectedAlbum.isOwner && isEditingTitle ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editedTitle}
+                        onChange={(e) => setEditedTitle(e.target.value)}
+                        className="text-2xl font-bold text-gray-900 border-b-2 border-blue-500 outline-none bg-transparent"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleUpdateAlbumTitle();
+                          if (e.key === 'Escape') setIsEditingTitle(false);
+                        }}
+                      />
+                      <button
+                        onClick={handleUpdateAlbumTitle}
+                        className="p-1 text-green-600 hover:text-green-800"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => setIsEditingTitle(false)}
+                        className="p-1 text-red-600 hover:text-red-800"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-2xl font-bold text-gray-900">{selectedAlbum.title}</h3>
+                      {selectedAlbum.isOwner && (
+                        <button
+                          onClick={() => {
+                            setEditedTitle(selectedAlbum.title);
+                            setIsEditingTitle(true);
+                          }}
+                          className="p-1 text-gray-400 hover:text-blue-600"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {selectedAlbum.isOwner ? (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
@@ -855,7 +983,7 @@ export const AlbumsManager: React.FC = () => {
                     </span>
                   ) : (
                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(selectedAlbum.shared_via?.[0]?.role || 'read_only')}`}>
-                      Guest • {(selectedAlbum.shared_via?.[0]?.role || 'read_only').replace('_', ' ')}
+                      {(selectedAlbum.shared_via?.[0]?.role || 'read_only').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                     </span>
                   )}
                 </div>
@@ -869,7 +997,12 @@ export const AlbumsManager: React.FC = () => {
                 )}
               </div>
               <button
-                onClick={() => setSelectedAlbum(null)}
+                onClick={() => {
+                  setSelectedAlbum(null);
+                  setIsEditingTitle(false);
+                  setAlbumDetailViewMode('grid');
+                  setCarouselIndex(0);
+                }}
                 className="text-gray-400 hover:text-gray-600 text-2xl"
               >
                 ×
@@ -913,11 +1046,40 @@ export const AlbumsManager: React.FC = () => {
             )}
 
             {/* Album Photos */}
-            <div>
+            <div className="flex-1">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-gray-900">
-                  Photos ({selectedAlbum.album_assets?.length || 0})
-                </h4>
+                <div className="flex items-center gap-4">
+                  <h4 className="font-semibold text-gray-900">
+                    Photos ({selectedAlbum.album_assets?.length || 0})
+                  </h4>
+                  {/* View mode toggle */}
+                  <div className="flex bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => setAlbumDetailViewMode('grid')}
+                      className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                        albumDetailViewMode === 'grid'
+                          ? 'bg-white text-blue-600 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setAlbumDetailViewMode('carousel')}
+                      className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                        albumDetailViewMode === 'carousel'
+                          ? 'bg-white text-blue-600 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowImageUploader(true)}
@@ -936,6 +1098,7 @@ export const AlbumsManager: React.FC = () => {
                 </div>
               </div>
               {selectedAlbum.album_assets && selectedAlbum.album_assets.length > 0 ? (
+                albumDetailViewMode === 'grid' ? (
                 <div className="flex flex-wrap gap-2" onClick={() => setContextMenu(null)}>
                   {selectedAlbum.album_assets.map(asset => (
                     <div
@@ -1029,6 +1192,70 @@ export const AlbumsManager: React.FC = () => {
                     </div>
                   )}
                 </div>
+                ) : (
+                  /* Carousel View */
+                  <div className="relative bg-black rounded-lg overflow-hidden" style={{ height: '60vh' }}>
+                    {selectedAlbum.album_assets && selectedAlbum.album_assets[carouselIndex] && (
+                      <>
+                        <img
+                          src={selectedAlbum.album_assets[carouselIndex].web_uri ||
+                               selectedAlbum.album_assets[carouselIndex].asset_uri || ''}
+                          alt="Album photo"
+                          className="w-full h-full object-contain"
+                          onClick={() => setSelectedAsset(selectedAlbum.album_assets![carouselIndex])}
+                        />
+                        {/* Memory indicator and add button - top right */}
+                        <div className="absolute top-4 right-4 flex items-center gap-2">
+                          {memoryCounts[selectedAlbum.album_assets[carouselIndex].asset_id] > 0 && (
+                            <button
+                              onClick={() => setMemoriesAssetId(selectedAlbum.album_assets![carouselIndex].asset_id)}
+                              className="bg-black/60 hover:bg-black/80 text-white px-3 py-2 rounded-full flex items-center gap-2 transition-colors"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                              </svg>
+                              <span className="font-medium">{memoryCounts[selectedAlbum.album_assets[carouselIndex].asset_id]}</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setMemoriesAssetId(selectedAlbum.album_assets![carouselIndex].asset_id)}
+                            className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-full transition-colors"
+                            title="Add memory"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </div>
+                        {/* Navigation arrows */}
+                        {carouselIndex > 0 && (
+                          <button
+                            onClick={() => setCarouselIndex(carouselIndex - 1)}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </button>
+                        )}
+                        {carouselIndex < (selectedAlbum.album_assets?.length || 0) - 1 && (
+                          <button
+                            onClick={() => setCarouselIndex(carouselIndex + 1)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        )}
+                        {/* Carousel indicator */}
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-4 py-2 rounded-full text-sm font-medium">
+                          {carouselIndex + 1} / {selectedAlbum.album_assets?.length || 0}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
               ) : (
                 <div className="text-center py-8">
                   <div className="text-4xl mb-4 opacity-50">📷</div>
