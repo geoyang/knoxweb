@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import heic2any from 'heic2any';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { addPhotosToAlbum } from '../../services/albumsApi';
 
 interface ImageUploaderProps {
   targetAlbumId?: string | null;  // Optional - if not provided, uploads to assets only
@@ -411,39 +412,22 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         f.id === fileObj.id ? { ...f, progress: 75 } : f
       ));
 
-      // Step 5 & 6: Create album asset entry only if an album is specified
-      if (targetAlbumId) {
-        // Get the highest display order in the target album
-        const { data: maxOrderData } = await supabase
-          .from('album_assets')
-          .select('display_order')
-          .eq('album_id', targetAlbumId)
-          .order('display_order', { ascending: false })
-          .limit(1);
-
-        const displayOrder = (maxOrderData?.[0]?.display_order || 0) + 1;
-
-        // Create album asset entry linking to the assets table entry
-        // asset_uri uses web URL for display, asset_id references the assets table
-        const albumAssetData = {
-          album_id: targetAlbumId,
-          asset_id: insertedAsset?.id, // Links to assets table (DB-generated UUID)
-          asset_uri: webUrl, // Web-compatible URL for display
-          asset_type: fileObj.file.type.startsWith('video/') ? 'video' : 'image',
-          display_order: displayOrder,
-          date_added: new Date().toISOString(),
-          user_id: user!.id
-        };
-
-        console.log('Inserting album asset:', albumAssetData);
-
-        const { error: insertError } = await supabase
-          .from('album_assets')
-          .insert(albumAssetData);
-
-        if (insertError) {
-          throw insertError;
-        }
+      // Step 5 & 6: Add to album only if an album is specified
+      if (targetAlbumId && insertedAsset?.id) {
+        // Use edge function to add photo to album (this triggers action logging)
+        await addPhotosToAlbum({
+          albumId: targetAlbumId,
+          assets: [{
+            id: insertedAsset.id,
+            uri: webUrl,
+            mediaType: fileObj.file.type.startsWith('video/') ? 'video' : 'photo',
+            thumbnail_uri: thumbnailData || undefined,
+            web_uri: webUrl,
+          }],
+        });
+        console.log('Photo added to album via edge function');
+      } else if (targetAlbumId && !insertedAsset?.id) {
+        console.warn('Cannot add to album - asset entry was not created');
       } else {
         console.log('No album specified - asset uploaded to library only');
       }

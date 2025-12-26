@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { addPhotosToAlbum } from '../../services/albumsApi';
 
 interface Asset {
   id: string;
@@ -164,32 +165,20 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
       // Get the assets to be added
       const selectedAssets = allAssets.filter(asset => selectedAssetIds.has(asset.id));
 
-      // Find the highest display order in the target album
-      const { data: maxOrderData } = await supabase
-        .from('album_assets')
-        .select('display_order')
-        .eq('album_id', targetAlbumId)
-        .order('display_order', { ascending: false })
-        .limit(1);
-
-      const startOrder = (maxOrderData?.[0]?.display_order || 0) + 1;
-
-      // Create new album_asset entries for the target album
-      const newAssetEntries = selectedAssets.map((asset, index) => ({
-        album_id: targetAlbumId,
-        asset_id: asset.id,  // Reference to assets table
-        asset_uri: asset.web_uri || asset.path,  // Use web_uri for display
-        asset_type: asset.media_type === 'video' ? 'video' : 'image',
-        display_order: startOrder + index,
-        date_added: new Date().toISOString(),
-        user_id: user!.id
+      // Format assets for the edge function
+      const assetsToAdd = selectedAssets.map(asset => ({
+        id: asset.id,
+        uri: asset.web_uri || asset.path,
+        mediaType: asset.media_type === 'video' ? 'video' : 'photo',
+        thumbnail_uri: asset.thumbnail || undefined,
+        web_uri: asset.web_uri || undefined,
       }));
 
-      const { error: insertError } = await supabase
-        .from('album_assets')
-        .insert(newAssetEntries);
-
-      if (insertError) throw insertError;
+      // Use edge function to add photos (this will trigger action logging)
+      await addPhotosToAlbum({
+        albumId: targetAlbumId,
+        assets: assetsToAdd,
+      });
 
       onPhotosAdded(selectedAssetIds.size);
       onClose();

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { adminApi } from '../services/adminApi';
 
 interface Circle {
   id: string;
@@ -25,11 +26,12 @@ interface Album {
   title: string;
   description?: string;
   keyphoto?: string;
-  keyphoto_thumbnail?: string;
+  keyphoto_thumbnail?: string | null;
   photo_count: number;
   circle_id: string;
   circle_name: string;
   album_assets?: AlbumAsset[];
+  isOwner?: boolean;
 }
 
 interface UserProfile {
@@ -134,59 +136,50 @@ export const Dashboard: React.FC = () => {
 
       setCircles(processedCircles);
 
-      // Load albums shared with user's circles
-      if (processedCircles.length > 0) {
-        const circleIds = processedCircles.map((c) => c.id);
+      // Load albums using the admin API (handles RLS properly via service role)
+      const albumsResult = await adminApi.getAlbums();
 
-        const { data: albumSharesData, error: albumSharesError } = await supabase
-          .from('album_shares')
-          .select(`
-            album_id,
-            circle_id,
-            albums (
-              id,
-              title,
-              description,
-              keyphoto,
-              album_assets (
-                id,
-                asset_id,
-                asset_uri,
-                asset_type,
-                thumbnail_uri,
-                web_uri
-              )
-            ),
-            circles (
-              name
-            )
-          `)
-          .in('circle_id', circleIds)
-          .eq('is_active', true);
-
-        if (albumSharesError) {
-          console.error('Album shares error:', albumSharesError);
-        }
-
+      if (albumsResult.success && albumsResult.data) {
         const processedAlbums: Album[] = [];
-        for (const share of albumSharesData || []) {
-          const album = share.albums as any;
-          const circle = share.circles as any;
-          if (album) {
-            processedAlbums.push({
-              id: album.id,
-              title: album.title,
-              description: album.description,
-              keyphoto: album.keyphoto,
-              photo_count: album.album_assets?.length || 0,
-              circle_id: share.circle_id,
-              circle_name: circle?.name || 'Unknown Circle',
-              album_assets: album.album_assets || [],
-            });
+
+        for (const album of albumsResult.data.albums || []) {
+          // Get circle info from shared_via for shared albums, or use empty for owned albums
+          let circleId = '';
+          let circleName = album.isOwner ? 'Owned' : 'Shared';
+
+          if (album.shared_via && album.shared_via.length > 0) {
+            circleId = album.shared_via[0].circle_id;
+            circleName = album.shared_via[0].circle_name;
+          } else if (album.album_shares && album.album_shares.length > 0) {
+            // For owned albums with shares
+            circleId = album.album_shares[0].circle_id;
+            circleName = album.album_shares[0].circles?.name || 'Shared';
           }
+
+          processedAlbums.push({
+            id: album.id,
+            title: album.title,
+            description: album.description,
+            keyphoto: album.keyphoto,
+            keyphoto_thumbnail: album.keyphoto_thumbnail,
+            photo_count: album.album_assets?.length || 0,
+            circle_id: circleId,
+            circle_name: circleName,
+            isOwner: album.isOwner,
+            album_assets: (album.album_assets || []).map((asset: any) => ({
+              id: asset.id,
+              asset_id: asset.asset_id,
+              asset_uri: asset.asset_uri,
+              asset_type: asset.asset_type,
+              thumbnail_uri: asset.thumbnail_uri,
+              web_uri: asset.web_uri,
+            })),
+          });
         }
 
         setAlbums(processedAlbums);
+      } else {
+        console.error('Failed to load albums:', albumsResult.error);
       }
 
       setError(null);

@@ -7,11 +7,15 @@ const publicMemoriesApi = {
   async getMemories(inviteId: string, assetId: string): Promise<{ success: boolean; memories?: Memory[]; error?: string }> {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       const response = await fetch(
         `${supabaseUrl}/functions/v1/public-memories?invite_id=${inviteId}&asset_id=${assetId}`,
         {
           method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+          },
         }
       );
       const data = await response.json();
@@ -28,11 +32,15 @@ const publicMemoriesApi = {
   async getMemoryCount(inviteId: string, assetId: string): Promise<number> {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       const response = await fetch(
         `${supabaseUrl}/functions/v1/public-memories?invite_id=${inviteId}&asset_id=${assetId}&count=true`,
         {
           method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+          },
         }
       );
       const data = await response.json();
@@ -191,6 +199,9 @@ export const AlbumViewer: React.FC = () => {
     phone: '',
   });
   const [regError, setRegError] = useState<string | null>(null);
+
+  // Inline registration prompt state (for "Add Memory" from read-only users)
+  const [showInlineRegistration, setShowInlineRegistration] = useState(false);
 
   const isWebAccessibleUrl = (url: string | null | undefined): boolean => {
     if (!url) return false;
@@ -760,13 +771,63 @@ export const AlbumViewer: React.FC = () => {
 
         {/* Public Memories Panel */}
         {memoriesAssetId && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setMemoriesAssetId(null)}>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setMemoriesAssetId(null); setShowInlineRegistration(false); }}>
             <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b">
                 <h2 className="text-xl font-bold text-gray-800">Memories</h2>
-                <button onClick={() => setMemoriesAssetId(null)} className="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                <div className="flex items-center gap-2">
+                  {/* Add Memory Button */}
+                  <button
+                    onClick={() => {
+                      if (canEdit) {
+                        // User can add memories - TODO: implement add memory form
+                        alert('Add Memory feature coming soon!');
+                      } else {
+                        // Show registration prompt
+                        setShowInlineRegistration(true);
+                      }
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors"
+                  >
+                    <span>+</span> Add Memory
+                  </button>
+                  <button onClick={() => { setMemoriesAssetId(null); setShowInlineRegistration(false); }} className="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                </div>
               </div>
+
+              {/* Inline Registration Prompt */}
+              {showInlineRegistration && (
+                <div className="p-4 bg-blue-50 border-b border-blue-200">
+                  <div className="text-center">
+                    <div className="text-3xl mb-2">✍️</div>
+                    <h3 className="font-semibold text-gray-800 mb-1">Create an Account to Add Memories</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      {isReadOnly
+                        ? 'You have view-only access. Create a full account to share your own memories.'
+                        : 'Complete your profile to start sharing memories with this circle.'}
+                    </p>
+                    <div className="flex justify-center gap-3">
+                      <button
+                        onClick={() => setShowInlineRegistration(false)}
+                        className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowInlineRegistration(false);
+                          setMemoriesAssetId(null);
+                          setShowRegistration(true);
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        Create Account
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Content */}
               <div className="flex-1 overflow-y-auto p-4">
@@ -892,6 +953,9 @@ export const AlbumViewer: React.FC = () => {
               <p className="text-sm font-medium">
                 {isReadOnly ? '👁️ View-only access' : canEdit ? '✏️ Editor access' : '👤 Member access'}
               </p>
+              {invite.email && (
+                <p className="text-xs opacity-75 mt-1">{invite.email}</p>
+              )}
             </div>
             {canEdit && account?.profile && (
               <p className="text-sm mt-2 opacity-75">

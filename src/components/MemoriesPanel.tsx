@@ -28,6 +28,10 @@ export const MemoriesPanel: React.FC<MemoriesPanelProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Edit memory state
+  const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+
   // Camera/microphone recording state
   const [inputMode, setInputMode] = useState<'file' | 'record'>('file');
   const [isRecording, setIsRecording] = useState(false);
@@ -92,6 +96,35 @@ export const MemoriesPanel: React.FC<MemoriesPanelProps> = ({
       onMemoriesUpdated?.();
     } else {
       alert(result.error || 'Failed to delete memory');
+    }
+  };
+
+  const handleStartEdit = (memory: Memory) => {
+    if (memory.memory_type === 'text') {
+      setEditingMemoryId(memory.id);
+      setEditText(memory.content_text || '');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMemoryId(null);
+    setEditText('');
+  };
+
+  const handleSaveEdit = async (memoryId: string) => {
+    if (!editText.trim()) {
+      alert('Memory text cannot be empty');
+      return;
+    }
+
+    const result = await memoriesApi.editMemory(memoryId, { content_text: editText.trim() });
+    if (result.success) {
+      setEditingMemoryId(null);
+      setEditText('');
+      loadMemories();
+      onMemoriesUpdated?.();
+    } else {
+      alert(result.error || 'Failed to save changes');
     }
   };
 
@@ -307,8 +340,39 @@ export const MemoriesPanel: React.FC<MemoriesPanelProps> = ({
   };
 
   const renderMemoryContent = (memory: Memory) => {
+    const isEditing = editingMemoryId === memory.id;
+
     switch (memory.memory_type) {
       case 'text':
+        if (isEditing) {
+          return (
+            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+              <textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
+                className="w-full h-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
+                autoFocus
+              />
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-xs text-gray-500">{editText.length}/{MAX_TEXT_LENGTH}</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCancelEdit}
+                    className="px-3 py-1.5 text-sm text-gray-600 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleSaveEdit(memory.id)}
+                    className="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
         return <p className="text-gray-700 whitespace-pre-wrap">{memory.content_text}</p>;
 
       case 'image':
@@ -388,12 +452,22 @@ export const MemoriesPanel: React.FC<MemoriesPanelProps> = ({
           <span className="text-xs text-gray-500">{formatDate(reply.created_at)}</span>
         </div>
         <div className="text-sm">{renderMemoryContent(reply)}</div>
-        <button
-          onClick={() => handleDeleteMemory(reply.id)}
-          className="text-xs text-red-500 hover:text-red-700 mt-2"
-        >
-          Delete
-        </button>
+        <div className="flex items-center gap-3 mt-2">
+          {reply.memory_type === 'text' && canAddMemory && (
+            <button
+              onClick={() => handleStartEdit(reply)}
+              className="text-xs text-blue-500 hover:text-blue-700"
+            >
+              Edit
+            </button>
+          )}
+          <button
+            onClick={() => handleDeleteMemory(reply.id)}
+            className="text-xs text-red-500 hover:text-red-700"
+          >
+            Delete
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -454,6 +528,14 @@ export const MemoriesPanel: React.FC<MemoriesPanelProps> = ({
                   className="text-gray-600 hover:text-gray-800 flex items-center gap-1"
                 >
                   {isExpanded ? '🔼' : '🔽'} {memory.replies!.length} {memory.replies!.length === 1 ? 'Reply' : 'Replies'}
+                </button>
+              )}
+              {memory.memory_type === 'text' && canAddMemory && (
+                <button
+                  onClick={() => handleStartEdit(memory)}
+                  className="text-blue-500 hover:text-blue-700 flex items-center gap-1"
+                >
+                  ✏️ Edit
                 </button>
               )}
               <button

@@ -176,6 +176,14 @@ class MemoriesApiService {
     });
   }
 
+  // Edit a memory
+  async editMemory(memoryId: string, input: Partial<MemoryInput>): Promise<ApiResponse<{ memory: Memory }>> {
+    return this.makeApiCall(`?memory_id=${memoryId}`, {
+      method: 'PUT',
+      body: input
+    });
+  }
+
   // Upload media to storage bucket
   async uploadMemoryMedia(
     file: File,

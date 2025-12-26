@@ -7,6 +7,7 @@ import { ImagesManager } from './admin/ImagesManager';
 import { UsersManager } from './admin/UsersManager';
 import { InvitesManager } from './admin/InvitesManager';
 import { AccountScreen } from './admin/AccountScreen';
+import PushNotificationTest from './admin/PushNotificationTest';
 
 export const AdminDashboard: React.FC = () => {
   const { user, userProfile, signOut, loading, isSuperAdmin } = useAuth();
@@ -147,19 +148,34 @@ export const AdminDashboard: React.FC = () => {
                 </Link>
               </li>
               {isSuperAdmin && (
-                <li>
-                  <Link
-                    to="/admin/users"
-                    className={`flex items-center px-4 py-2 rounded-md transition-colors ${
-                      location.pathname.includes('/admin/users') 
-                        ? 'bg-blue-100 text-blue-700 font-medium' 
-                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                    }`}
-                  >
-                    <span className="mr-3">👤</span>
-                    Users
-                  </Link>
-                </li>
+                <>
+                  <li>
+                    <Link
+                      to="/admin/users"
+                      className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                        location.pathname.includes('/admin/users')
+                          ? 'bg-blue-100 text-blue-700 font-medium'
+                          : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                      }`}
+                    >
+                      <span className="mr-3">👤</span>
+                      Users
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/admin/push-test"
+                      className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                        location.pathname.includes('/admin/push-test')
+                          ? 'bg-blue-100 text-blue-700 font-medium'
+                          : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                      }`}
+                    >
+                      <span className="mr-3">🔔</span>
+                      Push Test
+                    </Link>
+                  </li>
+                </>
               )}
             </ul>
           </div>
@@ -173,15 +189,25 @@ export const AdminDashboard: React.FC = () => {
             <Route path="albums" element={<AlbumsManager />} />
             <Route path="images" element={<ImagesManager />} />
             <Route path="invites" element={<InvitesManager />} />
-            <Route 
-              path="users" 
+            <Route
+              path="users"
               element={
                 isSuperAdmin ? (
                   <UsersManager />
                 ) : (
                   <Navigate to="/admin/circles" replace />
                 )
-              } 
+              }
+            />
+            <Route
+              path="push-test"
+              element={
+                isSuperAdmin ? (
+                  <PushNotificationTest />
+                ) : (
+                  <Navigate to="/admin/circles" replace />
+                )
+              }
             />
           </Routes>
         </main>

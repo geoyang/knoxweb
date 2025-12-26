@@ -406,13 +406,11 @@ export const AlbumsManager: React.FC = () => {
     if (!selectedAlbum) return;
 
     try {
-      // Get the thumbnail or asset URI to use as keyphoto
-      const keyphotoValue = asset.thumbnail_uri || asset.web_uri || asset.asset_uri;
-
+      // Store the asset_id as the key photo reference
       const { error } = await supabase
         .from('albums')
         .update({
-          keyphoto: keyphotoValue,
+          keyphoto: asset.asset_id,
         })
         .eq('id', selectedAlbum.id)
         .eq('user_id', user!.id);
@@ -424,7 +422,7 @@ export const AlbumsManager: React.FC = () => {
         if (!prev) return prev;
         return {
           ...prev,
-          keyphoto: keyphotoValue,
+          keyphoto: asset.asset_id,
           keyphoto_thumbnail: asset.thumbnail_uri || null,
         };
       });

@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { addPhotosToAlbum } from '../../services/albumsApi';
 
 interface StandaloneImageUploaderProps {
   onImagesUploaded: (count: number) => void;
@@ -373,37 +374,19 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
         f.id === fileObj.id ? { ...f, progress: 75 } : f
       ));
 
-      // Get the highest display order in the target album
-      const { data: maxOrderData } = await supabase
-        .from('album_assets')
-        .select('display_order')
-        .eq('album_id', albumId)
-        .order('display_order', { ascending: false })
-        .limit(1);
-
-      const displayOrder = (maxOrderData?.[0]?.display_order || 0) + 1;
-
-      // Create album asset entry with thumbnail
-      const assetData = {
-        album_id: albumId,
-        asset_id: generateId(),
-        asset_uri: uploadResult.originalUrl,
-        thumbnail_uri: uploadResult.thumbnailUrl,
-        asset_type: fileObj.file.type.startsWith('video/') ? 'video' : 'image',
-        display_order: displayOrder,
-        date_added: new Date().toISOString(),
-        user_id: user!.id
-      };
-
-      console.log('Creating asset with data:', assetData);
-
-      const { error: insertError } = await supabase
-        .from('album_assets')
-        .insert(assetData);
-
-      if (insertError) {
-        throw insertError;
-      }
+      // Use edge function to add photo to album (this triggers action logging)
+      const assetId = generateId();
+      await addPhotosToAlbum({
+        albumId,
+        assets: [{
+          id: assetId,
+          uri: uploadResult.originalUrl,
+          mediaType: fileObj.file.type.startsWith('video/') ? 'video' : 'photo',
+          thumbnail_uri: uploadResult.thumbnailUrl,
+          web_uri: uploadResult.originalUrl,
+        }],
+      });
+      console.log('Photo added to album via edge function');
 
       // Update status to success
       setUploadedFiles(prev => prev.map(f => 
