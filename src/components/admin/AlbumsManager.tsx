@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { PhotoPicker } from './PhotoPicker';
 import { ImageUploader } from './ImageUploader';
@@ -84,7 +85,8 @@ export const AlbumsManager: React.FC = () => {
   const [albumDetailViewMode, setAlbumDetailViewMode] = useState<'grid' | 'carousel'>('grid');
   const [carouselIndex, setCarouselIndex] = useState(0);
 
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (user?.id) {
@@ -133,14 +135,19 @@ export const AlbumsManager: React.FC = () => {
 
       if (sessionError || !session?.access_token) {
         console.error('Authentication issue:', sessionError);
-        setError('Please log in again to continue.');
-        setLoading(false);
+        await signOut();
+        navigate('/login');
         return [];
       }
 
       const result = await adminApi.getAlbums();
 
       if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return [];
+        }
         throw new Error(adminApi.handleApiError(result));
       }
 
@@ -192,13 +199,18 @@ export const AlbumsManager: React.FC = () => {
       }
 
       const result = await adminApi.getCircles();
-      
-      if (result.success) {
-        setCircles(result.data?.circles || []);
-      } else {
+
+      if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         console.error('Error loading circles:', adminApi.handleApiError(result));
         setCircles([]);
+        return;
       }
+      setCircles(result.data?.circles || []);
     } catch (err) {
       console.error('Error loading circles:', err);
       setCircles([]);
@@ -212,6 +224,11 @@ export const AlbumsManager: React.FC = () => {
       const result = await adminApi.updateAlbum({ album_id: selectedAlbum.id, title: editedTitle.trim() });
 
       if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         throw new Error(adminApi.handleApiError(result));
       }
 
@@ -233,20 +250,44 @@ export const AlbumsManager: React.FC = () => {
     const formData = new FormData(form);
     
     try {
-      const { data, error } = await supabase
-        .from('album_shares')
-        .insert([
-          {
-            album_id: selectedAlbum.id,
-            circle_id: formData.get('circle_id') as string,
-            role: formData.get('role') as string,
-            shared_by: user!.id,
-          }
-        ])
-        .select()
-        .single();
+      const circleId = formData.get('circle_id') as string;
+      const role = formData.get('role') as string;
 
-      if (error) throw error;
+      // Get current session for auth
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      // Get existing shares for this album to build the new circle_ids array
+      const { data: existingShares } = await supabase
+        .from('album_shares')
+        .select('circle_id')
+        .eq('album_id', selectedAlbum.id)
+        .eq('is_active', true);
+
+      const existingCircleIds = (existingShares || []).map(s => s.circle_id);
+      const newCircleIds = [...new Set([...existingCircleIds, circleId])];
+
+      // Call edge function to handle sharing
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?action=share`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            album_id: selectedAlbum.id,
+            circle_ids: newCircleIds,
+            role: role,
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to share album');
+      }
 
       setShowShareForm(false);
       form.reset();
@@ -259,14 +300,55 @@ export const AlbumsManager: React.FC = () => {
 
   const handleRemoveShare = async (shareId: string) => {
     if (!confirm('Are you sure you want to stop sharing this album?')) return;
+    if (!selectedAlbum) return;
 
     try {
-      const { error } = await supabase
-        .from('album_shares')
-        .update({ is_active: false })
-        .eq('id', shareId);
+      // Get current session for auth
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
 
-      if (error) throw error;
+      // Get the circle_id of the share being removed
+      const { data: shareToRemove } = await supabase
+        .from('album_shares')
+        .select('circle_id')
+        .eq('id', shareId)
+        .single();
+
+      if (!shareToRemove) throw new Error('Share not found');
+
+      // Get all current active shares except the one being removed
+      const { data: existingShares } = await supabase
+        .from('album_shares')
+        .select('circle_id')
+        .eq('album_id', selectedAlbum.id)
+        .eq('is_active', true);
+
+      const remainingCircleIds = (existingShares || [])
+        .map(s => s.circle_id)
+        .filter(id => id !== shareToRemove.circle_id);
+
+      // Call edge function to update sharing
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?action=share`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            album_id: selectedAlbum.id,
+            circle_ids: remainingCircleIds,
+            role: 'read_only',
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to remove share');
+      }
+
       await loadAlbums();
     } catch (err) {
       console.error('Error removing share:', err);
@@ -279,8 +361,13 @@ export const AlbumsManager: React.FC = () => {
 
     try {
       const result = await adminApi.deleteAlbum(albumId);
-      
+
       if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         throw new Error(adminApi.handleApiError(result));
       }
       
@@ -308,6 +395,11 @@ export const AlbumsManager: React.FC = () => {
       });
 
       if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         throw new Error(adminApi.handleApiError(result));
       }
 
@@ -1409,24 +1501,16 @@ export const AlbumsManager: React.FC = () => {
                       />
                     );
                   } else if (hasWebAccessibleUrl && isVideo) {
-                    // Show video placeholder
+                    // Show video player
                     return (
-                      <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
-                        <div className="text-6xl mb-4">🎥</div>
-                        <div className="text-xl font-semibold mb-2">Video Playback</div>
-                        <div className="text-sm text-center max-w-md">
-                          Video playback in albums requires additional implementation.
-                          <br />
-                          <a
-                            href={selectedAsset.asset_uri}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 underline mt-2 inline-block"
-                          >
-                            Open video in new tab
-                          </a>
-                        </div>
-                      </div>
+                      <video
+                        src={selectedAsset.web_uri || selectedAsset.asset_uri}
+                        controls
+                        autoPlay
+                        className="w-full h-full object-contain mt-[10px] bg-black rounded-lg"
+                      >
+                        Your browser does not support the video tag.
+                      </video>
                     );
                   } else {
                     return null; // Fall through to "Not Available" below

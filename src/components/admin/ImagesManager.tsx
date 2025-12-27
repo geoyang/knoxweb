@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ImageUploader } from './ImageUploader';
 import { MemoriesPanel } from '../MemoriesPanel';
@@ -51,7 +52,8 @@ export const ImagesManager: React.FC = () => {
   const [memoryCounts, setMemoryCounts] = useState<Record<string, number>>({});
   const [memoriesAssetId, setMemoriesAssetId] = useState<string | null>(null);
 
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const isWebAccessibleUrl = (url: string | null): boolean => {
     if (!url) return false;
@@ -339,8 +341,13 @@ export const ImagesManager: React.FC = () => {
       setError(null);
 
       const result = await adminApi.getImages(filterType, sortBy);
-      
+
       if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         throw new Error(adminApi.handleApiError(result));
       }
 
@@ -380,8 +387,13 @@ export const ImagesManager: React.FC = () => {
 
     try {
       const result = await adminApi.deleteAsset(assetId);
-      
+
       if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         throw new Error(adminApi.handleApiError(result));
       }
       

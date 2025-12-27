@@ -1,23 +1,63 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { DebugSupabase } from './DebugSupabase';
 import { TokenManager } from '../utils/tokenManager';
+
+const REMEMBER_EMAIL_KEY = 'knox_remember_email';
+const SAVED_EMAIL_KEY = 'knox_saved_email';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(false);
-  const [authMethod, setAuthMethod] = useState<'magic-link' | 'code'>('magic-link');
+  const [authMethod, setAuthMethod] = useState<'magic-link' | 'code'>('code');
   const [codeSent, setCodeSent] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [devCode, setDevCode] = useState<string | null>(null);
-  
-  const { user, signInWithMagicLink, signInWithCode, verifyCode, checkUserExists } = useAuth();
+  const [rememberEmail, setRememberEmail] = useState(false);
 
-  // Redirect if already logged in
-  if (user) {
+  const { user, loading: authLoading, signInWithMagicLink, signInWithCode, verifyCode, checkUserExists } = useAuth();
+  const navigate = useNavigate();
+
+  // Load saved email on mount
+  useEffect(() => {
+    const remember = localStorage.getItem(REMEMBER_EMAIL_KEY);
+    if (remember === 'true') {
+      setRememberEmail(true);
+      const savedEmail = localStorage.getItem(SAVED_EMAIL_KEY);
+      if (savedEmail) {
+        setEmail(savedEmail);
+      }
+    }
+  }, []);
+
+  const handleRememberEmailChange = (checked: boolean) => {
+    setRememberEmail(checked);
+    localStorage.setItem(REMEMBER_EMAIL_KEY, checked ? 'true' : 'false');
+    if (!checked) {
+      localStorage.removeItem(SAVED_EMAIL_KEY);
+    }
+  };
+
+  const saveEmailIfRemembered = () => {
+    if (rememberEmail && email) {
+      localStorage.setItem(SAVED_EMAIL_KEY, email.toLowerCase().trim());
+    }
+  };
+
+  // Don't redirect while auth is still loading, but allow verification screen to stay
+  if (authLoading && !codeSent && !emailSent) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+      </div>
+    );
+  }
+
+  // Redirect if already logged in (but not during code entry)
+  if (user && !codeSent) {
     return <Navigate to="/admin" replace />;
   }
 
@@ -79,6 +119,7 @@ export const Login: React.FC = () => {
     if (error) {
       setError(error.message);
     } else {
+      saveEmailIfRemembered();
       setCodeSent(true);
       if (import.meta.env.DEV && code) {
         setDevCode(code);
@@ -88,7 +129,7 @@ export const Login: React.FC = () => {
 
   const handleCodeVerification = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!verificationCode || verificationCode.length !== 4) {
       setError('Please enter the 4-digit code');
       return;
@@ -102,8 +143,8 @@ export const Login: React.FC = () => {
       if (error) {
         setError(error.message);
       } else if (success) {
-        // Navigation will be handled by the auth state change
         console.log('Code verification successful, redirecting...');
+        navigate('/admin', { replace: true });
       }
     } catch (err) {
       setError('Verification failed. Please try again.');
@@ -142,7 +183,7 @@ export const Login: React.FC = () => {
           </p>
         </div>
 
-        {/* Auth Method Toggle */}
+        {/* Auth Method Toggle - Magic Link temporarily disabled
         {!emailSent && !codeSent && (
           <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
             <button
@@ -169,6 +210,7 @@ export const Login: React.FC = () => {
             </button>
           </div>
         )}
+        */}
 
         {!emailSent && !codeSent ? (
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -187,22 +229,37 @@ export const Login: React.FC = () => {
               />
             </div>
 
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <input
+                  id="remember-email"
+                  type="checkbox"
+                  checked={rememberEmail}
+                  onChange={(e) => handleRememberEmailChange(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                />
+                <label htmlFor="remember-email" className="ml-2 block text-sm text-gray-700 cursor-pointer">
+                  Remember my email
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-2 px-4 rounded-md transition-colors"
+              >
+                {loading
+                  ? 'Sending...'
+                  : '📱 Send Code'
+                }
+              </button>
+            </div>
+
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
                 {error}
               </div>
             )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-2 px-4 rounded-md transition-colors"
-            >
-              {loading 
-                ? (authMethod === 'magic-link' ? 'Sending magic link...' : 'Sending code...')
-                : (authMethod === 'magic-link' ? '🪄 Send Magic Link' : '📱 Send Code')
-              }
-            </button>
             
             <p className="text-sm text-gray-600 text-center">
               {authMethod === 'magic-link'
@@ -256,7 +313,29 @@ export const Login: React.FC = () => {
                   id="code"
                   type="text"
                   value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value.toUpperCase().slice(0, 4))}
+                  onChange={(e) => {
+                    const code = e.target.value.toUpperCase().slice(0, 4);
+                    setVerificationCode(code);
+                    // Auto-submit when 4 characters are entered
+                    if (code.length === 4) {
+                      setTimeout(async () => {
+                        setLoading(true);
+                        setError(null);
+                        try {
+                          const { error, success } = await verifyCode(email, code);
+                          if (error) {
+                            setError(error.message);
+                          } else if (success) {
+                            navigate('/admin', { replace: true });
+                          }
+                        } catch (err) {
+                          setError('Verification failed. Please try again.');
+                        } finally {
+                          setLoading(false);
+                        }
+                      }, 100);
+                    }
+                  }}
                   maxLength={4}
                   className="w-full px-3 py-3 text-center text-2xl font-bold tracking-widest border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="----"
@@ -290,6 +369,7 @@ export const Login: React.FC = () => {
 
         <div className="mt-6 text-center text-sm text-gray-600">
           <p>Don't have an account? Contact your administrator.</p>
+          {/* Switch auth method - temporarily disabled
           {(emailSent || codeSent) && (
             <button
               onClick={switchAuthMethod}
@@ -298,6 +378,7 @@ export const Login: React.FC = () => {
               Try {authMethod === 'magic-link' ? '4-digit code' : 'magic link'} instead
             </button>
           )}
+          */}
         </div>
 
         {/* Debug component temporarily disabled due to profiles table RLS restrictions

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../../services/adminApi';
 import { supabase } from '../../lib/supabase';
@@ -57,7 +58,8 @@ export const InvitesManager: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedCircle, setSelectedCircle] = useState<string>('all');
 
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (user?.id) {
@@ -83,20 +85,25 @@ export const InvitesManager: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Check authentication state first
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
+
       if (sessionError || !session?.access_token) {
         console.error('Authentication issue:', sessionError);
-        setError('Please log in again to continue.');
-        setLoading(false);
+        await signOut();
+        navigate('/login');
         return;
       }
       
       const result = await adminApi.getInvitations();
-      
+
       if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         throw new Error(adminApi.handleApiError(result));
       }
 
@@ -140,8 +147,13 @@ export const InvitesManager: React.FC = () => {
         email: formData.get('email') as string,
         role: formData.get('role') as string,
       });
-      
+
       if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         throw new Error(adminApi.handleApiError(result));
       }
 
@@ -157,11 +169,16 @@ export const InvitesManager: React.FC = () => {
   const handleResendInvitation = async (inviteId: string, email: string, circleName: string, role: string) => {
     try {
       const result = await adminApi.resendInvitation(inviteId);
-      
+
       if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         throw new Error(adminApi.handleApiError(result));
       }
-      
+
       alert('Invitation resent successfully!');
     } catch (err) {
       console.error('Error resending invitation:', err);
@@ -174,11 +191,16 @@ export const InvitesManager: React.FC = () => {
 
     try {
       const result = await adminApi.cancelInvitation(inviteId);
-      
+
       if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         throw new Error(adminApi.handleApiError(result));
       }
-      
+
       await loadInvitations();
     } catch (err) {
       console.error('Error cancelling invitation:', err);

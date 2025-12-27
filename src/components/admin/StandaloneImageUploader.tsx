@@ -123,16 +123,16 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       const img = new Image();
-      
+
       img.onload = () => {
         // Set canvas size to 80x80
         canvas.width = 80;
         canvas.height = 80;
-        
+
         // Calculate aspect ratio
         const aspectRatio = img.width / img.height;
         let drawWidth, drawHeight, offsetX, offsetY;
-        
+
         if (aspectRatio > 1) {
           // Landscape
           drawHeight = 80;
@@ -146,11 +146,11 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
           offsetX = 0;
           offsetY = -(drawHeight - 80) / 2;
         }
-        
+
         // Clear canvas and draw image
         ctx!.clearRect(0, 0, 80, 80);
         ctx!.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
-        
+
         // Convert to blob
         canvas.toBlob((blob) => {
           if (blob) {
@@ -160,9 +160,73 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
           }
         }, 'image/jpeg', 0.8);
       };
-      
+
       img.onerror = () => reject(new Error('Failed to load image for thumbnail'));
       img.src = URL.createObjectURL(file);
+    });
+  };
+
+  // Create thumbnail from video at 2 seconds
+  const createVideoThumbnailBlob = async (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+
+      video.onloadedmetadata = () => {
+        // Seek to 2 seconds or 10% of video duration, whichever is smaller
+        const seekTime = Math.min(2, video.duration * 0.1);
+        video.currentTime = seekTime;
+      };
+
+      video.onseeked = () => {
+        // Set canvas size to 80x80
+        canvas.width = 80;
+        canvas.height = 80;
+
+        // Calculate aspect ratio
+        const aspectRatio = video.videoWidth / video.videoHeight;
+        let drawWidth, drawHeight, offsetX, offsetY;
+
+        if (aspectRatio > 1) {
+          // Landscape
+          drawHeight = 80;
+          drawWidth = 80 * aspectRatio;
+          offsetX = -(drawWidth - 80) / 2;
+          offsetY = 0;
+        } else {
+          // Portrait
+          drawWidth = 80;
+          drawHeight = 80 / aspectRatio;
+          offsetX = 0;
+          offsetY = -(drawHeight - 80) / 2;
+        }
+
+        // Clear canvas and draw video frame
+        ctx!.clearRect(0, 0, 80, 80);
+        ctx!.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
+
+        // Convert to blob
+        canvas.toBlob((blob) => {
+          URL.revokeObjectURL(video.src);
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Failed to create video thumbnail blob'));
+          }
+        }, 'image/jpeg', 0.8);
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(video.src);
+        reject(new Error('Failed to load video for thumbnail'));
+      };
+
+      video.src = URL.createObjectURL(file);
     });
   };
 
@@ -180,26 +244,34 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
       throw error;
     }
 
-    // Generate and upload thumbnail for images
+    // Generate and upload thumbnail for images and videos
     let thumbnailUrl = '';
-    if (file.type.startsWith('image/')) {
-      try {
-        const thumbnailBlob = await createThumbnailBlob(file);
-        const thumbnailFileName = `${user!.id}/thumbnails/${Date.now()}_${Math.random().toString(36).substr(2, 9)}_thumb.jpg`;
-        
-        const { data: thumbData, error: thumbError } = await supabase.storage
-          .from('assets')
-          .upload(thumbnailFileName, thumbnailBlob);
-          
-        if (!thumbError && thumbData) {
-          const { data: thumbUrlData } = supabase.storage
-            .from('assets')
-            .getPublicUrl(thumbData.path);
-          thumbnailUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/assets/${thumbData.path}`;
-        }
-      } catch (thumbError) {
-        console.warn('Failed to create thumbnail, using original image:', thumbError);
+    const isVideo = file.type.startsWith('video/');
+
+    try {
+      let thumbnailBlob: Blob;
+
+      if (isVideo) {
+        // Generate thumbnail from video at 2 seconds
+        thumbnailBlob = await createVideoThumbnailBlob(file);
+        console.log('Video thumbnail generated');
+      } else if (file.type.startsWith('image/')) {
+        thumbnailBlob = await createThumbnailBlob(file);
+      } else {
+        throw new Error('Unsupported file type for thumbnail');
       }
+
+      const thumbnailFileName = `${user!.id}/thumbnails/${Date.now()}_${Math.random().toString(36).substr(2, 9)}_thumb.jpg`;
+
+      const { data: thumbData, error: thumbError } = await supabase.storage
+        .from('assets')
+        .upload(thumbnailFileName, thumbnailBlob);
+
+      if (!thumbError && thumbData) {
+        thumbnailUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/assets/${thumbData.path}`;
+      }
+    } catch (thumbError) {
+      console.warn('Failed to create thumbnail:', thumbError);
     }
 
     const { data: publicUrlData } = supabase.storage

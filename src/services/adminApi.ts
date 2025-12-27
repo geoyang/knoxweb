@@ -5,6 +5,7 @@ interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   details?: string;
+  isAuthError?: boolean;
 }
 
 class AdminApiService {
@@ -36,7 +37,8 @@ class AdminApiService {
       if (!authHeaders) {
         return {
           success: false,
-          error: 'Authentication required'
+          error: 'Authentication required',
+          isAuthError: true
         };
       }
 
@@ -68,10 +70,17 @@ class AdminApiService {
 
       if (!response.ok) {
         console.error(`API call to ${functionName} failed:`, data);
+        // Check for auth errors (401, 403, or auth-related error messages)
+        const isAuthError = response.status === 401 ||
+                           response.status === 403 ||
+                           data.error?.toLowerCase().includes('auth') ||
+                           data.error?.toLowerCase().includes('token') ||
+                           data.error?.toLowerCase().includes('jwt');
         return {
           success: false,
           error: data.error || 'API call failed',
-          details: data.details || JSON.stringify(data)
+          details: data.details || JSON.stringify(data),
+          isAuthError
         };
       }
 
@@ -255,9 +264,6 @@ class AdminApiService {
 
   // Handle common API errors
   handleApiError(error: ApiResponse): string {
-    if (error.error?.includes('authentication') || error.error?.includes('token')) {
-      return 'Please log in again to continue.';
-    }
     if (error.error?.includes('access denied') || error.error?.includes('not found')) {
       return 'You don\'t have permission to access this resource.';
     }

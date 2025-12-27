@@ -710,15 +710,16 @@ export const AlbumViewer: React.FC = () => {
                 ×
               </button>
 
-              {/* Display image - use high quality web-compatible JPEG */}
+              {/* Display image or video */}
               {selectedAsset.asset_type === 'video' ? (
-                <div className="bg-gray-900 rounded-lg p-8 text-center">
-                  <div className="text-6xl mb-4">🎬</div>
-                  <p className="text-white text-lg mb-4">Video Preview</p>
-                  <p className="text-gray-400 text-sm mb-6">
-                    Download the original to play this video
-                  </p>
-                </div>
+                <video
+                  src={getDisplayUrl(selectedAsset) || getOriginalUrl(selectedAsset) || ''}
+                  controls
+                  autoPlay
+                  className="max-w-full max-h-[80vh] rounded-lg mt-[10px] bg-black"
+                >
+                  Your browser does not support the video tag.
+                </video>
               ) : (
                 <img
                   src={getDisplayUrl(selectedAsset) || ''}

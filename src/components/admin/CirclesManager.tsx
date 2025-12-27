@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../../services/adminApi';
 import { supabase } from '../../lib/supabase';
@@ -47,7 +48,8 @@ export const CirclesManager: React.FC = () => {
   const [editDescription, setEditDescription] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (user?.id) {
@@ -68,23 +70,28 @@ export const CirclesManager: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       console.log('Loading circles for user:', user?.id);
-      
+
       // Check authentication state first
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
+
       if (sessionError || !session?.access_token) {
         console.error('Authentication issue:', sessionError);
-        setError('Please log in again to continue.');
-        setLoading(false);
+        await signOut();
+        navigate('/login');
         return;
       }
       
       const result = await adminApi.getCircles();
       console.log('Circles API result:', result);
-      
+
       if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         throw new Error(adminApi.handleApiError(result));
       }
 
@@ -101,13 +108,18 @@ export const CirclesManager: React.FC = () => {
   const loadCircleUsers = async (circleId: string) => {
     try {
       const result = await adminApi.getCircleUsers(circleId);
-      
-      if (result.success) {
-        setCircleUsers(result.data?.users || []);
-      } else {
+
+      if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         console.warn('Circle users could not be loaded:', adminApi.handleApiError(result));
         setCircleUsers([]);
+        return;
       }
+      setCircleUsers(result.data?.users || []);
     } catch (err) {
       console.error('Error loading circle users:', err);
       setCircleUsers([]);
@@ -129,8 +141,13 @@ export const CirclesManager: React.FC = () => {
         name: formData.get('name') as string,
         description: formData.get('description') as string || undefined,
       });
-      
+
       if (!result.success) {
+        if (result.isAuthError) {
+          await signOut();
+          navigate('/login');
+          return;
+        }
         throw new Error(adminApi.handleApiError(result));
       }
 

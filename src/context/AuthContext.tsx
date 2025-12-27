@@ -481,6 +481,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signOut = async () => {
+    // Clear state immediately to prevent redirect loops
+    setUser(null);
+    setUserProfile(null);
+    setSession(null);
+    setIsSuperAdmin(false);
+    userProfileRef.current = null;
+
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };

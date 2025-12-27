@@ -88,6 +88,63 @@ const generateThumbnail = async (file: File | Blob, maxSize: number = 300): Prom
   });
 };
 
+// Generate thumbnail from video file at 2 seconds
+const generateVideoThumbnail = async (file: File, maxSize: number = 300): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+
+    video.onloadedmetadata = () => {
+      // Seek to 2 seconds or 10% of video duration, whichever is smaller
+      const seekTime = Math.min(2, video.duration * 0.1);
+      video.currentTime = seekTime;
+    };
+
+    video.onseeked = () => {
+      // Calculate thumbnail dimensions
+      let width = video.videoWidth;
+      let height = video.videoHeight;
+
+      if (width > height) {
+        if (width > maxSize) {
+          height = (height * maxSize) / width;
+          width = maxSize;
+        }
+      } else {
+        if (height > maxSize) {
+          width = (width * maxSize) / height;
+          height = maxSize;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        URL.revokeObjectURL(video.src);
+        resolve(dataUrl);
+      } else {
+        URL.revokeObjectURL(video.src);
+        reject(new Error('Could not get canvas context'));
+      }
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(video.src);
+      reject(new Error('Failed to load video for thumbnail'));
+    };
+
+    video.src = URL.createObjectURL(file);
+  });
+};
+
 export const ImageUploader: React.FC<ImageUploaderProps> = ({
   targetAlbumId,
   onImagesUploaded,
@@ -325,16 +382,22 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       const timestamp = Date.now();
 
       // Step 1: Upload original file (including HEIC - preserves Live Photos etc.)
+      const isVideoFile = fileObj.file.type.startsWith('video/');
       console.log('Uploading original file:', fileObj.file.name);
+      console.log('File type:', fileObj.file.type);
+      console.log('File size:', Math.round(fileObj.file.size / 1024 / 1024 * 100) / 100, 'MB');
+      console.log('Is video:', isVideoFile);
       setUploadedFiles(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, progress: 10 } : f
       ));
 
       const originalPath = `${user!.id}/${timestamp}_${fileObj.file.name}`;
-      const originalUpload = await uploadToSupabase(fileObj.file, originalPath);
+      console.log('Upload path:', originalPath);
+      const originalUpload = await uploadToSupabase(fileObj.file, originalPath, fileObj.file.type);
       const originalUrl = originalUpload.url;
       const objectId = originalUpload.objectId;
       console.log('Original uploaded:', originalUrl);
+      console.log('Object ID:', objectId);
 
       // Step 2: For HEIC, convert and upload web-compatible JPEG
       let webUrl = originalUrl; // Default to original
@@ -362,11 +425,21 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       // Step 3: Generate base64 thumbnail
       let thumbnailData: string | null = null;
-      if (isImage) {
-        setUploadedFiles(prev => prev.map(f =>
-          f.id === fileObj.id ? { ...f, progress: 50 } : f
-        ));
+      const isVideo = fileObj.file.type.startsWith('video/');
 
+      setUploadedFiles(prev => prev.map(f =>
+        f.id === fileObj.id ? { ...f, progress: 50 } : f
+      ));
+
+      if (isVideo) {
+        // Generate thumbnail from video at 2 seconds
+        try {
+          thumbnailData = await generateVideoThumbnail(fileObj.file);
+          console.log('Video thumbnail generated, size:', Math.round(thumbnailData.length / 1024), 'KB');
+        } catch (thumbError) {
+          console.warn('Video thumbnail generation failed:', thumbError);
+        }
+      } else if (isImage) {
         try {
           // For HEIC, we need to convert first to generate thumbnail
           const imageForThumbnail = isHeic ? await convertHeicToJpeg(fileObj.file) : fileObj.file;
