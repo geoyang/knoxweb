@@ -97,23 +97,10 @@ export const AdminDashboard: React.FC = () => {
             <ul className="space-y-2">
               <li>
                 <Link
-                  to="/admin/circles"
-                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
-                    location.pathname.includes('/admin/circles') 
-                      ? 'bg-blue-100 text-blue-700 font-medium' 
-                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                  }`}
-                >
-                  <span className="mr-3">👥</span>
-                  Circles
-                </Link>
-              </li>
-              <li>
-                <Link
                   to="/admin/albums"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
-                    location.pathname.includes('/admin/albums') 
-                      ? 'bg-blue-100 text-blue-700 font-medium' 
+                    location.pathname.includes('/admin/albums')
+                      ? 'bg-blue-100 text-blue-700 font-medium'
                       : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
                   }`}
                 >
@@ -136,10 +123,23 @@ export const AdminDashboard: React.FC = () => {
               </li>
               <li>
                 <Link
+                  to="/admin/circles"
+                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                    location.pathname.includes('/admin/circles')
+                      ? 'bg-blue-100 text-blue-700 font-medium'
+                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                  }`}
+                >
+                  <span className="mr-3">👥</span>
+                  Circles
+                </Link>
+              </li>
+              <li>
+                <Link
                   to="/admin/invites"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
-                    location.pathname.includes('/admin/invites') 
-                      ? 'bg-blue-100 text-blue-700 font-medium' 
+                    location.pathname.includes('/admin/invites')
+                      ? 'bg-blue-100 text-blue-700 font-medium'
                       : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
                   }`}
                 >
@@ -184,10 +184,10 @@ export const AdminDashboard: React.FC = () => {
         {/* Main Content */}
         <main className="flex-1 p-8">
           <Routes>
-            <Route index element={<Navigate to="/admin/circles" replace />} />
-            <Route path="circles" element={<CirclesManager />} />
+            <Route index element={<Navigate to="/admin/albums" replace />} />
             <Route path="albums" element={<AlbumsManager />} />
             <Route path="images" element={<ImagesManager />} />
+            <Route path="circles" element={<CirclesManager />} />
             <Route path="invites" element={<InvitesManager />} />
             <Route
               path="users"
@@ -195,7 +195,7 @@ export const AdminDashboard: React.FC = () => {
                 isSuperAdmin ? (
                   <UsersManager />
                 ) : (
-                  <Navigate to="/admin/circles" replace />
+                  <Navigate to="/admin/albums" replace />
                 )
               }
             />
@@ -205,7 +205,7 @@ export const AdminDashboard: React.FC = () => {
                 isSuperAdmin ? (
                   <PushNotificationTest />
                 ) : (
-                  <Navigate to="/admin/circles" replace />
+                  <Navigate to="/admin/albums" replace />
                 )
               }
             />

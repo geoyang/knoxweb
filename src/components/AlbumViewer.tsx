@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import type { Memory } from '../services/memoriesApi';
 
 // Public memories API helper (no auth required, uses invite ID for access)
@@ -118,6 +118,25 @@ interface AlbumAsset {
   date_added: string;
   path?: string | null;
   thumbnail?: string | null;
+  // Metadata fields
+  created_at?: string;
+  width?: number;
+  height?: number;
+  latitude?: number;
+  longitude?: number;
+  location_name?: string;
+  camera_make?: string;
+  camera_model?: string;
+  lens_make?: string;
+  lens_model?: string;
+  orientation?: number;
+  aperture?: number;
+  shutter_speed?: string;
+  iso?: number;
+  focal_length?: number;
+  focal_length_35mm?: number;
+  flash?: string;
+  white_balance?: string;
 }
 
 interface UserProfile {
@@ -146,18 +165,90 @@ interface AlbumData {
 
 export const AlbumViewer: React.FC = () => {
   const { inviteId } = useParams<{ inviteId: string }>();
+  const navigate = useNavigate();
   const [albumData, setAlbumData] = useState<AlbumData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<AlbumAsset | null>(null);
-  const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
 
   // Memories state
   const [memoriesAssetId, setMemoriesAssetId] = useState<string | null>(null);
   const [memoryCounts, setMemoryCounts] = useState<Record<string, number>>({});
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loadingMemories, setLoadingMemories] = useState(false);
+
+  // Photo info/metadata state
+  const [infoAsset, setInfoAsset] = useState<AlbumAsset | null>(null);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; asset: AlbumAsset } | null>(null);
+
+  // Handle context menu (right-click / long-press)
+  const handleContextMenu = useCallback((e: React.MouseEvent, asset: AlbumAsset) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, asset });
+  }, []);
+
+  // Close context menu when clicking elsewhere
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [contextMenu]);
+
+  // Format metadata value for display
+  const formatMetadataValue = (key: string, value: any): string => {
+    if (value === null || value === undefined) return '-';
+
+    switch (key) {
+      case 'created_at':
+      case 'date_added':
+        return new Date(value).toLocaleString();
+      case 'aperture':
+        return `f/${value}`;
+      case 'focal_length':
+      case 'focal_length_35mm':
+        return `${value}mm`;
+      case 'iso':
+        return `ISO ${value}`;
+      case 'width':
+      case 'height':
+        return `${value}px`;
+      default:
+        return String(value);
+    }
+  };
+
+  // Get metadata fields to display (excluding lat/long, using location_name instead)
+  const getMetadataFields = (asset: AlbumAsset) => {
+    const fields: { label: string; value: string }[] = [];
+
+    if (asset.created_at) fields.push({ label: 'Date Taken', value: formatMetadataValue('created_at', asset.created_at) });
+    if (asset.date_added) fields.push({ label: 'Date Added', value: formatMetadataValue('date_added', asset.date_added) });
+    if (asset.width && asset.height) fields.push({ label: 'Dimensions', value: `${asset.width} × ${asset.height}` });
+    if (asset.location_name) fields.push({ label: 'Location', value: asset.location_name });
+    if (asset.camera_make || asset.camera_model) {
+      const camera = [asset.camera_make, asset.camera_model].filter(Boolean).join(' ');
+      fields.push({ label: 'Camera', value: camera });
+    }
+    if (asset.lens_make || asset.lens_model) {
+      const lens = [asset.lens_make, asset.lens_model].filter(Boolean).join(' ');
+      fields.push({ label: 'Lens', value: lens });
+    }
+    if (asset.aperture) fields.push({ label: 'Aperture', value: formatMetadataValue('aperture', asset.aperture) });
+    if (asset.shutter_speed) fields.push({ label: 'Shutter Speed', value: asset.shutter_speed });
+    if (asset.iso) fields.push({ label: 'ISO', value: formatMetadataValue('iso', asset.iso) });
+    if (asset.focal_length) fields.push({ label: 'Focal Length', value: formatMetadataValue('focal_length', asset.focal_length) });
+    if (asset.focal_length_35mm) fields.push({ label: 'Focal Length (35mm)', value: formatMetadataValue('focal_length_35mm', asset.focal_length_35mm) });
+    if (asset.flash) fields.push({ label: 'Flash', value: asset.flash });
+    if (asset.white_balance) fields.push({ label: 'White Balance', value: asset.white_balance });
+
+    return fields;
+  };
 
   // Load memories when panel is opened
   useEffect(() => {
@@ -395,19 +486,7 @@ export const AlbumViewer: React.FC = () => {
     loadAlbumData();
   }, [inviteId]);
 
-  // Load memory counts when album is selected
-  useEffect(() => {
-    const loadMemoryCounts = async () => {
-      if (!selectedAlbum || selectedAlbum.assets.length === 0 || !inviteId) return;
-
-      const assetIds = selectedAlbum.assets.map(a => a.asset_id);
-      const counts = await publicMemoriesApi.getMemoryCounts(inviteId, assetIds);
-      setMemoryCounts(counts);
-    };
-
-    loadMemoryCounts();
-  }, [selectedAlbum, inviteId]);
-
+  
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
@@ -574,347 +653,6 @@ export const AlbumViewer: React.FC = () => {
     );
   }
 
-  // Album Detail View
-  if (selectedAlbum) {
-    const accessibleAssets = selectedAlbum.assets.filter(asset => getThumbnailUrl(asset) !== null);
-
-    return (
-      <div className="min-h-screen bg-gray-50">
-        {/* Album Header */}
-        <div className="bg-white shadow-sm sticky top-0 z-10">
-          <div className="max-w-6xl mx-auto px-4 py-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setSelectedAlbum(null)}
-                className="text-blue-600 hover:text-blue-800 flex items-center gap-2"
-              >
-                <span className="text-xl">←</span>
-                <span>Back to Albums</span>
-              </button>
-              <div className="flex-1">
-                <h1 className="text-xl font-bold text-gray-800">{selectedAlbum.title}</h1>
-                {selectedAlbum.description && (
-                  <p className="text-sm text-gray-500">{selectedAlbum.description}</p>
-                )}
-              </div>
-              <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
-                {accessibleAssets.length} photos
-              </span>
-
-              {/* Editor Controls */}
-              {canEdit && (
-                <button
-                  className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 flex items-center gap-2 transition-colors text-sm font-medium"
-                  onClick={() => alert('Add Photo feature coming soon! This will allow you to upload photos to this album.')}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Photos
-                </button>
-              )}
-
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="bg-gray-100 hover:bg-gray-200 rounded-full p-2 transition-all disabled:opacity-50"
-                title="Refresh"
-              >
-                <svg
-                  className={`w-5 h-5 text-gray-600 ${refreshing ? 'animate-spin' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Photos Grid */}
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          {accessibleAssets.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="text-6xl mb-4 opacity-50">📷</div>
-              <h3 className="text-xl font-bold text-gray-700 mb-2">No Photos Available</h3>
-              <p className="text-gray-500">This album doesn't have any viewable photos yet.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {selectedAlbum.assets.map(asset => {
-                const thumbnailUrl = getThumbnailUrl(asset);
-                const displayUrl = getDisplayUrl(asset);
-                if (!thumbnailUrl) return null;
-                return (
-                  <div
-                    key={asset.id}
-                    className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative shadow-md"
-                    onClick={() => displayUrl && setSelectedAsset(asset)}
-                  >
-                    <img
-                      src={thumbnailUrl}
-                      alt="Photo"
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                    {asset.asset_type === 'video' && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="bg-black/50 rounded-full p-3">
-                          <span className="text-white text-2xl">▶️</span>
-                        </div>
-                      </div>
-                    )}
-                    {/* Memory indicator */}
-                    {memoryCounts[asset.asset_id] > 0 && (
-                      <button
-                        className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 rounded-full p-1.5 flex items-center gap-1 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMemoriesAssetId(asset.asset_id);
-                        }}
-                      >
-                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
-                        {memoryCounts[asset.asset_id] > 1 && (
-                          <span className="text-white text-xs font-medium pr-0.5">{memoryCounts[asset.asset_id]}</span>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Image Modal */}
-        {selectedAsset && (
-          <div
-            className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
-            onClick={() => setSelectedAsset(null)}
-          >
-            <div className="relative max-w-5xl max-h-full" onClick={(e) => e.stopPropagation()}>
-              {/* Close button */}
-              <button
-                onClick={() => setSelectedAsset(null)}
-                className="absolute -top-12 right-0 text-white text-3xl hover:text-gray-300"
-              >
-                ×
-              </button>
-
-              {/* Display image or video */}
-              {selectedAsset.asset_type === 'video' ? (
-                <video
-                  src={getDisplayUrl(selectedAsset) || getOriginalUrl(selectedAsset) || ''}
-                  controls
-                  autoPlay
-                  className="max-w-full max-h-[80vh] rounded-lg mt-[10px] bg-black"
-                >
-                  Your browser does not support the video tag.
-                </video>
-              ) : (
-                <img
-                  src={getDisplayUrl(selectedAsset) || ''}
-                  alt="Full size"
-                  className="max-w-full max-h-[80vh] rounded-lg mt-[10px]"
-                />
-              )}
-
-              {/* Action buttons */}
-              <div className="mt-4 flex justify-center gap-3">
-                {/* Memories button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMemoriesAssetId(selectedAsset.asset_id);
-                  }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg flex items-center gap-2 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  Memories
-                  {memoryCounts[selectedAsset.asset_id] > 0 && (
-                    <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">
-                      {memoryCounts[selectedAsset.asset_id]}
-                    </span>
-                  )}
-                </button>
-
-                {/* Download Original button */}
-                {getOriginalUrl(selectedAsset) && (
-                  <a
-                    href={getOriginalUrl(selectedAsset)!}
-                    download
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-6 rounded-lg flex items-center gap-2 transition-colors"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Download Original
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Public Memories Panel */}
-        {memoriesAssetId && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setMemoriesAssetId(null); setShowInlineRegistration(false); }}>
-            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-              {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b">
-                <h2 className="text-xl font-bold text-gray-800">Memories</h2>
-                <div className="flex items-center gap-2">
-                  {/* Add Memory Button */}
-                  <button
-                    onClick={() => {
-                      if (canEdit) {
-                        // User can add memories - TODO: implement add memory form
-                        alert('Add Memory feature coming soon!');
-                      } else {
-                        // Show registration prompt
-                        setShowInlineRegistration(true);
-                      }
-                    }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors"
-                  >
-                    <span>+</span> Add Memory
-                  </button>
-                  <button onClick={() => { setMemoriesAssetId(null); setShowInlineRegistration(false); }} className="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
-                </div>
-              </div>
-
-              {/* Inline Registration Prompt */}
-              {showInlineRegistration && (
-                <div className="p-4 bg-blue-50 border-b border-blue-200">
-                  <div className="text-center">
-                    <div className="text-3xl mb-2">✍️</div>
-                    <h3 className="font-semibold text-gray-800 mb-1">Create an Account to Add Memories</h3>
-                    <p className="text-sm text-gray-600 mb-4">
-                      {isReadOnly
-                        ? 'You have view-only access. Create a full account to share your own memories.'
-                        : 'Complete your profile to start sharing memories with this circle.'}
-                    </p>
-                    <div className="flex justify-center gap-3">
-                      <button
-                        onClick={() => setShowInlineRegistration(false)}
-                        className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowInlineRegistration(false);
-                          setMemoriesAssetId(null);
-                          setShowRegistration(true);
-                        }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        Create Account
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Content */}
-              <div className="flex-1 overflow-y-auto p-4">
-                {loadingMemories ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  </div>
-                ) : memories.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">
-                    <div className="text-4xl mb-2">💭</div>
-                    <p>No memories yet</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {memories.map((memory) => (
-                      <div key={memory.id} className="bg-gray-50 rounded-lg p-4">
-                        {/* Memory header */}
-                        <div className="flex items-center gap-3 mb-2">
-                          {memory.user.avatar_url ? (
-                            <img src={memory.user.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
-                              {(memory.user.name || memory.user.email || '?')[0].toUpperCase()}
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-800">{memory.user.name || memory.user.email || 'Unknown'}</div>
-                            <div className="text-xs text-gray-500">{formatDate(memory.created_at)}</div>
-                          </div>
-                        </div>
-
-                        {/* Memory content */}
-                        {memory.memory_type === 'text' && memory.content_text && (
-                          <p className="text-gray-700 whitespace-pre-wrap">{memory.content_text}</p>
-                        )}
-                        {memory.memory_type === 'image' && memory.content_url && (
-                          <img src={memory.content_url} alt="" className="max-w-full rounded-lg mt-2" />
-                        )}
-                        {memory.memory_type === 'video' && memory.content_url && (
-                          <video src={memory.content_url} controls className="max-w-full rounded-lg mt-2" />
-                        )}
-                        {memory.memory_type === 'audio' && memory.content_url && (
-                          <audio src={memory.content_url} controls className="w-full mt-2" />
-                        )}
-
-                        {/* Replies */}
-                        {memory.replies && memory.replies.length > 0 && (
-                          <div className="mt-3 pl-4 border-l-2 border-gray-200 space-y-3">
-                            {memory.replies.map((reply) => (
-                              <div key={reply.id} className="bg-white rounded-lg p-3">
-                                <div className="flex items-center gap-2 mb-1">
-                                  {reply.user.avatar_url ? (
-                                    <img src={reply.user.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
-                                  ) : (
-                                    <div className="w-6 h-6 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs font-medium">
-                                      {(reply.user.name || reply.user.email || '?')[0].toUpperCase()}
-                                    </div>
-                                  )}
-                                  <span className="font-medium text-sm text-gray-700">{reply.user.name || reply.user.email}</span>
-                                  <span className="text-xs text-gray-500">{formatDate(reply.created_at)}</span>
-                                </div>
-                                {reply.memory_type === 'text' && reply.content_text && (
-                                  <p className="text-gray-600 text-sm">{reply.content_text}</p>
-                                )}
-                                {reply.memory_type === 'image' && reply.content_url && (
-                                  <img src={reply.content_url} alt="" className="max-w-full rounded-lg mt-1" />
-                                )}
-                                {reply.memory_type === 'video' && reply.content_url && (
-                                  <video src={reply.content_url} controls className="max-w-full rounded-lg mt-1" />
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   // Albums Grid View (Main View)
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1010,7 +748,7 @@ export const AlbumViewer: React.FC = () => {
                 <div
                   key={album.id}
                   className="cursor-pointer group"
-                  onClick={() => setSelectedAlbum(album)}
+                  onClick={() => navigate(`/album/${inviteId}/${album.id}`)}
                 >
                   {/* Album Cover */}
                   <div className="relative aspect-square bg-gray-100 rounded-2xl overflow-hidden shadow-lg group-hover:shadow-xl transition-all group-hover:scale-[1.02]">
@@ -1083,6 +821,435 @@ export const AlbumViewer: React.FC = () => {
           </a>
         </div>
       </div>
+    </div>
+  );
+};
+
+// Album Detail View - Standalone page for viewing a single album
+export const AlbumDetailView: React.FC = () => {
+  const { inviteId, albumId } = useParams<{ inviteId: string; albumId: string }>();
+  const navigate = useNavigate();
+  const [album, setAlbum] = useState<Album | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<AlbumAsset | null>(null);
+
+  // Memories state
+  const [memoriesAssetId, setMemoriesAssetId] = useState<string | null>(null);
+  const [memoryCounts, setMemoryCounts] = useState<Record<string, number>>({});
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [loadingMemories, setLoadingMemories] = useState(false);
+  const [showInlineRegistration, setShowInlineRegistration] = useState(false);
+  const [inlineRegEmail, setInlineRegEmail] = useState('');
+  const [inlineRegName, setInlineRegName] = useState('');
+
+  // Fetch album data
+  useEffect(() => {
+    const fetchAlbum = async () => {
+      if (!inviteId) return;
+
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const response = await fetch(
+          `${supabaseUrl}/functions/v1/public-album-view?inviteId=${inviteId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to load album');
+        }
+
+        const data = await response.json();
+        const foundAlbum = data.albums?.find((a: Album) => a.id === albumId);
+        if (foundAlbum) {
+          setAlbum(foundAlbum);
+        } else {
+          setError('Album not found');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load album');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAlbum();
+  }, [inviteId, albumId]);
+
+  // Load memory counts
+  useEffect(() => {
+    const loadMemoryCounts = async () => {
+      if (!album || album.assets.length === 0 || !inviteId) return;
+
+      const assetIds = album.assets.map(a => a.asset_id);
+      const counts: Record<string, number> = {};
+      for (const assetId of assetIds) {
+        counts[assetId] = await publicMemoriesApi.getMemoryCount(inviteId, assetId);
+      }
+      setMemoryCounts(counts);
+    };
+    loadMemoryCounts();
+  }, [album, inviteId]);
+
+  // Load memories when panel is opened
+  useEffect(() => {
+    const loadMemories = async () => {
+      if (!memoriesAssetId || !inviteId) return;
+      setLoadingMemories(true);
+      const result = await publicMemoriesApi.getMemories(inviteId, memoriesAssetId);
+      if (result.success && result.memories) {
+        setMemories(result.memories);
+      } else {
+        setMemories([]);
+      }
+      setLoadingMemories(false);
+    };
+    loadMemories();
+  }, [memoriesAssetId, inviteId]);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  // URL helpers
+  const getThumbnailUrl = (asset: AlbumAsset): string | null => {
+    if (asset.thumbnail && (asset.thumbnail.startsWith('http') || asset.thumbnail.startsWith('data:'))) {
+      return asset.thumbnail;
+    }
+    if (asset.web_uri && asset.web_uri.startsWith('http')) {
+      return asset.web_uri;
+    }
+    if (asset.path && asset.path.startsWith('http')) {
+      return asset.path;
+    }
+    return null;
+  };
+
+  const getDisplayUrl = (asset: AlbumAsset): string | null => {
+    if (asset.web_uri && asset.web_uri.startsWith('http')) {
+      return asset.web_uri;
+    }
+    if (asset.path && asset.path.startsWith('http')) {
+      return asset.path;
+    }
+    return getThumbnailUrl(asset);
+  };
+
+  const getOriginalUrl = (asset: AlbumAsset): string | null => {
+    if (asset.path && asset.path.startsWith('http')) {
+      return asset.path;
+    }
+    return getDisplayUrl(asset);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading album...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !album) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 text-lg">{error || 'Album not found'}</p>
+          <button
+            onClick={() => navigate(`/album/${inviteId}`)}
+            className="mt-4 text-blue-600 hover:underline"
+          >
+            ← Back to albums
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const accessibleAssets = album.assets.filter(asset => getThumbnailUrl(asset) !== null);
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* CSS for hover overlay */}
+      <style>{`
+        .photo-card .photo-overlay {
+          position: absolute;
+          inset: 0;
+          background: rgba(0,0,0,0.75);
+          opacity: 0;
+          transition: opacity 0.2s;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-end;
+          padding: 8px;
+          pointer-events: none;
+        }
+        .photo-card:hover .photo-overlay {
+          opacity: 1;
+        }
+      `}</style>
+
+      {/* Header with back button */}
+      <div className="bg-white shadow-sm sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate(`/album/${inviteId}`)}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              <span className="font-medium">Back</span>
+            </button>
+            <div className="flex-1">
+              <h1 className="text-xl font-bold text-gray-800">{album.title}</h1>
+              {album.description && (
+                <p className="text-sm text-gray-500">{album.description}</p>
+              )}
+            </div>
+            <div className="text-sm text-gray-500">
+              {accessibleAssets.length} photo{accessibleAssets.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Photos Grid */}
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        {accessibleAssets.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="text-6xl mb-4 opacity-50">📷</div>
+            <h3 className="text-xl font-bold text-gray-700 mb-2">No Photos Available</h3>
+            <p className="text-gray-500">This album doesn't have any viewable photos yet.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {album.assets.map(asset => {
+              const thumbnailUrl = getThumbnailUrl(asset);
+              const displayUrl = getDisplayUrl(asset);
+              if (!thumbnailUrl) return null;
+              return (
+                <div
+                  key={asset.id}
+                  className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative shadow-md photo-card"
+                  onClick={() => displayUrl && setSelectedAsset(asset)}
+                >
+                  <img
+                    src={thumbnailUrl}
+                    alt="Photo"
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                  {asset.asset_type === 'video' && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="bg-black/50 rounded-full p-3">
+                        <span className="text-white text-2xl">▶️</span>
+                      </div>
+                    </div>
+                  )}
+                  {/* Metadata overlay on hover */}
+                  <div className="photo-overlay">
+                    <div style={{ color: 'white', fontSize: '11px', lineHeight: '1.4' }}>
+                      {(asset.created_at || asset.date_added) && (
+                        <div>📅 {new Date(asset.created_at || asset.date_added).toLocaleDateString()}</div>
+                      )}
+                      {asset.location_name && (
+                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📍 {asset.location_name}</div>
+                      )}
+                      {(asset.camera_make || asset.camera_model) && (
+                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📷 {[asset.camera_make, asset.camera_model].filter(Boolean).join(' ')}</div>
+                      )}
+                      {asset.aperture && (
+                        <div>f/{asset.aperture}{asset.iso ? ` • ISO ${asset.iso}` : ''}</div>
+                      )}
+                      {!asset.location_name && !asset.camera_make && !asset.camera_model && !asset.created_at && !asset.date_added && !asset.aperture && (
+                        <div style={{ color: '#ccc', fontStyle: 'italic' }}>No metadata</div>
+                      )}
+                    </div>
+                  </div>
+                  {/* Memory indicator */}
+                  {memoryCounts[asset.asset_id] > 0 && (
+                    <button
+                      className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 rounded-full p-1.5 flex items-center gap-1 transition-colors z-10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMemoriesAssetId(asset.asset_id);
+                      }}
+                    >
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      {memoryCounts[asset.asset_id] > 1 && (
+                        <span className="text-white text-xs font-medium pr-0.5">{memoryCounts[asset.asset_id]}</span>
+                      )}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Image/Video Modal */}
+      {selectedAsset && (
+        <div
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedAsset(null)}
+        >
+          <div className="relative max-w-5xl max-h-full" onClick={(e) => e.stopPropagation()}>
+            {/* Close button */}
+            <button
+              onClick={() => setSelectedAsset(null)}
+              className="absolute -top-12 right-0 text-white text-3xl hover:text-gray-300"
+            >
+              ×
+            </button>
+
+            {/* Display image or video */}
+            {selectedAsset.asset_type === 'video' ? (
+              <video
+                src={getDisplayUrl(selectedAsset) || getOriginalUrl(selectedAsset) || ''}
+                controls
+                autoPlay
+                className="max-w-full max-h-[80vh] rounded-lg mt-[10px] bg-black"
+              >
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              <img
+                src={getDisplayUrl(selectedAsset) || ''}
+                alt="Full size"
+                className="max-w-full max-h-[80vh] rounded-lg mt-[10px]"
+              />
+            )}
+
+            {/* Action buttons */}
+            <div className="mt-4 flex justify-center gap-3">
+              {/* Memories button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMemoriesAssetId(selectedAsset.asset_id);
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                Memories
+                {memoryCounts[selectedAsset.asset_id] > 0 && (
+                  <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">
+                    {memoryCounts[selectedAsset.asset_id]}
+                  </span>
+                )}
+              </button>
+
+              {/* Download Original button */}
+              {getOriginalUrl(selectedAsset) && (
+                <a
+                  href={getOriginalUrl(selectedAsset)!}
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-6 rounded-lg flex items-center gap-2 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download Original
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Memories Panel */}
+      {memoriesAssetId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setMemoriesAssetId(null); setShowInlineRegistration(false); }}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-xl font-bold text-gray-800">Memories</h2>
+              <button
+                onClick={() => { setMemoriesAssetId(null); setShowInlineRegistration(false); }}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {loadingMemories ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : memories.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-5xl mb-4">💭</div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">No memories yet</h3>
+                  <p className="text-gray-500 text-sm">Be the first to add a memory to this photo!</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {memories.map((memory) => (
+                    <div key={memory.id} className="bg-gray-50 rounded-lg p-4">
+                      {/* Memory header */}
+                      <div className="flex items-center gap-3 mb-2">
+                        {memory.user.avatar_url ? (
+                          <img src={memory.user.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
+                            {(memory.user.name || memory.user.email || '?')[0].toUpperCase()}
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-800">{memory.user.name || memory.user.email || 'Unknown'}</div>
+                          <div className="text-xs text-gray-500">{formatDate(memory.created_at)}</div>
+                        </div>
+                      </div>
+
+                      {/* Memory content */}
+                      {memory.memory_type === 'text' && memory.content_text && (
+                        <p className="text-gray-700 whitespace-pre-wrap">{memory.content_text}</p>
+                      )}
+                      {memory.memory_type === 'image' && memory.content_url && (
+                        <img src={memory.content_url} alt="" className="max-w-full rounded-lg mt-2" />
+                      )}
+                      {memory.memory_type === 'video' && memory.content_url && (
+                        <video src={memory.content_url} controls className="max-w-full rounded-lg mt-2" />
+                      )}
+                      {memory.memory_type === 'audio' && memory.content_url && (
+                        <audio src={memory.content_url} controls className="w-full mt-2" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

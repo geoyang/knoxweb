@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { AlbumViewer } from './components/AlbumViewer';
+import { AlbumViewer, AlbumDetailView } from './components/AlbumViewer';
 import { ViewCircle } from './components/ViewCircle';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Login } from './components/Login';
@@ -16,6 +16,7 @@ function App() {
       <Routes>
         {/* Public route for album viewing without authentication */}
         <Route path="/album/:inviteId" element={<AlbumViewer />} />
+        <Route path="/album/:inviteId/:albumId" element={<AlbumDetailView />} />
 
         {/* Circle invitation acceptance route */}
         <Route path="/view-circle/:inviteId" element={<ViewCircle />} />

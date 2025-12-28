@@ -1,8 +1,326 @@
 import React, { useState, useCallback } from 'react';
 import heic2any from 'heic2any';
+import exifr from 'exifr';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { addPhotosToAlbum } from '../../services/albumsApi';
+import { addPhotosToAlbum, createAssetInLibrary } from '../../services/albumsApi';
+
+// Interface for extracted EXIF metadata (matches mobile app's AssetMetadata)
+interface ExifMetadata {
+  createdAt: Date | null;
+  latitude: number | null;
+  longitude: number | null;
+  locationName: string | null;
+  make: string | null;
+  model: string | null;
+  lensMake: string | null;
+  lensModel: string | null;
+  width: number | null;
+  height: number | null;
+  orientation: number | null;
+  iso: number | null;
+  focalLength: number | null;
+  focalLength35mm: number | null;
+  aperture: number | null;
+  shutterSpeed: string | null;  // As string like "1/125"
+  flash: string | null;
+  whiteBalance: string | null;
+  duration: number | null;  // Video duration in seconds
+  // Raw EXIF data for storage in metadata JSONB column
+  rawExif: Record<string, unknown> | null;
+}
+
+// Reverse geocode coordinates to location name using OpenStreetMap Nominatim
+const reverseGeocode = async (latitude: number, longitude: number): Promise<string | null> => {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14`,
+      {
+        headers: {
+          'User-Agent': 'Knox Photo App/1.0',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.warn('Reverse geocoding failed:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (data.address) {
+      // Build a readable location name from address components
+      const parts: string[] = [];
+
+      // Add neighborhood/suburb/village if available
+      if (data.address.neighbourhood) {
+        parts.push(data.address.neighbourhood);
+      } else if (data.address.suburb) {
+        parts.push(data.address.suburb);
+      } else if (data.address.village) {
+        parts.push(data.address.village);
+      }
+
+      // Add city/town
+      if (data.address.city) {
+        parts.push(data.address.city);
+      } else if (data.address.town) {
+        parts.push(data.address.town);
+      } else if (data.address.municipality) {
+        parts.push(data.address.municipality);
+      }
+
+      // Add state/region
+      if (data.address.state) {
+        parts.push(data.address.state);
+      } else if (data.address.region) {
+        parts.push(data.address.region);
+      }
+
+      // Add country
+      if (data.address.country) {
+        parts.push(data.address.country);
+      }
+
+      if (parts.length > 0) {
+        return parts.join(', ');
+      }
+    }
+
+    // Fallback to display_name if structured address not available
+    if (data.display_name) {
+      return data.display_name;
+    }
+
+    return null;
+  } catch (error) {
+    console.warn('Reverse geocoding error:', error);
+    return null;
+  }
+};
+
+// Extract video metadata using HTML5 video element
+const extractVideoMetadata = async (file: File): Promise<ExifMetadata> => {
+  return new Promise((resolve) => {
+    const defaultMetadata: ExifMetadata = {
+      createdAt: null,
+      latitude: null,
+      longitude: null,
+      locationName: null,
+      make: null,
+      model: null,
+      lensMake: null,
+      lensModel: null,
+      width: null,
+      height: null,
+      orientation: null,
+      iso: null,
+      focalLength: null,
+      focalLength35mm: null,
+      aperture: null,
+      shutterSpeed: null,
+      flash: null,
+      whiteBalance: null,
+      duration: null,
+      rawExif: null,
+    };
+
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+
+    video.onloadedmetadata = () => {
+      console.log('=== VIDEO METADATA EXTRACTION ===');
+      console.log('Video file:', file.name);
+      console.log('Video duration:', video.duration);
+      console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
+
+      // Try to get last modified date from file as creation date fallback
+      let createdAt: Date | null = null;
+      if (file.lastModified) {
+        createdAt = new Date(file.lastModified);
+        console.log('File last modified:', createdAt);
+      }
+
+      const metadata: ExifMetadata = {
+        ...defaultMetadata,
+        width: video.videoWidth || null,
+        height: video.videoHeight || null,
+        duration: video.duration || null,
+        createdAt,
+        rawExif: {
+          video_duration: video.duration,
+          video_width: video.videoWidth,
+          video_height: video.videoHeight,
+          file_type: file.type,
+          file_size: file.size,
+        },
+      };
+
+      console.log('Extracted video metadata:', metadata);
+      console.log('=== VIDEO METADATA EXTRACTION COMPLETE ===');
+
+      URL.revokeObjectURL(video.src);
+      resolve(metadata);
+    };
+
+    video.onerror = () => {
+      console.warn('Could not load video metadata');
+      URL.revokeObjectURL(video.src);
+      // Still return file's last modified date if available
+      resolve({
+        ...defaultMetadata,
+        createdAt: file.lastModified ? new Date(file.lastModified) : null,
+      });
+    };
+
+    video.src = URL.createObjectURL(file);
+  });
+};
+
+// Extract EXIF metadata from an image file
+const extractExifMetadata = async (file: File): Promise<ExifMetadata> => {
+  const defaultMetadata: ExifMetadata = {
+    createdAt: null,
+    latitude: null,
+    longitude: null,
+    locationName: null,
+    make: null,
+    model: null,
+    lensMake: null,
+    lensModel: null,
+    width: null,
+    height: null,
+    orientation: null,
+    iso: null,
+    focalLength: null,
+    focalLength35mm: null,
+    aperture: null,
+    shutterSpeed: null,
+    flash: null,
+    whiteBalance: null,
+    duration: null,
+    rawExif: null,
+  };
+
+  try {
+    // Parse all EXIF data including GPS, TIFF, IPTC, etc.
+    const exif = await exifr.parse(file, {
+      // Parse all segments for comprehensive metadata
+      tiff: true,
+      exif: true,
+      gps: true,
+      ifd1: true,     // Thumbnail IFD
+      iptc: true,     // IPTC metadata
+      xmp: true,      // XMP metadata
+      icc: false,     // Skip ICC profile (usually not needed)
+      translateKeys: true,
+      translateValues: false,  // Keep raw values (orientation as number, not "Rotate 90 CW")
+      reviveValues: true,
+    });
+
+    if (!exif) {
+      console.log('No EXIF data found in file:', file.name);
+      return defaultMetadata;
+    }
+
+    console.log('Extracted EXIF data (full):', JSON.stringify(exif, null, 2));
+
+    // Get creation date - try various fields
+    let createdAt: Date | null = null;
+    if (exif.DateTimeOriginal) {
+      createdAt = new Date(exif.DateTimeOriginal);
+    } else if (exif.CreateDate) {
+      createdAt = new Date(exif.CreateDate);
+    } else if (exif.ModifyDate) {
+      createdAt = new Date(exif.ModifyDate);
+    }
+
+    // Validate the date - if invalid, use null
+    if (createdAt && isNaN(createdAt.getTime())) {
+      createdAt = null;
+    }
+
+    // Get GPS coordinates - exifr parses these directly
+    const latitude = exif.latitude ?? exif.GPSLatitude ?? null;
+    const longitude = exif.longitude ?? exif.GPSLongitude ?? null;
+
+    // Get dimensions
+    const width = exif.ImageWidth ?? exif.ExifImageWidth ?? null;
+    const height = exif.ImageHeight ?? exif.ExifImageHeight ?? null;
+
+    // Clean the raw EXIF data for JSON storage (remove any circular refs or non-serializable values)
+    let rawExif: Record<string, unknown> | null = null;
+    try {
+      // Convert to JSON and back to ensure it's serializable
+      rawExif = JSON.parse(JSON.stringify(exif));
+    } catch {
+      console.warn('Could not serialize raw EXIF data');
+    }
+
+    // Get parsed coordinates
+    const parsedLatitude = typeof latitude === 'number' ? latitude : null;
+    const parsedLongitude = typeof longitude === 'number' ? longitude : null;
+
+    // Reverse geocode to get location name if we have coordinates
+    let locationName: string | null = null;
+    if (parsedLatitude !== null && parsedLongitude !== null) {
+      console.log('Reverse geocoding coordinates:', parsedLatitude, parsedLongitude);
+      locationName = await reverseGeocode(parsedLatitude, parsedLongitude);
+      console.log('Location name:', locationName);
+    }
+
+    // Format shutter speed as string (e.g., "1/125")
+    let shutterSpeed: string | null = null;
+    if (exif.ExposureTime) {
+      const exposure = exif.ExposureTime;
+      shutterSpeed = exposure < 1 ? `1/${Math.round(1 / exposure)}` : `${exposure}s`;
+    }
+
+    // Format flash mode
+    let flash: string | null = null;
+    if (exif.Flash !== undefined) {
+      const flashModes: Record<number, string> = {
+        0: 'No Flash', 1: 'Fired', 5: 'Fired, Return not detected', 7: 'Fired, Return detected',
+        16: 'Off', 24: 'Auto, Did not fire', 25: 'Auto, Fired', 32: 'No flash function',
+      };
+      flash = flashModes[exif.Flash] || `Flash: ${exif.Flash}`;
+    }
+
+    // Format white balance
+    let whiteBalance: string | null = null;
+    if (exif.WhiteBalance !== undefined) {
+      whiteBalance = exif.WhiteBalance === 0 ? 'Auto' : 'Manual';
+    }
+
+    return {
+      createdAt,
+      latitude: parsedLatitude,
+      longitude: parsedLongitude,
+      locationName,
+      make: exif.Make ?? null,
+      model: exif.Model ?? null,
+      lensMake: exif.LensMake ?? null,
+      lensModel: exif.LensModel ?? exif.Lens ?? null,
+      width,
+      height,
+      duration: null,  // Photos don't have duration
+      orientation: exif.Orientation ?? null,
+      iso: exif.ISO ?? exif.ISOSpeedRatings ?? null,
+      focalLength: exif.FocalLength ?? null,
+      focalLength35mm: exif.FocalLengthIn35mmFormat ?? exif.FocalLenIn35mmFilm ?? null,
+      aperture: exif.FNumber ?? null,
+      shutterSpeed,
+      flash,
+      whiteBalance,
+      rawExif,
+    };
+  } catch (error) {
+    console.warn('Failed to extract EXIF data:', error);
+    return defaultMetadata;
+  }
+};
 
 interface ImageUploaderProps {
   targetAlbumId?: string | null;  // Optional - if not provided, uploads to assets only
@@ -381,8 +699,20 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       const isImage = fileObj.file.type.startsWith('image/') || isHeic;
       const timestamp = Date.now();
 
-      // Step 1: Upload original file (including HEIC - preserves Live Photos etc.)
+      // Step 0: Extract metadata before uploading (EXIF for images, video metadata for videos)
+      let exifMetadata: ExifMetadata | null = null;
       const isVideoFile = fileObj.file.type.startsWith('video/');
+      if (isVideoFile) {
+        console.log('Extracting video metadata from:', fileObj.file.name);
+        exifMetadata = await extractVideoMetadata(fileObj.file);
+        console.log('Video metadata:', exifMetadata);
+      } else if (isImage) {
+        console.log('Extracting EXIF metadata from:', fileObj.file.name);
+        exifMetadata = await extractExifMetadata(fileObj.file);
+        console.log('EXIF metadata:', exifMetadata);
+      }
+
+      // Step 1: Upload original file (including HEIC - preserves Live Photos etc.)
       console.log('Uploading original file:', fileObj.file.name);
       console.log('File type:', fileObj.file.type);
       console.log('File size:', Math.round(fileObj.file.size / 1024 / 1024 * 100) / 100, 'MB');
@@ -454,30 +784,49 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         f.id === fileObj.id ? { ...f, progress: 60 } : f
       ));
 
-      // Step 4: Create entry in assets table (id is auto-generated by DB)
-      const assetEntry = {
+      // Step 4: Build asset data with all metadata
+      // Use EXIF creation date if available, otherwise use current time
+      const photoCreatedAt = exifMetadata?.createdAt
+        ? exifMetadata.createdAt.toISOString()
+        : new Date().toISOString();
+      const uploadedAt = new Date().toISOString();
+      const mediaType = fileObj.file.type.startsWith('video/') ? 'video' : 'photo';
+
+      // Build asset data with all metadata (used for both album and library-only uploads)
+      const assetData: Record<string, unknown> = {
+        needsCreation: true,
         path: originalUrl,
         thumbnail: thumbnailData || originalUrl,
         web_uri: webUrl,
-        asset_file_id: objectId, // Storage object UUID from Supabase
-        user_id: user!.id,
-        created_at: new Date().toISOString(),
-        media_type: fileObj.file.type.startsWith('video/') ? 'video' : 'photo',
+        asset_file_id: objectId,
+        created_at: photoCreatedAt,
+        uploaded_at: uploadedAt,
+        media_type: mediaType,
+        uri: webUrl,
+        mediaType: mediaType,
       };
 
-      console.log('Creating assets entry:', assetEntry);
-      const { data: insertedAsset, error: assetError } = await supabase
-        .from('assets')
-        .insert(assetEntry)
-        .select()
-        .single();
-
-      if (assetError) {
-        console.error('Failed to create asset entry:', assetError);
-        console.error('Asset entry data was:', JSON.stringify(assetEntry, null, 2));
-        // Continue anyway - album_assets can still work without assets entry
-      } else {
-        console.log('Asset entry created successfully:', insertedAsset?.id);
+      // Add EXIF/video metadata (matching mobile app's field names)
+      if (exifMetadata) {
+        if (exifMetadata.latitude !== null) assetData.latitude = exifMetadata.latitude;
+        if (exifMetadata.longitude !== null) assetData.longitude = exifMetadata.longitude;
+        if (exifMetadata.locationName) assetData.location_name = exifMetadata.locationName;
+        if (exifMetadata.make) assetData.camera_make = exifMetadata.make;
+        if (exifMetadata.model) assetData.camera_model = exifMetadata.model;
+        if (exifMetadata.lensMake) assetData.lens_make = exifMetadata.lensMake;
+        if (exifMetadata.lensModel) assetData.lens_model = exifMetadata.lensModel;
+        if (exifMetadata.width) assetData.width = exifMetadata.width;
+        if (exifMetadata.height) assetData.height = exifMetadata.height;
+        if (exifMetadata.duration !== null) assetData.duration = exifMetadata.duration;
+        if (exifMetadata.orientation) assetData.orientation = exifMetadata.orientation;
+        if (exifMetadata.iso) assetData.iso = exifMetadata.iso;
+        if (exifMetadata.aperture) assetData.aperture = exifMetadata.aperture;
+        if (exifMetadata.focalLength) assetData.focal_length = exifMetadata.focalLength;
+        if (exifMetadata.focalLength35mm) assetData.focal_length_35mm = exifMetadata.focalLength35mm;
+        if (exifMetadata.shutterSpeed) assetData.shutter_speed = exifMetadata.shutterSpeed;
+        if (exifMetadata.flash) assetData.flash = exifMetadata.flash;
+        if (exifMetadata.whiteBalance) assetData.white_balance = exifMetadata.whiteBalance;
+        if (exifMetadata.rawExif) assetData.metadata = exifMetadata.rawExif;
       }
 
       // Update progress to 75% after uploads
@@ -485,24 +834,21 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         f.id === fileObj.id ? { ...f, progress: 75 } : f
       ));
 
-      // Step 5 & 6: Add to album only if an album is specified
-      if (targetAlbumId && insertedAsset?.id) {
-        // Use edge function to add photo to album (this triggers action logging)
+      // Step 5: Create asset and optionally add to album
+      // Use edge function for BOTH album and library-only uploads (consistent with mobile app)
+      if (targetAlbumId) {
+        // Upload to album - use admin-albums-api with needsCreation
+        console.log('Adding to album with needsCreation:', assetData);
         await addPhotosToAlbum({
           albumId: targetAlbumId,
-          assets: [{
-            id: insertedAsset.id,
-            uri: webUrl,
-            mediaType: fileObj.file.type.startsWith('video/') ? 'video' : 'photo',
-            thumbnail_uri: thumbnailData || undefined,
-            web_uri: webUrl,
-          }],
+          assets: [assetData],
         });
         console.log('Photo added to album via edge function');
-      } else if (targetAlbumId && !insertedAsset?.id) {
-        console.warn('Cannot add to album - asset entry was not created');
       } else {
-        console.log('No album specified - asset uploaded to library only');
+        // Library-only upload - use admin-images-api POST
+        console.log('Creating asset in library:', assetData);
+        await createAssetInLibrary(assetData);
+        console.log('Asset created in library via edge function');
       }
 
       // Update status to success

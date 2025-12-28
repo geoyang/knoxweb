@@ -21,6 +21,13 @@ interface Asset {
     title: string;
     user_id: string;
   };
+  // Metadata fields
+  created_at?: string;
+  location_name?: string;
+  camera_make?: string;
+  camera_model?: string;
+  aperture?: number;
+  iso?: number;
 }
 
 interface ImageStats {
@@ -89,6 +96,29 @@ export const ImagesManager: React.FC = () => {
 
     // For Supabase storage without stored thumbnail, use original
     return asset.asset_uri;
+  };
+
+  // Get metadata summary for hover display
+  const getMetadataSummary = (asset: Asset): string[] => {
+    const summary: string[] = [];
+
+    if (asset.created_at) {
+      summary.push(new Date(asset.created_at).toLocaleDateString());
+    }
+    if (asset.location_name) {
+      summary.push(asset.location_name);
+    }
+    if (asset.camera_make || asset.camera_model) {
+      summary.push([asset.camera_make, asset.camera_model].filter(Boolean).join(' '));
+    }
+    if (asset.aperture) {
+      summary.push(`f/${asset.aperture}`);
+    }
+    if (asset.iso) {
+      summary.push(`ISO ${asset.iso}`);
+    }
+
+    return summary;
   };
 
   // Helper function to fetch authenticated images from Supabase
@@ -511,13 +541,14 @@ export const ImagesManager: React.FC = () => {
 
       {/* Assets Display */}
       {viewMode === 'grid' ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-3">
           {filteredAssets.map(asset => {
             const memoryCount = memoryCounts[asset.asset_id] || 0;
+            const metadataSummary = getMetadataSummary(asset);
             return (
               <div
                 key={asset.id}
-                className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative group"
+                className="w-36 h-36 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative group"
                 onClick={() => setSelectedAsset(asset)}
               >
                 <AuthenticatedImage
@@ -527,7 +558,7 @@ export const ImagesManager: React.FC = () => {
                   useThumbnail={true}
                 />
                 {asset.asset_type === 'video' && (
-                  <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="bg-black/50 rounded-full p-1">
                       <span className="text-white text-xs">▶️</span>
                     </div>
@@ -536,7 +567,7 @@ export const ImagesManager: React.FC = () => {
                 {/* Memory indicator */}
                 {memoryCount > 0 && (
                   <button
-                    className="absolute top-1 right-1 bg-black/60 rounded-full p-1 flex items-center gap-0.5 hover:bg-black/80 transition-colors"
+                    className="absolute top-1 right-1 bg-black/60 rounded-full p-1 flex items-center gap-0.5 hover:bg-black/80 transition-colors z-10"
                     onClick={(e) => { e.stopPropagation(); setMemoriesAssetId(asset.asset_id); }}
                     title={`${memoryCount} ${memoryCount === 1 ? 'memory' : 'memories'}`}
                   >
@@ -546,7 +577,14 @@ export const ImagesManager: React.FC = () => {
                     )}
                   </button>
                 )}
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Metadata hover overlay */}
+                <div className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none">
+                  {metadataSummary.slice(0, 3).map((text, i) => (
+                    <div key={i} className="text-white text-[10px] leading-tight truncate">{text}</div>
+                  ))}
+                  <div className="text-white/70 text-[9px] mt-1 truncate">{asset.album?.title}</div>
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1 opacity-0 group-hover:opacity-0 transition-opacity">
                   <p className="text-white text-[9px] truncate px-1">{asset.album?.title}</p>
                 </div>
               </div>
@@ -681,23 +719,15 @@ export const ImagesManager: React.FC = () => {
                       useThumbnail={false}
                     />
                   ) : (
-                    // For videos, we'll need a different approach with signed URLs
-                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
-                      <div className="text-6xl mb-4">🎥</div>
-                      <div className="text-xl font-semibold mb-2">Video Playback</div>
-                      <div className="text-sm text-center max-w-md">
-                        Video playback in authenticated storage requires additional implementation.
-                        <br />
-                        <a
-                          href={selectedAsset.asset_uri}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 underline mt-2 inline-block"
-                        >
-                          Open video in new tab
-                        </a>
-                      </div>
-                    </div>
+                    // Video playback
+                    <video
+                      src={selectedAsset.asset_uri}
+                      controls
+                      autoPlay
+                      className="w-full h-full object-contain bg-black"
+                    >
+                      Your browser does not support the video tag.
+                    </video>
                   )
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">

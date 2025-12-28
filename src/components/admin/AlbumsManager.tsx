@@ -7,6 +7,7 @@ import { adminApi } from '../../services/adminApi';
 import { supabase } from '../../lib/supabase';
 import { MemoriesPanel } from '../MemoriesPanel';
 import { memoriesApi } from '../../services/memoriesApi';
+import { AlbumPhotoGrid, AlbumAsset, ContextMenuItem, getThumbnailUrl, isWebAccessibleUrl, isHeicUrl, getDisplayUrl } from '../AlbumPhotoGrid';
 
 interface Album {
   id: string;
@@ -35,6 +36,14 @@ interface Album {
     asset_type: string;
     thumbnail_uri?: string;
     web_uri?: string;  // Web-compatible JPEG for HEIC files
+    // Metadata fields
+    created_at?: string;
+    date_added?: string;
+    location_name?: string;
+    camera_make?: string;
+    camera_model?: string;
+    aperture?: number;
+    iso?: number;
   }[];
   album_shares?: {
     id: string;
@@ -70,8 +79,6 @@ export const AlbumsManager: React.FC = () => {
   const [creatingAlbum, setCreatingAlbum] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
-  const [contextMenu, setContextMenu] = useState<{ asset: NonNullable<Album['album_assets']>[0]; x: number; y: number } | null>(null);
-  const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
 
   // Memories state
   const [memoriesAssetId, setMemoriesAssetId] = useState<string | null>(null);
@@ -485,7 +492,6 @@ export const AlbumsManager: React.FC = () => {
         };
       });
 
-      setContextMenu(null);
       await loadAlbums();
     } catch (err) {
       console.error('Error removing from album:', err);
@@ -519,7 +525,6 @@ export const AlbumsManager: React.FC = () => {
         };
       });
 
-      setContextMenu(null);
       await loadAlbums();
     } catch (err) {
       console.error('Error setting key photo:', err);
@@ -527,45 +532,7 @@ export const AlbumsManager: React.FC = () => {
     }
   };
 
-  // Context menu handlers
-  const handleContextMenu = (e: React.MouseEvent, asset: NonNullable<Album['album_assets']>[0]) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (selectedAlbum && canEditAlbum(selectedAlbum)) {
-      setContextMenu({ asset, x: e.clientX, y: e.clientY });
-    }
-  };
-
-  const handleLongPressStart = (e: React.MouseEvent | React.TouchEvent, asset: NonNullable<Album['album_assets']>[0]) => {
-    if (!selectedAlbum || !canEditAlbum(selectedAlbum)) return;
-
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-
-    longPressTimer.current = setTimeout(() => {
-      setContextMenu({ asset, x: clientX, y: clientY });
-    }, 500); // 500ms long press
-  };
-
-  const handleLongPressEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const isWebAccessibleUrl = (url: string | null): boolean => {
-    if (!url) return false;
-    // Check if URL is web accessible (http/https, data URI) and not a local scheme like ph://
-    return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:');
-  };
-
-  // Helper to check if URL is HEIC/HEIF (can't be displayed in browsers)
-  const isHeicUrl = (url: string | null | undefined): boolean => {
-    if (!url) return false;
-    const lower = url.toLowerCase();
-    return lower.endsWith('.heic') || lower.endsWith('.heif');
-  };
+  // Using isWebAccessibleUrl and isHeicUrl from shared AlbumPhotoGrid component
 
   // Get web-compatible image URL
   // Priority: base64 thumbnail > web_uri (JPEG) > thumbnail_uri (URL) > original (if not HEIC)
@@ -1011,7 +978,7 @@ export const AlbumsManager: React.FC = () => {
       {/* Album Details Modal */}
       {selectedAlbum && !showShareForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 pt-4 overflow-y-auto">
-          <div className="bg-white rounded-lg p-6 w-full max-w-6xl mb-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-[95vw] xl:max-w-7xl mb-4 mx-4">
             <div className="flex justify-between items-start mb-6">
               <div className="flex-1">
                 <div className="flex items-center gap-3">
@@ -1189,99 +1156,35 @@ export const AlbumsManager: React.FC = () => {
               </div>
               {selectedAlbum.album_assets && selectedAlbum.album_assets.length > 0 ? (
                 albumDetailViewMode === 'grid' ? (
-                <div className="flex flex-wrap gap-2" onClick={() => setContextMenu(null)}>
-                  {selectedAlbum.album_assets.map(asset => (
-                    <div
-                      key={asset.id}
-                      className={`w-20 h-20 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative ${
-                        contextMenu?.asset.id === asset.id ? 'ring-2 ring-blue-500' : ''
-                      }`}
-                      onClick={(e) => {
-                        if (!contextMenu) {
-                          setSelectedAsset(asset);
-                        }
-                        setContextMenu(null);
-                      }}
-                      onContextMenu={(e) => handleContextMenu(e, asset)}
-                      onMouseDown={(e) => handleLongPressStart(e, asset)}
-                      onMouseUp={handleLongPressEnd}
-                      onMouseLeave={handleLongPressEnd}
-                      onTouchStart={(e) => handleLongPressStart(e, asset)}
-                      onTouchEnd={handleLongPressEnd}
-                    >
-                      {(asset.web_uri && isWebAccessibleUrl(asset.web_uri)) ||
-                       (asset.thumbnail_uri && isWebAccessibleUrl(asset.thumbnail_uri)) ||
-                       isWebAccessibleUrl(asset.asset_uri) ? (
-                        <img
-                          src={getThumbnail(asset.asset_uri, {
-                            webUri: asset.web_uri,
-                            thumbnailUri: asset.thumbnail_uri
-                          }) || ''}
-                          alt="Album photo"
-                          className="w-full h-full object-cover"
-                          draggable={false}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
-                          <div className="text-sm mb-0.5">
-                            {asset.asset_type === 'video' ? '🎥' : '📸'}
-                          </div>
-                          <div className="text-[9px] text-center px-1">
-                            {asset.asset_type === 'video' ? 'Video' : 'Image'}
-                          </div>
-                        </div>
-                      )}
-                      {asset.asset_type === 'video' && isWebAccessibleUrl(asset.asset_uri) && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="bg-black/50 rounded-full p-1">
-                            <span className="text-white text-xs">▶️</span>
-                          </div>
-                        </div>
-                      )}
-                      {/* Memory indicator */}
-                      {memoryCounts[asset.asset_id] > 0 && (
-                        <button
-                          className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 rounded-full p-1 flex items-center gap-0.5 transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMemoriesAssetId(asset.asset_id);
-                          }}
-                        >
-                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                          </svg>
-                          {memoryCounts[asset.asset_id] > 1 && (
-                            <span className="text-white text-[10px] font-medium">{memoryCounts[asset.asset_id]}</span>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* Context Menu */}
-                  {contextMenu && canEditAlbum(selectedAlbum) && (
-                    <div
-                      className="fixed bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50"
-                      style={{ left: contextMenu.x, top: contextMenu.y }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        onClick={() => handleSetAsKeyPhoto(contextMenu.asset)}
-                        className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2"
-                      >
-                        <span>⭐</span>
-                        Set as Key Photo
-                      </button>
-                      <button
-                        onClick={() => handleRemoveFromAlbum(contextMenu.asset.id)}
-                        className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                      >
-                        <span>🗑️</span>
-                        Remove from Album
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <AlbumPhotoGrid
+                  assets={selectedAlbum.album_assets.map(a => ({
+                    ...a,
+                    asset_type: a.asset_type as 'image' | 'video' | 'photo'
+                  }))}
+                  onAssetClick={(asset) => setSelectedAsset(asset as NonNullable<Album['album_assets']>[0])}
+                  memoryCounts={memoryCounts}
+                  onMemoryClick={(assetId) => setMemoriesAssetId(assetId)}
+                  showMetadataOnHover={true}
+                  gridSize="large"
+                  contextMenuItems={canEditAlbum(selectedAlbum) ? [
+                    {
+                      label: 'Set as Key Photo',
+                      icon: '⭐',
+                      color: 'blue',
+                      onClick: (asset) => handleSetAsKeyPhoto(asset as NonNullable<Album['album_assets']>[0])
+                    },
+                    {
+                      label: 'Remove from Album',
+                      icon: '🗑️',
+                      color: 'red',
+                      onClick: (asset) => handleRemoveFromAlbum(asset.id)
+                    }
+                  ] : []}
+                  showDownload={true}
+                  showInfo={true}
+                  showMemories={true}
+                  onShowMemories={(asset) => setMemoriesAssetId(asset.asset_id)}
+                />
                 ) : (
                   /* Carousel View */
                   <div className="relative bg-black rounded-lg overflow-hidden" style={{ height: '60vh' }}>

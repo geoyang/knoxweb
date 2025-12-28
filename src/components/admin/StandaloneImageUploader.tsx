@@ -446,19 +446,23 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
         f.id === fileObj.id ? { ...f, progress: 75 } : f
       ));
 
-      // Use edge function to add photo to album (this triggers action logging)
-      const assetId = generateId();
+      // Use edge function to create asset and add to album (with needsCreation)
+      const mediaType = fileObj.file.type.startsWith('video/') ? 'video' : 'photo';
       await addPhotosToAlbum({
         albumId,
         assets: [{
-          id: assetId,
-          uri: uploadResult.originalUrl,
-          mediaType: fileObj.file.type.startsWith('video/') ? 'video' : 'photo',
-          thumbnail_uri: uploadResult.thumbnailUrl,
+          needsCreation: true,
+          path: uploadResult.originalUrl,
+          thumbnail: uploadResult.thumbnailUrl,
           web_uri: uploadResult.originalUrl,
+          uri: uploadResult.originalUrl,
+          media_type: mediaType,
+          mediaType: mediaType,
+          created_at: new Date().toISOString(),
+          uploaded_at: new Date().toISOString(),
         }],
       });
-      console.log('Photo added to album via edge function');
+      console.log('Photo created and added to album via edge function');
 
       // Update status to success
       setUploadedFiles(prev => prev.map(f => 
