@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { memoriesApi, Memory, MemoryInput } from '../services/memoriesApi';
+import { ReactionBar } from './ReactionBar';
 
 interface MemoriesPanelProps {
   assetId: string;
@@ -511,6 +512,15 @@ export const MemoriesPanel: React.FC<MemoriesPanelProps> = ({
               </span>
             </div>
             <div className="mt-2">{renderMemoryContent(memory)}</div>
+
+            {/* Reactions */}
+            <div className="mt-3">
+              <ReactionBar
+                targetId={memory.id}
+                targetType="memory"
+                compact
+              />
+            </div>
 
             {/* Actions */}
             <div className="flex items-center gap-4 mt-3 text-sm">

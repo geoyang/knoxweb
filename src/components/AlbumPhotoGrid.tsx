@@ -1,7 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MediaViewer, MediaInfoModal } from './MediaViewer';
+import { ReactionBar } from './ReactionBar';
 
 // Shared asset interface for both public and admin views
+// Reaction summary for display
+export interface ReactionSummary {
+  emoji: string;
+  emojiChar: string;
+  count: number;
+}
+
 export interface AlbumAsset {
   id: string;
   album_id?: string;
@@ -30,6 +38,9 @@ export interface AlbumAsset {
   focal_length_35mm?: number;
   flash?: string;
   white_balance?: string;
+  // Reaction fields
+  reactions?: ReactionSummary[];
+  reactionCount?: number;
 }
 
 export interface ContextMenuItem {
@@ -235,9 +246,9 @@ export const AlbumPhotoGrid: React.FC<AlbumPhotoGridProps> = ({
   }, [contextMenu, onAssetClick]);
 
   const sizeClasses = {
-    small: 'w-20 h-20',
-    medium: 'w-28 h-28',
-    large: 'w-36 h-36',
+    small: 'w-[156px] h-[156px]',
+    medium: 'w-[219px] h-[219px]',
+    large: 'w-[282px] h-[282px]',
   };
 
   const getColorClass = (color?: string) => {
@@ -290,19 +301,19 @@ export const AlbumPhotoGrid: React.FC<AlbumPhotoGridProps> = ({
           const metadataSummary = showMetadataOnHover ? getMetadataSummary(asset) : [];
 
           return (
-            <div
-              key={asset.id}
-              className={`photo-grid-card ${sizeClasses[gridSize]} bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform ${
-                contextMenu?.asset.id === asset.id ? 'ring-2 ring-blue-500' : ''
-              }`}
-              onClick={() => handleAssetClick(asset)}
-              onContextMenu={(e) => handleContextMenu(e, asset)}
-              onMouseDown={(e) => handleLongPressStart(e, asset)}
-              onMouseUp={handleLongPressEnd}
-              onMouseLeave={handleLongPressEnd}
-              onTouchStart={(e) => handleLongPressStart(e, asset)}
-              onTouchEnd={handleLongPressEnd}
-            >
+            <div key={asset.id} className="flex flex-col">
+              <div
+                className={`photo-grid-card ${sizeClasses[gridSize]} bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform ${
+                  contextMenu?.asset.id === asset.id ? 'ring-2 ring-blue-500' : ''
+                }`}
+                onClick={() => handleAssetClick(asset)}
+                onContextMenu={(e) => handleContextMenu(e, asset)}
+                onMouseDown={(e) => handleLongPressStart(e, asset)}
+                onMouseUp={handleLongPressEnd}
+                onMouseLeave={handleLongPressEnd}
+                onTouchStart={(e) => handleLongPressStart(e, asset)}
+                onTouchEnd={handleLongPressEnd}
+              >
               {thumbnailUrl ? (
                 <img
                   src={thumbnailUrl}
@@ -352,6 +363,18 @@ export const AlbumPhotoGrid: React.FC<AlbumPhotoGridProps> = ({
                   )}
                 </button>
               )}
+
+            </div>
+
+              {/* Reactions bar below the photo */}
+              <div className="mt-1 px-0.5">
+                <ReactionBar
+                  targetId={asset.asset_id}
+                  targetType="asset"
+                  compact
+                  className="justify-start"
+                />
+              </div>
             </div>
           );
         })}

@@ -898,12 +898,13 @@ export const AlbumDetailView: React.FC = () => {
     loadMemoryCounts();
   }, [album, inviteId]);
 
-  // Load memories when panel is opened
+  // Load memories when asset is selected (for inline display)
   useEffect(() => {
     const loadMemories = async () => {
-      if (!memoriesAssetId || !inviteId) return;
+      const assetIdToLoad = selectedAsset?.asset_id || memoriesAssetId;
+      if (!assetIdToLoad || !inviteId) return;
       setLoadingMemories(true);
-      const result = await publicMemoriesApi.getMemories(inviteId, memoriesAssetId);
+      const result = await publicMemoriesApi.getMemories(inviteId, assetIdToLoad);
       if (result.success && result.memories) {
         setMemories(result.memories);
       } else {
@@ -912,7 +913,7 @@ export const AlbumDetailView: React.FC = () => {
       setLoadingMemories(false);
     };
     loadMemories();
-  }, [memoriesAssetId, inviteId]);
+  }, [selectedAsset?.asset_id, memoriesAssetId, inviteId]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -1108,76 +1109,126 @@ export const AlbumDetailView: React.FC = () => {
         )}
       </div>
 
-      {/* Image/Video Modal */}
+      {/* Image/Video Modal with Inline Memories */}
       {selectedAsset && (
         <div
-          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/90 z-50 overflow-y-auto"
           onClick={() => setSelectedAsset(null)}
         >
-          <div className="relative max-w-5xl max-h-full" onClick={(e) => e.stopPropagation()}>
-            {/* Close button */}
-            <button
-              onClick={() => setSelectedAsset(null)}
-              className="absolute -top-12 right-0 text-white text-3xl hover:text-gray-300"
-            >
-              ×
-            </button>
-
-            {/* Display image or video */}
-            {selectedAsset.asset_type === 'video' ? (
-              <video
-                src={getDisplayUrl(selectedAsset) || getOriginalUrl(selectedAsset) || ''}
-                controls
-                autoPlay
-                className="max-w-full max-h-[80vh] rounded-lg mt-[10px] bg-black"
-              >
-                Your browser does not support the video tag.
-              </video>
-            ) : (
-              <img
-                src={getDisplayUrl(selectedAsset) || ''}
-                alt="Full size"
-                className="max-w-full max-h-[80vh] rounded-lg mt-[10px]"
-              />
-            )}
-
-            {/* Action buttons */}
-            <div className="mt-4 flex justify-center gap-3">
-              {/* Memories button */}
+          <div className="min-h-full flex flex-col items-center justify-start p-4 pt-12">
+            <div className="relative max-w-5xl w-full" onClick={(e) => e.stopPropagation()}>
+              {/* Close button */}
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMemoriesAssetId(selectedAsset.asset_id);
-                }}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg flex items-center gap-2 transition-colors"
+                onClick={() => setSelectedAsset(null)}
+                className="absolute -top-10 right-0 text-white text-3xl hover:text-gray-300 z-10"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                Memories
-                {memoryCounts[selectedAsset.asset_id] > 0 && (
-                  <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">
-                    {memoryCounts[selectedAsset.asset_id]}
-                  </span>
-                )}
+                ×
               </button>
 
-              {/* Download Original button */}
-              {getOriginalUrl(selectedAsset) && (
-                <a
-                  href={getOriginalUrl(selectedAsset)!}
-                  download
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-6 rounded-lg flex items-center gap-2 transition-colors"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Download Original
-                </a>
-              )}
+              {/* Display image or video */}
+              <div className="flex justify-center">
+                {selectedAsset.asset_type === 'video' ? (
+                  <video
+                    src={getDisplayUrl(selectedAsset) || getOriginalUrl(selectedAsset) || ''}
+                    controls
+                    autoPlay
+                    className="max-w-full max-h-[50vh] rounded-lg bg-black"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                ) : (
+                  <img
+                    src={getDisplayUrl(selectedAsset) || ''}
+                    alt="Full size"
+                    className="max-w-full max-h-[50vh] rounded-lg object-contain"
+                  />
+                )}
+              </div>
+
+              {/* Inline Memories Section */}
+              <div className="mt-4 bg-white rounded-xl max-h-[35vh] overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
+                  <h3 className="font-semibold text-gray-800">
+                    Memories {memoryCounts[selectedAsset.asset_id] > 0 && `(${memoryCounts[selectedAsset.asset_id]})`}
+                  </h3>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                  {loadingMemories ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  ) : memories.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <div className="text-3xl mb-2">💭</div>
+                      <p className="text-sm">No memories yet</p>
+                      <p className="text-xs text-gray-400 mt-1">Be the first to add one in the app!</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {memories.map((memory) => (
+                        <div key={memory.id} className="flex gap-3">
+                          {memory.user.avatar_url ? (
+                            <img
+                              src={memory.user.avatar_url}
+                              alt=""
+                              className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-blue-600 text-sm font-medium">
+                                {(memory.user.name || memory.user.email || '?').charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="font-medium text-sm text-gray-900">
+                                {memory.user.name || memory.user.email}
+                              </span>
+                              <span className="text-xs text-gray-500">{formatDate(memory.created_at)}</span>
+                            </div>
+                            {memory.memory_type === 'text' ? (
+                              <p className="text-sm text-gray-700">{memory.content_text}</p>
+                            ) : memory.memory_type === 'image' ? (
+                              <img
+                                src={memory.content_url || ''}
+                                alt="Memory"
+                                className="max-w-xs rounded-lg cursor-pointer hover:opacity-90"
+                                onClick={() => window.open(memory.content_url || '', '_blank')}
+                              />
+                            ) : memory.memory_type === 'video' ? (
+                              <video src={memory.content_url || ''} controls className="max-w-xs rounded-lg" />
+                            ) : memory.memory_type === 'audio' ? (
+                              <audio src={memory.content_url || ''} controls className="w-full max-w-xs" />
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="mt-4 flex justify-center gap-3">
+                {/* Download Original button */}
+                {getOriginalUrl(selectedAsset) && (
+                  <a
+                    href={getOriginalUrl(selectedAsset)!}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-6 rounded-lg flex items-center gap-2 transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download Original
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </div>

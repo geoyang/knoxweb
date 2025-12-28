@@ -7,6 +7,7 @@ import { AdminAlbumDetail } from './admin/AdminAlbumDetail';
 import { ImagesManager } from './admin/ImagesManager';
 import { UsersManager } from './admin/UsersManager';
 import { InvitesManager } from './admin/InvitesManager';
+import { ContactsManager } from './admin/ContactsManager';
 import { AccountScreen } from './admin/AccountScreen';
 import PushNotificationTest from './admin/PushNotificationTest';
 
@@ -148,6 +149,19 @@ export const AdminDashboard: React.FC = () => {
                   Invitations
                 </Link>
               </li>
+              <li>
+                <Link
+                  to="/admin/contacts"
+                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                    location.pathname.includes('/admin/contacts')
+                      ? 'bg-blue-100 text-blue-700 font-medium'
+                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                  }`}
+                >
+                  <span className="mr-3">📇</span>
+                  Contacts
+                </Link>
+              </li>
               {isSuperAdmin && (
                 <>
                   <li>
@@ -191,6 +205,7 @@ export const AdminDashboard: React.FC = () => {
             <Route path="images" element={<ImagesManager />} />
             <Route path="circles" element={<CirclesManager />} />
             <Route path="invites" element={<InvitesManager />} />
+            <Route path="contacts" element={<ContactsManager />} />
             <Route
               path="users"
               element={
