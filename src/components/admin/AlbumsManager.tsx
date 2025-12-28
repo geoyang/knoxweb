@@ -706,7 +706,7 @@ export const AlbumsManager: React.FC = () => {
             <div
               key={album.id}
               className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => setSelectedAlbum(album)}
+              onClick={() => navigate(`/admin/albums/${album.id}`)}
             >
               <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 rounded-t-lg overflow-hidden flex items-center justify-center">
                 {(() => {
@@ -929,7 +929,7 @@ export const AlbumsManager: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedAlbum(album);
+                          navigate(`/admin/albums/${album.id}`);
                         }}
                         className="text-blue-600 hover:text-blue-800"
                       >

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CirclesManager } from './admin/CirclesManager';
 import { AlbumsManager } from './admin/AlbumsManager';
+import { AdminAlbumDetail } from './admin/AdminAlbumDetail';
 import { ImagesManager } from './admin/ImagesManager';
 import { UsersManager } from './admin/UsersManager';
 import { InvitesManager } from './admin/InvitesManager';
@@ -186,6 +187,7 @@ export const AdminDashboard: React.FC = () => {
           <Routes>
             <Route index element={<Navigate to="/admin/albums" replace />} />
             <Route path="albums" element={<AlbumsManager />} />
+            <Route path="albums/:albumId" element={<AdminAlbumDetail />} />
             <Route path="images" element={<ImagesManager />} />
             <Route path="circles" element={<CirclesManager />} />
             <Route path="invites" element={<InvitesManager />} />

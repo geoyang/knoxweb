@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ImageUploader } from './ImageUploader';
 import { MemoriesPanel } from '../MemoriesPanel';
+import { VideoPlayer } from '../VideoPlayer';
 import { adminApi } from '../../services/adminApi';
 import { memoriesApi } from '../../services/memoriesApi';
 import { supabase } from '../../lib/supabase';
@@ -720,14 +721,10 @@ export const ImagesManager: React.FC = () => {
                     />
                   ) : (
                     // Video playback
-                    <video
+                    <VideoPlayer
                       src={selectedAsset.asset_uri}
-                      controls
-                      autoPlay
                       className="w-full h-full object-contain bg-black"
-                    >
-                      Your browser does not support the video tag.
-                    </video>
+                    />
                   )
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">

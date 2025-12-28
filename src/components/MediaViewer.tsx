@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { VideoPlayer } from './VideoPlayer';
 
 interface MediaAsset {
   id?: string;
@@ -74,15 +75,12 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({
 
         {/* Media content */}
         {isVideo ? (
-          <video
-            src={displayUrl || ''}
-            controls
-            autoPlay
-            className="max-w-full max-h-[80vh] rounded-lg bg-black"
-            style={{ marginTop: '10px' }}
-          >
-            Your browser does not support the video tag.
-          </video>
+          <div style={{ marginTop: '10px' }}>
+            <VideoPlayer
+              src={displayUrl || ''}
+              className="max-w-full max-h-[80vh] rounded-lg"
+            />
+          </div>
         ) : (
           <img
             src={displayUrl || ''}
