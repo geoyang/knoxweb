@@ -4,6 +4,16 @@ import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../../services/adminApi';
 import { supabase } from '../../lib/supabase';
 
+interface CircleMember {
+  user_id: string | null;
+  role: string;
+  profile?: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+  };
+}
+
 interface Circle {
   id: string;
   name: string;
@@ -13,6 +23,8 @@ interface Circle {
   date_modified: string;
   is_active: boolean;
   user_role?: string; // The user's role if they're a guest (not owner)
+  members?: CircleMember[];
+  member_count?: number;
   profiles?: {
     full_name: string | null;
     email: string | null;
@@ -165,6 +177,65 @@ export const CirclesManager: React.FC = () => {
     setEditName(circle.name);
     setEditDescription(circle.description || '');
     setShowEditCircleForm(true);
+  };
+
+  // Render avatar group for circle members
+  const renderAvatarGroup = (members: CircleMember[] | undefined, size: 'sm' | 'md' = 'md') => {
+    if (!members || members.length === 0) {
+      return (
+        <div className={`${size === 'md' ? 'w-12 h-12' : 'w-10 h-10'} rounded-full bg-blue-100 flex items-center justify-center`}>
+          <span className="text-blue-600 font-medium text-lg">👥</span>
+        </div>
+      );
+    }
+
+    const maxShow = 3;
+    const toShow = members.slice(0, maxShow);
+    const remaining = members.length - maxShow;
+    const containerSize = size === 'md' ? 'w-12 h-12' : 'w-10 h-10';
+    const avatarSize = size === 'md' ? 'w-7 h-7' : 'w-6 h-6';
+    const avatarSizeFirst = size === 'md' ? 'w-8 h-8' : 'w-7 h-7';
+
+    return (
+      <div className={`${containerSize} relative flex-shrink-0`}>
+        {toShow.map((member, index) => {
+          const isFirst = index === 0;
+          const positionClass = isFirst
+            ? 'top-0 left-0'
+            : index === 1
+            ? 'bottom-0 right-0'
+            : 'top-0 right-0';
+          const sizeClass = isFirst ? avatarSizeFirst : avatarSize;
+
+          return (
+            <div
+              key={member.user_id || index}
+              className={`absolute ${positionClass} ${sizeClass} rounded-full border-2 border-white overflow-hidden`}
+              style={{ zIndex: maxShow - index }}
+            >
+              {member.profile?.avatar_url ? (
+                <img
+                  src={member.profile.avatar_url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-blue-500 flex items-center justify-center">
+                  <span className="text-white text-xs font-medium">
+                    {(member.profile?.full_name || '?')[0].toUpperCase()}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {remaining > 0 && (
+          <div className="absolute bottom-0 left-3 w-5 h-5 rounded-full bg-gray-400 border-2 border-white flex items-center justify-center">
+            <span className="text-white text-[8px] font-bold">+{remaining}</span>
+          </div>
+        )}
+      </div>
+    );
   };
 
   const handleSaveCircleEdit = async (e: React.FormEvent) => {
@@ -349,28 +420,37 @@ export const CirclesManager: React.FC = () => {
                     onClick={() => handleCircleSelect(circle)}
                     onDoubleClick={() => isOwner && handleDoubleClickCircle(circle)}
                   >
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-semibold text-gray-900">{circle.name}</h4>
-                      {isOwner ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
-                            <path fillRule="evenodd" d="M12.516 2.17a.75.75 0 00-1.032 0 11.209 11.209 0 01-7.877 3.08.75.75 0 00-.722.515A12.74 12.74 0 002.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.749.749 0 00.374 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.39-.223-2.73-.635-3.985a.75.75 0 00-.722-.516 11.209 11.209 0 01-7.877-3.08z" clipRule="evenodd" />
-                          </svg>
-                          Owner
-                        </span>
-                      ) : (
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getRoleColor(circle.user_role || 'read_only')}`}>
-                          Guest • {(circle.user_role || 'read_only').replace('_', ' ')}
-                        </span>
-                      )}
+                    <div className="flex items-start gap-3">
+                      {/* Avatar Group */}
+                      {renderAvatarGroup(circle.members)}
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-semibold text-gray-900 truncate">{circle.name}</h4>
+                          {isOwner ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 flex-shrink-0 ml-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                                <path fillRule="evenodd" d="M12.516 2.17a.75.75 0 00-1.032 0 11.209 11.209 0 01-7.877 3.08.75.75 0 00-.722.515A12.74 12.74 0 002.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.749.749 0 00.374 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.39-.223-2.73-.635-3.985a.75.75 0 00-.722-.516 11.209 11.209 0 01-7.877-3.08z" clipRule="evenodd" />
+                              </svg>
+                              Owner
+                            </span>
+                          ) : (
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ml-2 ${getRoleColor(circle.user_role || 'read_only')}`}>
+                              Guest • {(circle.user_role || 'read_only').replace('_', ' ')}
+                            </span>
+                          )}
+                        </div>
+                        {circle.description && (
+                          <p className="text-sm text-gray-600 mt-1 truncate">{circle.description}</p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          {circle.member_count !== undefined ? `${circle.member_count} member${circle.member_count !== 1 ? 's' : ''}` : ''}
+                          {circle.member_count !== undefined && ' • '}
+                          Created {new Date(circle.date_created).toLocaleDateString()}
+                          {isOwner && <span className="ml-2 text-gray-400">(double-click to edit)</span>}
+                        </p>
+                      </div>
                     </div>
-                    {circle.description && (
-                      <p className="text-sm text-gray-600 mt-1">{circle.description}</p>
-                    )}
-                    <p className="text-xs text-gray-500 mt-2">
-                      Created {new Date(circle.date_created).toLocaleDateString()}
-                      {isOwner && <span className="ml-2 text-gray-400">(double-click to edit)</span>}
-                    </p>
                   </div>
                 );
               })

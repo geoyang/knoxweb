@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CirclesManager } from './admin/CirclesManager';
@@ -8,13 +8,31 @@ import { ImagesManager } from './admin/ImagesManager';
 import { UsersManager } from './admin/UsersManager';
 import { InvitesManager } from './admin/InvitesManager';
 import { ContactsManager } from './admin/ContactsManager';
+import { ChatManager } from './admin/ChatManager';
 import { AccountScreen } from './admin/AccountScreen';
 import PushNotificationTest from './admin/PushNotificationTest';
+import { chatApi } from '../services/chatApi';
 
 export const AdminDashboard: React.FC = () => {
   const { user, userProfile, signOut, loading, isSuperAdmin } = useAuth();
   const location = useLocation();
   const [showAccountScreen, setShowAccountScreen] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+
+  // Fetch unread chat count
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      if (user) {
+        const count = await chatApi.getTotalUnreadCount();
+        setUnreadChatCount(count);
+      }
+    };
+
+    fetchUnreadCount();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
   
   console.log('AdminDashboard render:', { 
     loading, 
@@ -162,6 +180,24 @@ export const AdminDashboard: React.FC = () => {
                   Contacts
                 </Link>
               </li>
+              <li>
+                <Link
+                  to="/admin/chat"
+                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                    location.pathname.includes('/admin/chat')
+                      ? 'bg-blue-100 text-blue-700 font-medium'
+                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                  }`}
+                >
+                  <span className="mr-3">💬</span>
+                  Chat
+                  {unreadChatCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                      {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                    </span>
+                  )}
+                </Link>
+              </li>
               {isSuperAdmin && (
                 <>
                   <li>
@@ -206,6 +242,7 @@ export const AdminDashboard: React.FC = () => {
             <Route path="circles" element={<CirclesManager />} />
             <Route path="invites" element={<InvitesManager />} />
             <Route path="contacts" element={<ContactsManager />} />
+            <Route path="chat" element={<ChatManager />} />
             <Route
               path="users"
               element={
