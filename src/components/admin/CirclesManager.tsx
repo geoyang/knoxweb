@@ -107,6 +107,7 @@ export const CirclesManager: React.FC = () => {
         throw new Error(adminApi.handleApiError(result));
       }
 
+      console.log('Circles API response:', result.data?.circles);
       setCircles(result.data?.circles || []);
       setError(null);
     } catch (err) {

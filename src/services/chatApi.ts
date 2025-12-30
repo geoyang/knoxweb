@@ -180,13 +180,13 @@ class ChatApiService {
     return result.data.conversations.reduce((sum, conv) => sum + conv.unread_count, 0);
   }
 
-  async getMessages(conversationId: string, page: number = 1, limit: number = 50): Promise<ApiResponse<{
+  async getMessages(conversationId: string, page: number = 1, limit: number = 20): Promise<ApiResponse<{
     messages: Message[];
-    pagination?: { page: number; limit: number; total: number; total_pages: number };
+    pagination?: { page: number; limit: number; total: number; totalPages: number; hasMore: boolean };
   }>> {
     const result = await this.apiRequest<{
       messages: Message[];
-      pagination: { page: number; limit: number; total: number; total_pages: number };
+      pagination: { page: number; limit: number; total: number; totalPages: number; hasMore: boolean };
     }>('messages', 'GET', { conversation_id: conversationId, page, limit });
 
     if (result.success && result.data) {

@@ -66,6 +66,7 @@ export interface Reaction {
   user_id: string;
   asset_id: string | null;
   memory_id: string | null;
+  message_id: string | null;
   emoji: EmojiCode;
   emojiChar: string;
   created_at: string;
@@ -85,7 +86,7 @@ export interface ReactionsData {
   details: Reaction[];
 }
 
-export type TargetType = 'asset' | 'memory';
+export type TargetType = 'asset' | 'memory' | 'message';
 
 class ReactionsApiService {
   private async getAuthHeaders(): Promise<{ Authorization: string; apikey: string } | null> {
@@ -165,9 +166,14 @@ class ReactionsApiService {
     }
   }
 
-  // Get all reactions for an asset or memory
+  // Get all reactions for an asset, memory, or message
   async getReactions(targetId: string, targetType: TargetType): Promise<ReactionsData> {
-    const param = targetType === 'asset' ? 'asset_id' : 'memory_id';
+    const paramMap: Record<TargetType, string> = {
+      asset: 'asset_id',
+      memory: 'memory_id',
+      message: 'message_id',
+    };
+    const param = paramMap[targetType];
     const result = await this.makeApiCall<{ reactions: ReactionsData }>(`?${param}=${targetId}`);
 
     if (result.success && result.data?.reactions) {
@@ -183,7 +189,12 @@ class ReactionsApiService {
     targetType: TargetType,
     emoji: EmojiCode
   ): Promise<Reaction | null> {
-    const param = targetType === 'asset' ? 'asset_id' : 'memory_id';
+    const paramMap: Record<TargetType, string> = {
+      asset: 'asset_id',
+      memory: 'memory_id',
+      message: 'message_id',
+    };
+    const param = paramMap[targetType];
     const result = await this.makeApiCall<{ reaction: Reaction }>(`?${param}=${targetId}`, {
       method: 'POST',
       body: { emoji },

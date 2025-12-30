@@ -10,14 +10,81 @@ import { InvitesManager } from './admin/InvitesManager';
 import { ContactsManager } from './admin/ContactsManager';
 import { ChatManager } from './admin/ChatManager';
 import { AccountScreen } from './admin/AccountScreen';
+import { FoldersManager } from './admin/FoldersManager';
 import PushNotificationTest from './admin/PushNotificationTest';
 import { chatApi } from '../services/chatApi';
+import { adminApi } from '../services/adminApi';
+import { getFolders } from '../services/foldersApi';
+import { contactsApi } from '../services/contactsApi';
 
 export const AdminDashboard: React.FC = () => {
   const { user, userProfile, signOut, loading, isSuperAdmin } = useAuth();
   const location = useLocation();
   const [showAccountScreen, setShowAccountScreen] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [totalChatCount, setTotalChatCount] = useState(0);
+
+  // Tab counts
+  const [countsLoading, setCountsLoading] = useState(true);
+  const [counts, setCounts] = useState({
+    albums: 0,
+    media: 0,
+    folders: 0,
+    circles: 0,
+    contacts: 0,
+    invitations: 0,
+  });
+
+  // Fetch all counts
+  useEffect(() => {
+    const fetchCounts = async () => {
+      if (!user) return;
+
+      setCountsLoading(true);
+      try {
+        // Fetch all counts in parallel
+        const [albumsRes, imagesRes, circlesRes, invitationsRes, foldersRes, contactsRes, chatRes] = await Promise.all([
+          adminApi.getAlbums(),
+          adminApi.getImages(),
+          adminApi.getCircles(),
+          adminApi.getInvitations(),
+          getFolders(),
+          contactsApi.getContacts(),
+          chatApi.getConversations(),
+        ]);
+
+        setCounts({
+          albums: albumsRes.success && albumsRes.data ? albumsRes.data.count || albumsRes.data.albums?.length || 0 : 0,
+          media: imagesRes.success && imagesRes.data ? imagesRes.data.count || imagesRes.data.assets?.length || 0 : 0,
+          folders: foldersRes.count || foldersRes.folders?.length || 0,
+          circles: circlesRes.success && circlesRes.data ? circlesRes.data.count || circlesRes.data.circles?.length || 0 : 0,
+          contacts: contactsRes.pagination?.total || contactsRes.contacts?.length || 0,
+          invitations: invitationsRes.success && invitationsRes.data ? invitationsRes.data.count || invitationsRes.data.invitations?.length || 0 : 0,
+        });
+
+        // Set chat count
+        if (chatRes.success && chatRes.data) {
+          setTotalChatCount(chatRes.data.conversations?.length || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching counts:', error);
+      } finally {
+        setCountsLoading(false);
+      }
+    };
+
+    fetchCounts();
+  }, [user]);
+
+  // Helper to render count or loading spinner
+  const renderCount = (count: number) => {
+    if (countsLoading) {
+      return (
+        <span className="ml-1 inline-block w-4 h-4 border-2 border-gray-300 border-t-gray-500 rounded-full animate-spin"></span>
+      );
+    }
+    return <span className="ml-1 text-gray-400 text-sm">({count})</span>;
+  };
 
   // Fetch unread chat count
   useEffect(() => {
@@ -117,6 +184,25 @@ export const AdminDashboard: React.FC = () => {
             <ul className="space-y-2">
               <li>
                 <Link
+                  to="/admin/chat"
+                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                    location.pathname.includes('/admin/chat')
+                      ? 'bg-blue-100 text-blue-700 font-medium'
+                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                  }`}
+                >
+                  <span className="mr-3">💬</span>
+                  Chats
+                  {renderCount(totalChatCount)}
+                  {unreadChatCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                      {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                    </span>
+                  )}
+                </Link>
+              </li>
+              <li>
+                <Link
                   to="/admin/albums"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                     location.pathname.includes('/admin/albums')
@@ -124,8 +210,9 @@ export const AdminDashboard: React.FC = () => {
                       : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
                   }`}
                 >
-                  <span className="mr-3">📁</span>
+                  <span className="mr-3">📷</span>
                   Albums
+                  {renderCount(counts.albums)}
                 </Link>
               </li>
               <li>
@@ -138,7 +225,22 @@ export const AdminDashboard: React.FC = () => {
                   }`}
                 >
                   <span className="mr-3">🖼️</span>
-                  My Images and Videos
+                  Media
+                  {renderCount(counts.media)}
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/admin/folders"
+                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                    location.pathname.includes('/admin/folders')
+                      ? 'bg-blue-100 text-blue-700 font-medium'
+                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                  }`}
+                >
+                  <span className="mr-3">📂</span>
+                  Folders
+                  {renderCount(counts.folders)}
                 </Link>
               </li>
               <li>
@@ -152,19 +254,7 @@ export const AdminDashboard: React.FC = () => {
                 >
                   <span className="mr-3">👥</span>
                   Circles
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/admin/invites"
-                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
-                    location.pathname.includes('/admin/invites')
-                      ? 'bg-blue-100 text-blue-700 font-medium'
-                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                  }`}
-                >
-                  <span className="mr-3">📧</span>
-                  Invitations
+                  {renderCount(counts.circles)}
                 </Link>
               </li>
               <li>
@@ -178,24 +268,21 @@ export const AdminDashboard: React.FC = () => {
                 >
                   <span className="mr-3">📇</span>
                   Contacts
+                  {renderCount(counts.contacts)}
                 </Link>
               </li>
               <li>
                 <Link
-                  to="/admin/chat"
+                  to="/admin/invites"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
-                    location.pathname.includes('/admin/chat')
+                    location.pathname.includes('/admin/invites')
                       ? 'bg-blue-100 text-blue-700 font-medium'
                       : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
                   }`}
                 >
-                  <span className="mr-3">💬</span>
-                  Chat
-                  {unreadChatCount > 0 && (
-                    <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
-                      {unreadChatCount > 99 ? '99+' : unreadChatCount}
-                    </span>
-                  )}
+                  <span className="mr-3">📧</span>
+                  Invitations
+                  {renderCount(counts.invitations)}
                 </Link>
               </li>
               {isSuperAdmin && (
@@ -235,7 +322,8 @@ export const AdminDashboard: React.FC = () => {
         {/* Main Content */}
         <main className="flex-1 p-8">
           <Routes>
-            <Route index element={<Navigate to="/admin/albums" replace />} />
+            <Route index element={<Navigate to="/admin/chat" replace />} />
+            <Route path="folders" element={<FoldersManager />} />
             <Route path="albums" element={<AlbumsManager />} />
             <Route path="albums/:albumId" element={<AdminAlbumDetail />} />
             <Route path="images" element={<ImagesManager />} />
