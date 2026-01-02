@@ -9,6 +9,7 @@ import { SignupSuccess } from './components/SignupSuccess';
 import { AuthCallback } from './components/AuthCallback';
 import { VerifyRegistration } from './components/VerifyRegistration';
 import { Dashboard } from './components/Dashboard';
+import { FrameSetup } from './components/FrameSetup';
 
 function App() {
   return (
@@ -20,6 +21,9 @@ function App() {
 
         {/* Circle invitation acceptance route */}
         <Route path="/view-circle/:inviteId" element={<ViewCircle />} />
+
+        {/* Picture Frame Setup route */}
+        <Route path="/frame-setup/:token" element={<FrameSetup />} />
 
         {/* Registration verification route */}
         <Route path="/verify" element={<VerifyRegistration />} />
