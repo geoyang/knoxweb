@@ -251,6 +251,92 @@ class AdminApiService {
     });
   }
 
+  // Promo Codes API
+  async getPromoCodes(): Promise<ApiResponse<{ promo_codes: any[] }>> {
+    return this.makeApiCall('promo-codes-api?action=list', {
+      method: 'GET'
+    });
+  }
+
+  async createPromoCode(promoData: {
+    code: string;
+    description?: string;
+    discount_percent?: number;
+    trial_days_override?: number;
+    is_perpetual_trial?: boolean;
+    max_uses?: number;
+    expires_at?: string;
+  }): Promise<ApiResponse<{ promo_code: any }>> {
+    return this.makeApiCall('promo-codes-api?action=create', {
+      method: 'POST',
+      body: JSON.stringify(promoData)
+    });
+  }
+
+  async updatePromoCode(promoData: {
+    id: string;
+    description?: string;
+    discount_percent?: number;
+    trial_days_override?: number;
+    is_perpetual_trial?: boolean;
+    max_uses?: number;
+    expires_at?: string;
+    is_active?: boolean;
+  }): Promise<ApiResponse<{ promo_code: any }>> {
+    return this.makeApiCall('promo-codes-api?action=update', {
+      method: 'POST',
+      body: JSON.stringify(promoData)
+    });
+  }
+
+  async deletePromoCode(promoId: string): Promise<ApiResponse<{ message: string }>> {
+    return this.makeApiCall('promo-codes-api?action=delete', {
+      method: 'POST',
+      body: JSON.stringify({ id: promoId })
+    });
+  }
+
+  async getPromoCodeStats(promoId: string): Promise<ApiResponse<{
+    promo_code: any;
+    stats: { total_uses: number; active_users: number; cancelled_users: number; remaining_uses: number | null };
+    users: any[];
+  }>> {
+    return this.makeApiCall(`promo-codes-api?action=stats&promo_id=${promoId}`, {
+      method: 'GET'
+    });
+  }
+
+  // Export Jobs API
+  async getExportJobs(): Promise<ApiResponse<{
+    jobs: Array<{
+      id: string;
+      status: string;
+      progress: { percent: number; processed: number; total: number; current_step: string };
+      result: { download_url: string; file_size_bytes: number; expires_at: string } | null;
+      error: { message: string; details: any } | null;
+      timestamps: { created: string; started: string; completed: string };
+    }>;
+  }>> {
+    return this.makeApiCall('export-api', {
+      method: 'GET'
+    });
+  }
+
+  async getExportJobStatus(jobId: string): Promise<ApiResponse<{
+    job: {
+      id: string;
+      status: string;
+      progress: { percent: number; processed: number; total: number; current_step: string };
+      result: { download_url: string; file_size_bytes: number; expires_at: string } | null;
+      error: { message: string; details: any } | null;
+      timestamps: { created: string; started: string; completed: string };
+    };
+  }>> {
+    return this.makeApiCall(`export-api?job_id=${jobId}`, {
+      method: 'GET'
+    });
+  }
+
   // Utility methods
   async healthCheck(): Promise<boolean> {
     try {

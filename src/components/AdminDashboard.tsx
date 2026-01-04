@@ -12,6 +12,8 @@ import { ChatManager } from './admin/ChatManager';
 import { AccountScreen } from './admin/AccountScreen';
 import { FoldersManager } from './admin/FoldersManager';
 import PushNotificationTest from './admin/PushNotificationTest';
+import { PromoCodesManager } from './admin/PromoCodesManager';
+import { ExportManager } from './admin/ExportManager';
 import { chatApi } from '../services/chatApi';
 import { adminApi } from '../services/adminApi';
 import { getFolders } from '../services/foldersApi';
@@ -313,6 +315,32 @@ export const AdminDashboard: React.FC = () => {
                       Push Test
                     </Link>
                   </li>
+                  <li>
+                    <Link
+                      to="/admin/promo-codes"
+                      className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                        location.pathname.includes('/admin/promo-codes')
+                          ? 'bg-blue-100 text-blue-700 font-medium'
+                          : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                      }`}
+                    >
+                      <span className="mr-3">🎟️</span>
+                      Promo Codes
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/admin/exports"
+                      className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                        location.pathname.includes('/admin/exports')
+                          ? 'bg-blue-100 text-blue-700 font-medium'
+                          : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                      }`}
+                    >
+                      <span className="mr-3">📦</span>
+                      Exports
+                    </Link>
+                  </li>
                 </>
               )}
             </ul>
@@ -346,6 +374,26 @@ export const AdminDashboard: React.FC = () => {
               element={
                 isSuperAdmin ? (
                   <PushNotificationTest />
+                ) : (
+                  <Navigate to="/admin/albums" replace />
+                )
+              }
+            />
+            <Route
+              path="promo-codes"
+              element={
+                isSuperAdmin ? (
+                  <PromoCodesManager />
+                ) : (
+                  <Navigate to="/admin/albums" replace />
+                )
+              }
+            />
+            <Route
+              path="exports"
+              element={
+                isSuperAdmin ? (
+                  <ExportManager />
                 ) : (
                   <Navigate to="/admin/albums" replace />
                 )
