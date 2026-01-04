@@ -48,6 +48,7 @@ export interface Contact {
   linked_profile?: LinkedProfile | null;
   avatar_url: string | null;
   phone_contact_id: string | null;
+  notification_sound: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -66,6 +67,7 @@ export interface ContactInput {
   relationship_type?: string;
   notes?: string;
   avatar_url?: string;
+  notification_sound?: string | null;
 }
 
 export interface Pagination {

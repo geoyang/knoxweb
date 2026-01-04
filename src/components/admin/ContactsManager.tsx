@@ -1,10 +1,704 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { contactsApi, Contact, ContactInput, RELATIONSHIP_TYPES, RELATIONSHIP_COLORS } from '../../services/contactsApi';
+
+// Notification sounds data (same as mobile app)
+const NOTIFICATION_SOUNDS = [
+  { id: 'default', name: 'Harmony', description: 'A pleasant chord - the default notification sound', icon: '🎵' },
+  { id: 'drama', name: 'Drama', description: 'A Dramatic Intro', icon: '🔔' },
+  { id: 'crystal_chime', name: 'Crystal Chime', description: 'Sparkling crystal wind chimes', icon: '💎' },
+  { id: 'quick_smack', name: 'Quick Smack', description: 'Quick smacking', icon: '👏' },
+  { id: 'piano_flourish', name: 'Piano Flourish', description: 'Elegant ascending piano notes', icon: '🎹' },
+  { id: 'birdsong', name: 'Birdsong', description: 'A cheerful bird chirping', icon: '🐦' },
+  { id: 'water_drop', name: 'Water Drop', description: 'A refreshing water droplet sound', icon: '💧' },
+  { id: 'retro_game', name: 'Retro Game', description: 'Fun 8-bit game sound effect', icon: '🎮' },
+  { id: 'bubble_pop', name: 'Bubble Pop', description: 'Playful bubble popping sound', icon: '🫧' },
+  { id: 'woosh', name: 'Woosh', description: 'Wooshing sound effect', icon: '💨' },
+  { id: 'sneeze', name: 'Sneeze', description: 'Sneeze', icon: '🤧' },
+];
+
+const getSoundById = (id: string | null) => {
+  return NOTIFICATION_SOUNDS.find(s => s.id === id) || NOTIFICATION_SOUNDS[0];
+};
 
 export const ContactsManager: React.FC = () => {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Form state
+  const [formData, setFormData] = useState<ContactInput>({
+    first_name: '',
+    last_name: '',
+    display_name: '',
+    relationship_type: '',
+    instagram_handle: '',
+    facebook_handle: '',
+    twitter_handle: '',
+    linkedin_handle: '',
+    notes: '',
+    notification_sound: 'default',
+  });
+
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user?.id) {
+      loadContacts();
+    } else {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  const loadContacts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await contactsApi.getContacts(searchQuery || undefined, 1, 1000);
+      setContacts(result.contacts);
+    } catch (err) {
+      console.error('Error loading contacts:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load contacts');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      if (user?.id) {
+        loadContacts();
+      }
+    }, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [searchQuery]);
+
+  const handleSelectContact = (contact: Contact) => {
+    setSelectedContact(contact);
+  };
+
+  const handleCreateNew = () => {
+    setEditingContact(null);
+    setFormData({
+      first_name: '',
+      last_name: '',
+      display_name: '',
+      relationship_type: '',
+      instagram_handle: '',
+      facebook_handle: '',
+      twitter_handle: '',
+      linkedin_handle: '',
+      notes: '',
+      notification_sound: 'default',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditContact = (contact: Contact) => {
+    setEditingContact(contact);
+    setFormData({
+      first_name: contact.first_name || '',
+      last_name: contact.last_name || '',
+      display_name: contact.display_name || '',
+      relationship_type: contact.relationship_type || '',
+      instagram_handle: contact.instagram_handle || '',
+      facebook_handle: contact.facebook_handle || '',
+      twitter_handle: contact.twitter_handle || '',
+      linkedin_handle: contact.linkedin_handle || '',
+      notes: contact.notes || '',
+      notification_sound: contact.notification_sound || 'default',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const input: ContactInput = {
+      first_name: formData.first_name?.trim() || undefined,
+      last_name: formData.last_name?.trim() || undefined,
+      display_name: formData.display_name?.trim() ||
+        `${formData.first_name || ''} ${formData.last_name || ''}`.trim() || undefined,
+      relationship_type: formData.relationship_type || undefined,
+      instagram_handle: formData.instagram_handle?.trim().replace('@', '') || undefined,
+      facebook_handle: formData.facebook_handle?.trim() || undefined,
+      twitter_handle: formData.twitter_handle?.trim().replace('@', '') || undefined,
+      linkedin_handle: formData.linkedin_handle?.trim() || undefined,
+      notes: formData.notes?.trim() || undefined,
+      notification_sound: formData.notification_sound === 'default' ? null : formData.notification_sound,
+    };
+
+    if (!input.display_name && !input.first_name && !input.last_name) {
+      alert('Please enter a name for the contact');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      let result: Contact | null;
+
+      if (editingContact) {
+        result = await contactsApi.updateContact(editingContact.id, input);
+      } else {
+        result = await contactsApi.createContact(input);
+      }
+
+      if (result) {
+        setShowEditModal(false);
+        await loadContacts();
+        if (editingContact && selectedContact?.id === editingContact.id) {
+          setSelectedContact(result);
+        }
+      } else {
+        alert('Failed to save contact');
+      }
+    } catch (err) {
+      console.error('Error saving contact:', err);
+      alert('Failed to save contact');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteContact = async (contact: Contact) => {
+    if (!confirm(`Are you sure you want to delete ${contact.display_name || 'this contact'}?`)) {
+      return;
+    }
+
+    try {
+      const success = await contactsApi.deleteContact(contact.id);
+      if (success) {
+        await loadContacts();
+        if (selectedContact?.id === contact.id) {
+          setSelectedContact(null);
+        }
+      } else {
+        alert('Failed to delete contact');
+      }
+    } catch (err) {
+      console.error('Error deleting contact:', err);
+      alert('Failed to delete contact');
+    }
+  };
+
+  const getRelationshipColor = (type: string | null) => {
+    if (!type) return 'bg-gray-100 text-gray-800';
+    const color = RELATIONSHIP_COLORS[type];
+    if (color === '#8B5CF6') return 'bg-purple-100 text-purple-800';
+    if (color === '#10B981') return 'bg-green-100 text-green-800';
+    if (color === '#3B82F6') return 'bg-blue-100 text-blue-800';
+    return 'bg-gray-100 text-gray-800';
+  };
+
+  const getInitials = (contact: Contact) => {
+    const name = contact.display_name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim();
+    if (!name) return '?';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-4">
-      <h2 className="text-xl font-bold mb-4">Contacts Manager</h2>
-      <p className="text-gray-500">Coming soon...</p>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Contacts</h2>
+        <button
+          onClick={handleCreateNew}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors"
+        >
+          Add Contact
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
+          {error}
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="relative">
+        <input
+          type="text"
+          placeholder="Search contacts..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <svg
+          className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
+        </svg>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Contacts List */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-6 border-b">
+            <h3 className="text-lg font-semibold">Your Contacts ({contacts.length})</h3>
+          </div>
+          <div className="divide-y max-h-[600px] overflow-y-auto">
+            {contacts.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">
+                {searchQuery ? 'No contacts match your search' : 'No contacts found. Add your first contact!'}
+              </div>
+            ) : (
+              contacts.map(contact => (
+                <div
+                  key={contact.id}
+                  className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
+                    selectedContact?.id === contact.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                  }`}
+                  onClick={() => handleSelectContact(contact)}
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Avatar */}
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                      {contact.avatar_url ? (
+                        <img
+                          src={contact.avatar_url}
+                          alt=""
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-blue-600 font-medium text-sm">
+                          {getInitials(contact)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-semibold text-gray-900 truncate">
+                          {contact.display_name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Unnamed'}
+                        </h4>
+                        {contact.relationship_type && (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ml-2 ${getRelationshipColor(contact.relationship_type)}`}>
+                            {contact.relationship_type}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                        {contact.linked_profile && (
+                          <span className="inline-flex items-center gap-1 text-green-600">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            Knox user
+                          </span>
+                        )}
+                        {contact.notification_sound && contact.notification_sound !== 'default' && (
+                          <span className="text-gray-400">
+                            {getSoundById(contact.notification_sound).icon} {getSoundById(contact.notification_sound).name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Contact Details */}
+        <div className="bg-white rounded-lg shadow">
+          {selectedContact ? (
+            <>
+              <div className="p-6 border-b">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
+                      {selectedContact.avatar_url ? (
+                        <img
+                          src={selectedContact.avatar_url}
+                          alt=""
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-blue-600 font-bold text-xl">
+                          {getInitials(selectedContact)}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold">
+                        {selectedContact.display_name || `${selectedContact.first_name || ''} ${selectedContact.last_name || ''}`.trim()}
+                      </h3>
+                      {selectedContact.relationship_type && (
+                        <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${getRelationshipColor(selectedContact.relationship_type)}`}>
+                          {selectedContact.relationship_type}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEditContact(selectedContact)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteContact(selectedContact)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Linked Profile */}
+                {selectedContact.linked_profile && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500 mb-2">Knox Profile</h4>
+                    <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
+                      <div className="w-10 h-10 rounded-full bg-green-200 flex items-center justify-center">
+                        {selectedContact.linked_profile.avatar_url ? (
+                          <img
+                            src={selectedContact.linked_profile.avatar_url}
+                            alt=""
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-green-700 font-medium">
+                            {(selectedContact.linked_profile.full_name || '?')[0].toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-green-800">{selectedContact.linked_profile.full_name}</p>
+                        <p className="text-sm text-green-600">{selectedContact.linked_profile.email}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Notification Sound */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-2">Notification Sound</h4>
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <span className="text-2xl">{getSoundById(selectedContact.notification_sound).icon}</span>
+                    <div>
+                      <p className="font-medium text-gray-900">{getSoundById(selectedContact.notification_sound).name}</p>
+                      <p className="text-sm text-gray-500">{getSoundById(selectedContact.notification_sound).description}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Social Media */}
+                {(selectedContact.instagram_handle || selectedContact.facebook_handle || selectedContact.twitter_handle || selectedContact.linkedin_handle) && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500 mb-2">Social Media</h4>
+                    <div className="space-y-2">
+                      {selectedContact.instagram_handle && (
+                        <a
+                          href={`https://instagram.com/${selectedContact.instagram_handle}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm text-blue-600 hover:underline"
+                        >
+                          <span className="w-5 h-5 bg-gradient-to-br from-purple-600 to-pink-500 rounded text-white text-xs flex items-center justify-center">IG</span>
+                          @{selectedContact.instagram_handle}
+                        </a>
+                      )}
+                      {selectedContact.twitter_handle && (
+                        <a
+                          href={`https://twitter.com/${selectedContact.twitter_handle}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm text-blue-600 hover:underline"
+                        >
+                          <span className="w-5 h-5 bg-black rounded text-white text-xs flex items-center justify-center">X</span>
+                          @{selectedContact.twitter_handle}
+                        </a>
+                      )}
+                      {selectedContact.facebook_handle && (
+                        <a
+                          href={`https://facebook.com/${selectedContact.facebook_handle}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm text-blue-600 hover:underline"
+                        >
+                          <span className="w-5 h-5 bg-blue-600 rounded text-white text-xs flex items-center justify-center">f</span>
+                          {selectedContact.facebook_handle}
+                        </a>
+                      )}
+                      {selectedContact.linkedin_handle && (
+                        <a
+                          href={`https://linkedin.com/in/${selectedContact.linkedin_handle}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm text-blue-600 hover:underline"
+                        >
+                          <span className="w-5 h-5 bg-blue-700 rounded text-white text-xs flex items-center justify-center">in</span>
+                          {selectedContact.linkedin_handle}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Phone Numbers */}
+                {selectedContact.phone_numbers && selectedContact.phone_numbers.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500 mb-2">Phone Numbers</h4>
+                    <div className="space-y-2">
+                      {selectedContact.phone_numbers.map((phone, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-sm">
+                          <span className="text-gray-400 capitalize">{phone.type}:</span>
+                          <a href={`tel:${phone.number}`} className="text-blue-600 hover:underline">
+                            {phone.number}
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Email Addresses */}
+                {selectedContact.email_addresses && selectedContact.email_addresses.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500 mb-2">Email Addresses</h4>
+                    <div className="space-y-2">
+                      {selectedContact.email_addresses.map((email, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-sm">
+                          <span className="text-gray-400 capitalize">{email.type}:</span>
+                          <a href={`mailto:${email.email}`} className="text-blue-600 hover:underline">
+                            {email.email}
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes */}
+                {selectedContact.notes && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500 mb-2">Notes</h4>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg">
+                      {selectedContact.notes}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="p-6 text-center text-gray-500">
+              Select a contact to view details
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Edit/Create Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4">
+              {editingContact ? 'Edit Contact' : 'New Contact'}
+            </h3>
+            <form onSubmit={handleSaveContact} className="space-y-4">
+              {/* Basic Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.first_name || ''}
+                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="First name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.last_name || ''}
+                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Last name"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Display Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.display_name || ''}
+                  onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Display name (optional)"
+                />
+              </div>
+
+              {/* Relationship Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Relationship
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {RELATIONSHIP_TYPES.map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setFormData({
+                        ...formData,
+                        relationship_type: formData.relationship_type === type ? '' : type
+                      })}
+                      className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${
+                        formData.relationship_type === type
+                          ? 'bg-blue-100 border-blue-500 text-blue-700'
+                          : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Social Media */}
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Social Media</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Instagram</label>
+                    <div className="flex">
+                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">@</span>
+                      <input
+                        type="text"
+                        value={formData.instagram_handle || ''}
+                        onChange={(e) => setFormData({ ...formData, instagram_handle: e.target.value })}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="username"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Twitter / X</label>
+                    <div className="flex">
+                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">@</span>
+                      <input
+                        type="text"
+                        value={formData.twitter_handle || ''}
+                        onChange={(e) => setFormData({ ...formData, twitter_handle: e.target.value })}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="username"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Facebook</label>
+                    <input
+                      type="text"
+                      value={formData.facebook_handle || ''}
+                      onChange={(e) => setFormData({ ...formData, facebook_handle: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Profile name or ID"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">LinkedIn</label>
+                    <input
+                      type="text"
+                      value={formData.linkedin_handle || ''}
+                      onChange={(e) => setFormData({ ...formData, linkedin_handle: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Profile username"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Notification Sound */}
+              <div className="border-t pt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notification Sound
+                </label>
+                <select
+                  value={formData.notification_sound || 'default'}
+                  onChange={(e) => setFormData({ ...formData, notification_sound: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {NOTIFICATION_SOUNDS.map((sound) => (
+                    <option key={sound.id} value={sound.id}>
+                      {sound.icon} {sound.name} - {sound.description}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  This sound will play when you receive notifications from this contact
+                </p>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  value={formData.notes || ''}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Add notes about this contact..."
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-2 px-4 rounded-md font-medium transition-colors"
+                >
+                  {saving ? 'Saving...' : (editingContact ? 'Save Changes' : 'Create Contact')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-md font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

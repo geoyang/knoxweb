@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../../services/adminApi';
 import { supabase } from '../../lib/supabase';
+import { contactsApi } from '../../services/contactsApi';
 
 interface CircleMember {
   user_id: string | null;
@@ -59,6 +60,7 @@ export const CirclesManager: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [importingContacts, setImportingContacts] = useState(false);
 
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -372,6 +374,77 @@ export const CirclesManager: React.FC = () => {
     alert('Invite link copied to clipboard!');
   };
 
+  const handleImportCircleToContacts = async () => {
+    if (!selectedCircle || circleUsers.length === 0) return;
+
+    try {
+      setImportingContacts(true);
+
+      // Filter to only accepted members with user_ids (actual users, not pending invites)
+      const membersToImport = circleUsers.filter(
+        member => member.status === 'accepted' && member.user_id && member.user_id !== user?.id
+      );
+
+      if (membersToImport.length === 0) {
+        alert('No members to import. Only accepted members (excluding yourself) can be imported as contacts.');
+        return;
+      }
+
+      let imported = 0;
+      let updated = 0;
+      let failed = 0;
+
+      // Get existing contacts to check for duplicates
+      const { contacts: existingContacts } = await contactsApi.getContacts(undefined, 1, 1000);
+
+      for (const member of membersToImport) {
+        try {
+          // Check if contact already exists with this linked_profile_id
+          const existingContact = existingContacts.find(
+            c => c.linked_profile_id === member.user_id
+          );
+
+          const contactData = {
+            display_name: member.profiles?.full_name || member.email || 'Unknown',
+            first_name: member.profiles?.full_name?.split(' ')[0] || undefined,
+            last_name: member.profiles?.full_name?.split(' ').slice(1).join(' ') || undefined,
+            relationship_type: 'friend' as const,
+            notes: `Imported from circle: ${selectedCircle.name}`,
+          };
+
+          if (existingContact) {
+            // Update existing contact
+            await contactsApi.updateContact(existingContact.id, contactData);
+            updated++;
+          } else {
+            // Create new contact
+            const newContact = await contactsApi.createContact(contactData);
+            if (newContact && member.user_id) {
+              // Link to Knox profile
+              await contactsApi.linkProfile(newContact.id, member.user_id);
+            }
+            imported++;
+          }
+        } catch (err) {
+          console.error('Error importing member:', member, err);
+          failed++;
+        }
+      }
+
+      let message = '';
+      if (imported > 0) message += `${imported} contact(s) imported. `;
+      if (updated > 0) message += `${updated} contact(s) updated. `;
+      if (failed > 0) message += `${failed} failed.`;
+
+      alert(message || 'No contacts were imported.');
+    } catch (err) {
+      console.error('Error importing contacts:', err);
+      alert('Failed to import contacts: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setImportingContacts(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -482,14 +555,34 @@ export const CirclesManager: React.FC = () => {
                       <p className="text-gray-600 mt-1">{selectedCircle.description}</p>
                     )}
                   </div>
-                  {(selectedCircle.owner_id === user?.id || ['admin', 'editor'].includes(selectedCircle.user_role || '')) && (
+                  <div className="flex gap-2">
                     <button
-                      onClick={() => setShowInviteForm(true)}
-                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                      onClick={handleImportCircleToContacts}
+                      disabled={importingContacts || circleUsers.length === 0}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm font-medium transition-colors flex items-center gap-1"
+                      title="Import circle members to your contacts"
                     >
-                      Invite User
+                      {importingContacts ? (
+                        <>
+                          <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          Importing...
+                        </>
+                      ) : (
+                        <>
+                          <span>📇</span>
+                          Import to Contacts
+                        </>
+                      )}
                     </button>
-                  )}
+                    {(selectedCircle.owner_id === user?.id || ['admin', 'editor'].includes(selectedCircle.user_role || '')) && (
+                      <button
+                        onClick={() => setShowInviteForm(true)}
+                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                      >
+                        Invite User
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               
