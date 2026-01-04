@@ -2,25 +2,40 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { contactsApi, Contact, ContactInput, RELATIONSHIP_TYPES, RELATIONSHIP_COLORS } from '../../services/contactsApi';
+import { NOTIFICATION_SOUNDS, getSoundById } from '../../config/notificationSounds';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { library } from '@fortawesome/fontawesome-svg-core';
+import {
+  faMusic, faBolt, faGem, faTableCells, faKeyboard,
+  faFilm, faPaperPlane, faFaceFrown, faHandBackFist,
+  faJetFighter, faFaceMeh, faGhost, faCircleExclamation
+} from '@fortawesome/free-solid-svg-icons';
 
-// Notification sounds data (same as mobile app)
-const NOTIFICATION_SOUNDS = [
-  { id: 'default', name: 'Harmony', description: 'A pleasant chord - the default notification sound', icon: '🎵' },
-  { id: 'drama', name: 'Drama', description: 'A Dramatic Intro', icon: '🔔' },
-  { id: 'crystal_chime', name: 'Crystal Chime', description: 'Sparkling crystal wind chimes', icon: '💎' },
-  { id: 'quick_smack', name: 'Quick Smack', description: 'Quick smacking', icon: '👏' },
-  { id: 'piano_flourish', name: 'Piano Flourish', description: 'Elegant ascending piano notes', icon: '🎹' },
-  { id: 'birdsong', name: 'Birdsong', description: 'A cheerful bird chirping', icon: '🐦' },
-  { id: 'water_drop', name: 'Water Drop', description: 'A refreshing water droplet sound', icon: '💧' },
-  { id: 'retro_game', name: 'Retro Game', description: 'Fun 8-bit game sound effect', icon: '🎮' },
-  { id: 'bubble_pop', name: 'Bubble Pop', description: 'Playful bubble popping sound', icon: '🫧' },
-  { id: 'woosh', name: 'Woosh', description: 'Wooshing sound effect', icon: '💨' },
-  { id: 'sneeze', name: 'Sneeze', description: 'Sneeze', icon: '🤧' },
-];
+// Add icons to library
+library.add(
+  faMusic, faBolt, faGem, faTableCells, faKeyboard,
+  faFilm, faPaperPlane, faFaceFrown, faHandBackFist,
+  faJetFighter, faFaceMeh, faGhost, faCircleExclamation
+);
 
-const getSoundById = (id: string | null) => {
-  return NOTIFICATION_SOUNDS.find(s => s.id === id) || NOTIFICATION_SOUNDS[0];
+// Map FA 4.7 icon names (from config) to FA 6 icons
+const iconMap: Record<string, any> = {
+  'music': faMusic,
+  'bolt': faBolt,
+  'diamond': faGem,
+  'th-large': faTableCells,
+  'keyboard-o': faKeyboard,
+  'film': faFilm,
+  'snapchat-ghost': faGhost,
+  'frown-o': faFaceFrown,
+  'hand-rock-o': faHandBackFist,
+  'fighter-jet': faJetFighter,
+  'meh-o': faFaceMeh,
+  'paper-plane': faPaperPlane,
+  'exclamation-circle': faCircleExclamation,
 };
+
+const getIcon = (iconName: string) => iconMap[iconName] || faMusic;
 
 export const ContactsManager: React.FC = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -121,19 +136,28 @@ export const ContactsManager: React.FC = () => {
   const handleSaveContact = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const input: ContactInput = {
-      first_name: formData.first_name?.trim() || undefined,
-      last_name: formData.last_name?.trim() || undefined,
-      display_name: formData.display_name?.trim() ||
-        `${formData.first_name || ''} ${formData.last_name || ''}`.trim() || undefined,
-      relationship_type: formData.relationship_type || undefined,
-      instagram_handle: formData.instagram_handle?.trim().replace('@', '') || undefined,
-      facebook_handle: formData.facebook_handle?.trim() || undefined,
-      twitter_handle: formData.twitter_handle?.trim().replace('@', '') || undefined,
-      linkedin_handle: formData.linkedin_handle?.trim() || undefined,
-      notes: formData.notes?.trim() || undefined,
-      notification_sound: formData.notification_sound === 'default' ? null : formData.notification_sound,
-    };
+    // Build input - always include notification_sound
+    const input: ContactInput = {};
+
+    if (formData.first_name?.trim()) input.first_name = formData.first_name.trim();
+    if (formData.last_name?.trim()) input.last_name = formData.last_name.trim();
+
+    const displayName = formData.display_name?.trim() ||
+      `${formData.first_name || ''} ${formData.last_name || ''}`.trim();
+    if (displayName) input.display_name = displayName;
+
+    if (formData.relationship_type) input.relationship_type = formData.relationship_type;
+    if (formData.instagram_handle?.trim()) input.instagram_handle = formData.instagram_handle.trim().replace('@', '');
+    if (formData.facebook_handle?.trim()) input.facebook_handle = formData.facebook_handle.trim();
+    if (formData.twitter_handle?.trim()) input.twitter_handle = formData.twitter_handle.trim().replace('@', '');
+    if (formData.linkedin_handle?.trim()) input.linkedin_handle = formData.linkedin_handle.trim();
+    if (formData.notes?.trim()) input.notes = formData.notes.trim();
+
+    // Always include notification_sound - use null for default, otherwise the sound ID
+    input.notification_sound = formData.notification_sound === 'default' ? null : formData.notification_sound;
+
+    console.log('Saving contact with input:', JSON.stringify(input));
+    console.log('notification_sound value:', input.notification_sound);
 
     if (!input.display_name && !input.first_name && !input.last_name) {
       alert('Please enter a name for the contact');
@@ -145,10 +169,15 @@ export const ContactsManager: React.FC = () => {
       let result: Contact | null;
 
       if (editingContact) {
+        console.log('Updating contact ID:', editingContact.id);
         result = await contactsApi.updateContact(editingContact.id, input);
       } else {
+        console.log('Creating new contact');
         result = await contactsApi.createContact(input);
       }
+
+      console.log('API result:', result);
+      console.log('Result notification_sound:', result?.notification_sound);
 
       if (result) {
         setShowEditModal(false);
@@ -157,11 +186,11 @@ export const ContactsManager: React.FC = () => {
           setSelectedContact(result);
         }
       } else {
-        alert('Failed to save contact');
+        alert('Failed to save contact - no result returned');
       }
     } catch (err) {
       console.error('Error saving contact:', err);
-      alert('Failed to save contact');
+      alert('Failed to save contact: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -310,8 +339,9 @@ export const ContactsManager: React.FC = () => {
                           </span>
                         )}
                         {contact.notification_sound && contact.notification_sound !== 'default' && (
-                          <span className="text-gray-400">
-                            {getSoundById(contact.notification_sound).icon} {getSoundById(contact.notification_sound).name}
+                          <span className="text-gray-400 flex items-center gap-1">
+                            <FontAwesomeIcon icon={getIcon(getSoundById(contact.notification_sound).icon)} className="w-3 h-3" />
+                            {getSoundById(contact.notification_sound).name}
                           </span>
                         )}
                       </div>
@@ -401,13 +431,21 @@ export const ContactsManager: React.FC = () => {
                 {/* Notification Sound */}
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Notification Sound</h4>
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <span className="text-2xl">{getSoundById(selectedContact.notification_sound).icon}</span>
-                    <div>
+                  <button
+                    onClick={() => handleEditContact(selectedContact)}
+                    className="w-full flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-left"
+                  >
+                    <FontAwesomeIcon icon={getIcon(getSoundById(selectedContact.notification_sound).icon)} className="text-2xl text-blue-500" />
+                    <div className="flex-1">
                       <p className="font-medium text-gray-900">{getSoundById(selectedContact.notification_sound).name}</p>
                       <p className="text-sm text-gray-500">{getSoundById(selectedContact.notification_sound).description}</p>
                     </div>
-                  </div>
+                    <span className="text-gray-400">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </span>
+                  </button>
                 </div>
 
                 {/* Social Media */}
@@ -656,7 +694,7 @@ export const ContactsManager: React.FC = () => {
                 >
                   {NOTIFICATION_SOUNDS.map((sound) => (
                     <option key={sound.id} value={sound.id}>
-                      {sound.icon} {sound.name} - {sound.description}
+                      {sound.name} - {sound.description}
                     </option>
                   ))}
                 </select>

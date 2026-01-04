@@ -5,6 +5,9 @@
   "type": "module",
   "dependencies": {
     "@flaticon/flaticon-uicons": "^3.3.1",
+    "@fortawesome/fontawesome-svg-core": "^7.1.0",
+    "@fortawesome/free-solid-svg-icons": "^7.1.0",
+    "@fortawesome/react-fontawesome": "^3.1.1",
     "@supabase/supabase-js": "^2.39.0",
     "dotenv": "^17.2.3",
     "exifr": "^7.1.3",
