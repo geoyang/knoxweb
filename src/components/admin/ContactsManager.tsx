@@ -1,21 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { contactsApi, Contact, ContactInput, RELATIONSHIP_TYPES, RELATIONSHIP_COLORS } from '../../services/contactsApi';
-import { NOTIFICATION_SOUNDS, getSoundById } from '../../config/notificationSounds';
+import { NOTIFICATION_SOUNDS, getSoundById, SOUND_CATEGORIES } from '../../config/notificationSounds';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { library } from '@fortawesome/fontawesome-svg-core';
 import {
   faMusic, faBolt, faGem, faTableCells, faKeyboard,
   faFilm, faPaperPlane, faFaceFrown, faHandBackFist,
-  faJetFighter, faFaceMeh, faGhost, faCircleExclamation
+  faJetFighter, faFaceMeh, faGhost, faCircleExclamation,
+  faPlay, faPause, faVolumeHigh
 } from '@fortawesome/free-solid-svg-icons';
 
 // Add icons to library
 library.add(
   faMusic, faBolt, faGem, faTableCells, faKeyboard,
   faFilm, faPaperPlane, faFaceFrown, faHandBackFist,
-  faJetFighter, faFaceMeh, faGhost, faCircleExclamation
+  faJetFighter, faFaceMeh, faGhost, faCircleExclamation,
+  faPlay, faPause, faVolumeHigh
 );
 
 // Map FA 4.7 icon names (from config) to FA 6 icons
@@ -46,6 +48,56 @@ export const ContactsManager: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [saving, setSaving] = useState(false);
+  const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Sound playback functions
+  const stopSound = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setPlayingSoundId(null);
+  }, []);
+
+  const playSound = useCallback((soundId: string) => {
+    const sound = getSoundById(soundId);
+
+    // If same sound is playing, stop it
+    if (playingSoundId === soundId) {
+      stopSound();
+      return;
+    }
+
+    // Stop any currently playing sound
+    stopSound();
+
+    // Create and play new audio
+    const audio = new Audio(`/sounds/${sound.filename}.wav`);
+    audioRef.current = audio;
+    setPlayingSoundId(soundId);
+
+    audio.play().catch(err => {
+      console.error('Error playing sound:', err);
+      setPlayingSoundId(null);
+    });
+
+    audio.onended = () => {
+      setPlayingSoundId(null);
+      audioRef.current = null;
+    };
+  }, [playingSoundId, stopSound]);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   // Form state
   const [formData, setFormData] = useState<ContactInput>({
@@ -180,6 +232,7 @@ export const ContactsManager: React.FC = () => {
       console.log('Result notification_sound:', result?.notification_sound);
 
       if (result) {
+        stopSound();
         setShowEditModal(false);
         await loadContacts();
         if (editingContact && selectedContact?.id === editingContact.id) {
@@ -431,21 +484,37 @@ export const ContactsManager: React.FC = () => {
                 {/* Notification Sound */}
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Notification Sound</h4>
-                  <button
-                    onClick={() => handleEditContact(selectedContact)}
-                    className="w-full flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-left"
-                  >
-                    <FontAwesomeIcon icon={getIcon(getSoundById(selectedContact.notification_sound).icon)} className="text-2xl text-blue-500" />
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900">{getSoundById(selectedContact.notification_sound).name}</p>
-                      <p className="text-sm text-gray-500">{getSoundById(selectedContact.notification_sound).description}</p>
-                    </div>
-                    <span className="text-gray-400">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                      </svg>
-                    </span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => playSound(selectedContact.notification_sound || 'default')}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                        playingSoundId === (selectedContact.notification_sound || 'default')
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                      }`}
+                      title={playingSoundId === (selectedContact.notification_sound || 'default') ? 'Stop' : 'Preview sound'}
+                    >
+                      <FontAwesomeIcon
+                        icon={playingSoundId === (selectedContact.notification_sound || 'default') ? faPause : faPlay}
+                        className="text-sm"
+                      />
+                    </button>
+                    <button
+                      onClick={() => handleEditContact(selectedContact)}
+                      className="flex-1 flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-left"
+                    >
+                      <FontAwesomeIcon icon={getIcon(getSoundById(selectedContact.notification_sound).icon)} className="text-2xl text-blue-500" />
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">{getSoundById(selectedContact.notification_sound).name}</p>
+                        <p className="text-sm text-gray-500">{getSoundById(selectedContact.notification_sound).description}</p>
+                      </div>
+                      <span className="text-gray-400">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Social Media */}
@@ -557,8 +626,21 @@ export const ContactsManager: React.FC = () => {
       {/* Edit/Create Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto relative">
+            <button
+              type="button"
+              onClick={() => {
+                stopSound();
+                setShowEditModal(false);
+              }}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+              title="Close"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <h3 className="text-lg font-semibold mb-4 pr-8">
               {editingContact ? 'Edit Contact' : 'New Contact'}
             </h3>
             <form onSubmit={handleSaveContact} className="space-y-4">
@@ -687,19 +769,64 @@ export const ContactsManager: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Notification Sound
                 </label>
-                <select
-                  value={formData.notification_sound || 'default'}
-                  onChange={(e) => setFormData({ ...formData, notification_sound: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {NOTIFICATION_SOUNDS.map((sound) => (
-                    <option key={sound.id} value={sound.id}>
-                      {sound.name} - {sound.description}
-                    </option>
-                  ))}
-                </select>
+                <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md">
+                  {SOUND_CATEGORIES.map((category) => {
+                    const categorySounds = NOTIFICATION_SOUNDS.filter(s => s.category === category.id);
+                    if (categorySounds.length === 0) return null;
+                    return (
+                      <div key={category.id}>
+                        <div className="px-3 py-1.5 bg-gray-100 text-xs font-semibold text-gray-500 uppercase sticky top-0">
+                          {category.name}
+                        </div>
+                        {categorySounds.map((sound) => (
+                          <div
+                            key={sound.id}
+                            className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+                              formData.notification_sound === sound.id
+                                ? 'bg-blue-50 border-l-4 border-blue-500'
+                                : 'hover:bg-gray-50 border-l-4 border-transparent'
+                            }`}
+                            onClick={() => setFormData({ ...formData, notification_sound: sound.id })}
+                          >
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                playSound(sound.id);
+                              }}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+                                playingSoundId === sound.id
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                              }`}
+                              title={playingSoundId === sound.id ? 'Stop' : 'Preview'}
+                            >
+                              <FontAwesomeIcon
+                                icon={playingSoundId === sound.id ? faPause : faPlay}
+                                className="text-xs"
+                              />
+                            </button>
+                            <FontAwesomeIcon
+                              icon={getIcon(sound.icon)}
+                              className="text-blue-500 w-4"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{sound.name}</p>
+                              <p className="text-xs text-gray-500 truncate">{sound.description}</p>
+                            </div>
+                            {formData.notification_sound === sound.id && (
+                              <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  This sound will play when you receive notifications from this contact
+                  Click play to preview, click the row to select
                 </p>
               </div>
 
@@ -727,7 +854,10 @@ export const ContactsManager: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowEditModal(false)}
+                  onClick={() => {
+                    stopSound();
+                    setShowEditModal(false);
+                  }}
                   className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-md font-medium transition-colors"
                 >
                   Cancel
