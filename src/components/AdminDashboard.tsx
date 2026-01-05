@@ -14,6 +14,7 @@ import { FoldersManager } from './admin/FoldersManager';
 import PushNotificationTest from './admin/PushNotificationTest';
 import { PromoCodesManager } from './admin/PromoCodesManager';
 import { ExportManager } from './admin/ExportManager';
+import { ImportManager } from './admin/ImportManager';
 import { chatApi } from '../services/chatApi';
 import { adminApi } from '../services/adminApi';
 import { getFolders } from '../services/foldersApi';
@@ -287,6 +288,19 @@ export const AdminDashboard: React.FC = () => {
                   {renderCount(counts.invitations)}
                 </Link>
               </li>
+              <li>
+                <Link
+                  to="/admin/import"
+                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                    location.pathname.includes('/admin/import')
+                      ? 'bg-blue-100 text-blue-700 font-medium'
+                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                  }`}
+                >
+                  <span className="mr-3">📥</span>
+                  Import
+                </Link>
+              </li>
               {isSuperAdmin && (
                 <>
                   <li>
@@ -358,6 +372,7 @@ export const AdminDashboard: React.FC = () => {
             <Route path="circles" element={<CirclesManager />} />
             <Route path="invites" element={<InvitesManager />} />
             <Route path="contacts" element={<ContactsManager />} />
+            <Route path="import" element={<ImportManager />} />
             <Route path="chat" element={<ChatManager />} />
             <Route
               path="users"
