@@ -4,10 +4,18 @@
 // Run this with: node create-storage-bucket.js
 
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 
-// Configuration from .env
-const supabaseUrl = 'https://quqlovduekdasldqadge.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1cWxvdmR1ZWtkYXNsZHFhZGdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NzQ5MjgsImV4cCI6MjA4MTE1MDkyOH0.bePrytQ_iJtzBjjkguFSCBrIpgzZlhBeOrbmsmzo5x4';
+// Load environment variables from .env file
+dotenv.config();
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in .env file');
+  process.exit(1);
+}
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -51,7 +59,7 @@ async function createImagesBucket() {
       console.error('❌ Cannot upload to assets bucket:', testUploadError);
       console.log('💡 This confirms the bucket does not exist or lacks permissions.');
       console.log('📋 You need to create the "assets" bucket in Supabase Dashboard:');
-      console.log('1. Go to: https://supabase.com/dashboard/project/quqlovduekdasldqadge/storage/buckets');
+      console.log(`1. Go to: https://supabase.com/dashboard/project/${supabaseUrl.split('//')[1].split('.')[0]}/storage/buckets`);
       console.log('2. Click "New bucket"');
       console.log('3. Name: "assets" (not "images")');
       console.log('4. Set as "Public bucket"');
@@ -87,7 +95,7 @@ async function createImagesBucket() {
       if (createError.message.includes('row-level security policy')) {
         console.log('\n💡 The bucket creation failed due to RLS policies.');
         console.log('📋 You need to create the bucket manually in Supabase Dashboard:');
-        console.log('1. Go to: https://supabase.com/dashboard/project/quqlovduekdasldqadge/storage/buckets');
+        console.log(`1. Go to: https://supabase.com/dashboard/project/${supabaseUrl.split('//')[1].split('.')[0]}/storage/buckets`);
         console.log('2. Click "New bucket"');
         console.log('3. Name: "images"');
         console.log('4. Set as "Public bucket"');
