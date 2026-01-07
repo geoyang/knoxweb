@@ -137,10 +137,10 @@ export const SearchTab: React.FC = () => {
           aiApi.getDetectedObjects(),
         ]);
 
-        if (contactsResult.success && contactsResult.data) {
-          setContacts(contactsResult.data.map((c: { id: string; display_name?: string; name?: string }) => ({
+        if (contactsResult.contacts && contactsResult.contacts.length > 0) {
+          setContacts(contactsResult.contacts.map((c) => ({
             id: c.id,
-            name: c.display_name || c.name || 'Unknown',
+            name: c.display_name || c.first_name || 'Unknown',
           })));
         }
 

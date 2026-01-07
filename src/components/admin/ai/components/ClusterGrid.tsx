@@ -140,7 +140,7 @@ export const ClusterGrid: React.FC<ClusterGridProps> = ({
               <span className={`cluster-card__badge ${
                 isLabeled ? 'cluster-card__badge--labeled' : 'cluster-card__badge--unlabeled'
               }`}>
-                {isLabeled ? 'Labeled' : 'Unlabeled'}
+                {isLabeled ? (cluster.name || 'Linked') : 'Unlabeled'}
               </span>
             </div>
           </div>

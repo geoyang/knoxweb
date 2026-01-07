@@ -24,10 +24,12 @@ export const FaceClustersTab: React.FC = () => {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [excludedFaceIds, setExcludedFaceIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clusteringJobId, setClusteringJobId] = useState<string | null>(null);
+  const [backfillRunning, setBackfillRunning] = useState(false);
 
   // Poll for clustering job status
   const { job: clusteringJob, notFound: jobNotFound } = useSingleJobPolling(clusteringJobId);
@@ -72,10 +74,10 @@ export const FaceClustersTab: React.FC = () => {
   const loadContacts = useCallback(async () => {
     try {
       const result = await contactsApi.getContacts();
-      if (result.success && result.data) {
-        setContacts(result.data.map((c: { id: string; display_name?: string; name?: string }) => ({
+      if (result.contacts && result.contacts.length > 0) {
+        setContacts(result.contacts.map((c) => ({
           id: c.id,
-          name: c.display_name || c.name || 'Unknown',
+          name: c.display_name || c.first_name || 'Unknown',
         })));
       }
     } catch (err) {
@@ -88,28 +90,34 @@ export const FaceClustersTab: React.FC = () => {
     loadContacts();
   }, [loadClusters, loadContacts]);
 
-  // Check if clustering is complete and refresh
+  // Check if clustering/backfill is complete and refresh
   useEffect(() => {
     if (clusteringJob?.status === 'completed') {
       loadClusters();
+      setBackfillRunning(false);
       // Clear job ID after a short delay to show completion
       setTimeout(() => setClusteringJobId(null), 1500);
     } else if (clusteringJob?.status === 'failed') {
-      setError(clusteringJob.error_message || 'Clustering failed');
+      setError(clusteringJob.error_message || 'Job failed');
+      setBackfillRunning(false);
       setTimeout(() => setClusteringJobId(null), 3000);
     }
   }, [clusteringJob?.status, loadClusters]);
 
-  // Load cluster detail
+  // Load cluster detail with ALL faces
   const handleSelectCluster = async (clusterId: string) => {
     setSelectedClusterId(clusterId);
     setDetailLoading(true);
 
     try {
-      const result = await aiApi.getCluster(clusterId);
-      if (result.success && result.data) {
-        // Map the response to match expected format
-        const clusterData = result.data.cluster || result.data;
+      // Get cluster info and ALL faces in parallel
+      const [clusterResult, facesResult] = await Promise.all([
+        aiApi.getCluster(clusterId),
+        aiApi.getClusterFaces(clusterId),
+      ]);
+
+      if (clusterResult.success && clusterResult.data) {
+        const clusterData = clusterResult.data.cluster || clusterResult.data;
         const mappedCluster = {
           id: clusterData.cluster_id || clusterData.id,
           name: clusterData.name,
@@ -117,7 +125,10 @@ export const FaceClustersTab: React.FC = () => {
           face_count: clusterData.face_count,
         };
         setSelectedCluster(mappedCluster);
-        setSampleFaces(clusterData.sample_faces || result.data.sample_faces || []);
+      }
+
+      if (facesResult.success && facesResult.data) {
+        setSampleFaces(facesResult.data.faces || []);
       }
     } catch (err) {
       console.error('Failed to load cluster detail:', err);
@@ -130,6 +141,7 @@ export const FaceClustersTab: React.FC = () => {
     setSelectedClusterId(null);
     setSelectedCluster(null);
     setSampleFaces([]);
+    setExcludedFaceIds([]);
   };
 
   const handleToggleSelect = (clusterId: string) => {
@@ -144,9 +156,15 @@ export const FaceClustersTab: React.FC = () => {
     if (!selectedClusterId) return;
 
     try {
-      const result = await aiApi.assignCluster(selectedClusterId, contactId, name);
+      const result = await aiApi.assignCluster(
+        selectedClusterId,
+        contactId,
+        name,
+        excludedFaceIds.length > 0 ? excludedFaceIds : undefined
+      );
       if (result.success) {
         setShowAssignModal(false);
+        setExcludedFaceIds([]);
         loadClusters();
         handleCloseDetail();
       }
@@ -183,6 +201,49 @@ export const FaceClustersTab: React.FC = () => {
     } catch (err) {
       console.error('Failed to run clustering:', err);
       setError(err instanceof Error ? err.message : 'Failed to start clustering');
+    }
+  };
+
+  const handleBackfillThumbnails = async () => {
+    try {
+      setError(null);
+      setBackfillRunning(true);
+      const result = await aiApi.backfillFaceThumbnails();
+      if (result.success && result.data?.job_id) {
+        // Set job ID to poll for status
+        setClusteringJobId(result.data.job_id);
+      } else if (result.error) {
+        setError(result.error);
+        setBackfillRunning(false);
+      }
+    } catch (err) {
+      console.error('Failed to backfill thumbnails:', err);
+      setError(err instanceof Error ? err.message : 'Failed to start backfill');
+      setBackfillRunning(false);
+    }
+  };
+
+  const handleClearClustering = async (clearThumbnails: boolean = false) => {
+    const confirmMsg = clearThumbnails
+      ? 'This will delete all face clusters AND thumbnails. You will need to re-run clustering and regenerate thumbnails. Continue?'
+      : 'This will delete all face clusters and contact assignments. Continue?';
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      setError(null);
+      setLoading(true);
+      const result = await aiApi.clearClustering(clearThumbnails);
+      if (result.success) {
+        loadClusters();
+      } else if (result.error) {
+        setError(result.error);
+      }
+    } catch (err) {
+      console.error('Failed to clear clustering:', err);
+      setError(err instanceof Error ? err.message : 'Failed to clear clustering');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -243,6 +304,38 @@ export const FaceClustersTab: React.FC = () => {
               }} />
             )}
             {isClusteringRunning ? 'Clustering...' : 'Run Clustering'}
+          </button>
+          <button
+            className="ai-button ai-button--secondary"
+            onClick={handleBackfillThumbnails}
+            disabled={isClusteringRunning || backfillRunning}
+            title="Generate cropped face thumbnails for existing faces"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              opacity: (isClusteringRunning || backfillRunning) ? 0.7 : 1
+            }}
+          >
+            {backfillRunning && (
+              <span className="spinner" style={{
+                width: '14px',
+                height: '14px',
+                border: '2px solid rgba(0,0,0,0.3)',
+                borderTopColor: '#333',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite'
+              }} />
+            )}
+            Crop Faces
+          </button>
+          <button
+            className="ai-button ai-button--danger"
+            onClick={() => handleClearClustering(true)}
+            disabled={isClusteringRunning || backfillRunning}
+            title="Clear all clustering data and thumbnails"
+          >
+            Clear All
           </button>
         </div>
       </div>
@@ -334,7 +427,10 @@ export const FaceClustersTab: React.FC = () => {
             cluster={selectedCluster}
             sampleFaces={sampleFaces}
             onClose={handleCloseDetail}
-            onAssign={() => setShowAssignModal(true)}
+            onAssign={(excluded) => {
+              setExcludedFaceIds(excluded);
+              setShowAssignModal(true);
+            }}
             loading={detailLoading}
           />
         )}

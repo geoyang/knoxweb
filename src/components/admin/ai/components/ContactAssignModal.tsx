@@ -35,7 +35,9 @@ export const ContactAssignModal: React.FC<ContactAssignModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === 'contact' && selectedContactId) {
-      onAssign(selectedContactId);
+      // Find the contact name to pass along
+      const selectedContact = contacts.find(c => c.id === selectedContactId);
+      onAssign(selectedContactId, selectedContact?.name);
     } else if (mode === 'custom' && customName.trim()) {
       onAssign('', customName.trim());
     }

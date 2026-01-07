@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { contactsApi, Contact, ContactInput, RELATIONSHIP_TYPES, RELATIONSHIP_COLORS } from '../../services/contactsApi';
+import { aiApi } from '../../services/aiApi';
 import { NOTIFICATION_SOUNDS, getSoundById, SOUND_CATEGORIES } from '../../config/notificationSounds';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { library } from '@fortawesome/fontawesome-svg-core';
@@ -49,6 +50,8 @@ export const ContactsManager: React.FC = () => {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [saving, setSaving] = useState(false);
   const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
+  const [contactImages, setContactImages] = useState<{ asset_id: string; thumbnail_url: string }[]>([]);
+  const [loadingImages, setLoadingImages] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Sound playback functions
@@ -147,8 +150,22 @@ export const ContactsManager: React.FC = () => {
     return () => clearTimeout(debounceTimer);
   }, [searchQuery]);
 
-  const handleSelectContact = (contact: Contact) => {
+  const handleSelectContact = async (contact: Contact) => {
     setSelectedContact(contact);
+    setContactImages([]);
+
+    // Load images for this contact
+    setLoadingImages(true);
+    try {
+      const result = await aiApi.getContactImages(contact.id);
+      if (result.success && result.data) {
+        setContactImages(result.data.images || []);
+      }
+    } catch (err) {
+      console.error('Failed to load contact images:', err);
+    } finally {
+      setLoadingImages(false);
+    }
   };
 
   const handleCreateNew = () => {
@@ -613,6 +630,42 @@ export const ContactsManager: React.FC = () => {
                     </p>
                   </div>
                 )}
+
+                {/* Photos */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-2">
+                    Photos {contactImages.length > 0 && `(${contactImages.length})`}
+                  </h4>
+                  {loadingImages ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : contactImages.length > 0 ? (
+                    <div className="grid grid-cols-4 gap-2">
+                      {contactImages.slice(0, 12).map((img) => (
+                        <div
+                          key={img.asset_id}
+                          className="aspect-square rounded-lg overflow-hidden bg-gray-100"
+                        >
+                          <img
+                            src={img.thumbnail_url}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ))}
+                      {contactImages.length > 12 && (
+                        <div className="aspect-square rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 text-sm font-medium">
+                          +{contactImages.length - 12} more
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 py-4 text-center bg-gray-50 rounded-lg">
+                      No photos linked to this contact
+                    </p>
+                  )}
+                </div>
               </div>
             </>
           ) : (

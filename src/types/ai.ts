@@ -70,12 +70,19 @@ export interface FaceCluster {
 
 // Sample face in a cluster
 export interface SampleFace {
-  id: string;
+  id?: string;
   asset_id: string;
   face_index: number;
   thumbnail_url?: string;
   bounding_box?: BoundingBox;
   is_from_video?: boolean;
+}
+
+// Response for all faces in a cluster
+export interface ClusterFacesResponse {
+  cluster_id: string;
+  faces: SampleFace[];
+  total: number;
 }
 
 // Search result

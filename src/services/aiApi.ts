@@ -158,15 +158,29 @@ class AIApiService {
     return this.request(`/api/v1/faces/clusters/${clusterId}`);
   }
 
+  // Get ALL faces in a cluster
+  async getClusterFaces(clusterId: string): Promise<AIApiResponse<{
+    cluster_id: string;
+    faces: SampleFace[];
+    total: number;
+  }>> {
+    return this.request(`/api/v1/faces/clusters/${clusterId}/faces`);
+  }
+
   // Assign cluster to Knox contact
   async assignCluster(
     clusterId: string,
     contactId: string,
-    name?: string
+    name?: string,
+    excludeFaceIds?: string[]
   ): Promise<AIApiResponse<void>> {
     return this.request(`/api/v1/faces/clusters/${clusterId}/assign`, {
       method: 'POST',
-      body: JSON.stringify({ knox_contact_id: contactId, name }),
+      body: JSON.stringify({
+        knox_contact_id: contactId,
+        name,
+        exclude_face_ids: excludeFaceIds?.length ? excludeFaceIds : undefined,
+      }),
     });
   }
 
@@ -186,6 +200,30 @@ class AIApiService {
     return this.request('/api/v1/faces/cluster', {
       method: 'POST',
       body: JSON.stringify(params || {}),
+    });
+  }
+
+  // Clear all clustering data
+  async clearClustering(clearThumbnails: boolean = false): Promise<AIApiResponse<{ status: string; message: string }>> {
+    const params = clearThumbnails ? '?clear_thumbnails=true' : '';
+    return this.request(`/api/v1/faces/clear-clustering${params}`, {
+      method: 'POST',
+    });
+  }
+
+  // Get images linked to a contact
+  async getContactImages(contactId: string, limit: number = 50): Promise<AIApiResponse<{
+    contact_id: string;
+    images: { asset_id: string; thumbnail_url: string }[];
+    total: number;
+  }>> {
+    return this.request(`/api/v1/faces/contact/${contactId}/images?limit=${limit}`);
+  }
+
+  // Backfill face thumbnails for existing embeddings
+  async backfillFaceThumbnails(): Promise<AIApiResponse<{ job_id: string; status: string }>> {
+    return this.request('/api/v1/faces/backfill-thumbnails', {
+      method: 'POST',
     });
   }
 
