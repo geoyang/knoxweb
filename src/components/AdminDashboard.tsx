@@ -15,6 +15,7 @@ import PushNotificationTest from './admin/PushNotificationTest';
 import { PromoCodesManager } from './admin/PromoCodesManager';
 import { ExportManager } from './admin/ExportManager';
 import { ImportManager } from './admin/ImportManager';
+import { AIProcessingManager } from './admin/ai';
 import { chatApi } from '../services/chatApi';
 import { adminApi } from '../services/adminApi';
 import { getFolders } from '../services/foldersApi';
@@ -301,6 +302,19 @@ export const AdminDashboard: React.FC = () => {
                   Import
                 </Link>
               </li>
+              <li>
+                <Link
+                  to="/admin/ai-processing"
+                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                    location.pathname.includes('/admin/ai-processing')
+                      ? 'bg-blue-100 text-blue-700 font-medium'
+                      : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                  }`}
+                >
+                  <span className="mr-3">🤖</span>
+                  AI Processing
+                </Link>
+              </li>
               {isSuperAdmin && (
                 <>
                   <li>
@@ -373,6 +387,7 @@ export const AdminDashboard: React.FC = () => {
             <Route path="invites" element={<InvitesManager />} />
             <Route path="contacts" element={<ContactsManager />} />
             <Route path="import" element={<ImportManager />} />
+            <Route path="ai-processing" element={<AIProcessingManager />} />
             <Route path="chat" element={<ChatManager />} />
             <Route
               path="users"

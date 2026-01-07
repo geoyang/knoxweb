@@ -345,18 +345,72 @@ const isHeicFile = (file: File): boolean => {
     file.type === 'image/heic' || file.type === 'image/heif';
 };
 
-// Convert HEIC to JPEG
+// Convert HEIC to JPEG with better error handling
 const convertHeicToJpeg = async (file: File): Promise<Blob> => {
-  console.log('Converting HEIC to JPEG:', file.name);
-  const result = await heic2any({
-    blob: file,
-    toType: 'image/jpeg',
-    quality: 0.92
+  console.log('Converting HEIC to JPEG:', file.name, 'size:', Math.round(file.size / 1024), 'KB');
+
+  try {
+    const result = await heic2any({
+      blob: file,
+      toType: 'image/jpeg',
+      quality: 0.92
+    });
+    // heic2any can return an array for multi-image HEIC files
+    const blob = Array.isArray(result) ? result[0] : result;
+    console.log('HEIC conversion complete, size:', Math.round(blob.size / 1024), 'KB');
+    return blob;
+  } catch (error) {
+    console.error('heic2any conversion failed:', error);
+
+    // Try using canvas as fallback (works on some browsers with HEIC support)
+    try {
+      console.log('Trying canvas fallback for HEIC...');
+      return await convertWithCanvas(file);
+    } catch (canvasError) {
+      console.error('Canvas fallback also failed:', canvasError);
+      throw new Error(`HEIC conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+};
+
+// Fallback: try to convert using canvas (works if browser has HEIC support)
+const convertWithCanvas = async (file: File): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(img.src);
+            if (blob) {
+              console.log('Canvas conversion successful, size:', Math.round(blob.size / 1024), 'KB');
+              resolve(blob);
+            } else {
+              reject(new Error('Canvas toBlob returned null'));
+            }
+          },
+          'image/jpeg',
+          0.92
+        );
+      } else {
+        URL.revokeObjectURL(img.src);
+        reject(new Error('Could not get canvas context'));
+      }
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(img.src);
+      reject(new Error('Image failed to load'));
+    };
+
+    img.src = URL.createObjectURL(file);
   });
-  // heic2any can return an array for multi-image HEIC files
-  const blob = Array.isArray(result) ? result[0] : result;
-  console.log('HEIC conversion complete, size:', Math.round(blob.size / 1024), 'KB');
-  return blob;
 };
 
 // Generate thumbnail from image file
@@ -748,8 +802,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           webUrl = webUpload.url;
           console.log('Web version uploaded:', webUrl);
         } catch (heicError) {
-          console.warn('HEIC conversion failed, using original:', heicError);
-          // Continue with original - will show as not displayable
+          console.error('HEIC conversion failed:', heicError);
+          // Don't continue with HEIC URL - throw error so user knows
+          throw new Error(`HEIC conversion failed for ${fileObj.file.name}. Please convert to JPEG before uploading.`);
         }
       }
 
