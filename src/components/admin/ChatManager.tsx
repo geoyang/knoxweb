@@ -508,16 +508,16 @@ export const ChatManager: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded-lg">
         {error}
-        <button onClick={fetchConversations} className="ml-4 text-red-600 underline">
+        <button onClick={fetchConversations} className="ml-4 text-red-600 dark:text-red-400 underline">
           Retry
         </button>
       </div>
@@ -527,20 +527,20 @@ export const ChatManager: React.FC = () => {
   return (
     <div className="h-[calc(100vh-12rem)]">
       <div className="mb-4">
-        <h2 className="text-2xl font-bold text-gray-800">Chat</h2>
-        <p className="text-gray-600">Messages with your circles and contacts</p>
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Chat</h2>
+        <p className="text-slate-600 dark:text-slate-400">Messages with your circles and contacts</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 h-[calc(100%-4rem)] flex overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 h-[calc(100%-4rem)] flex overflow-hidden">
         {/* Conversation List */}
-        <div className="w-80 border-r border-gray-200 flex flex-col">
-          <div className="p-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-800">Conversations</h3>
+        <div className="w-80 border-r border-slate-200 dark:border-slate-800 flex flex-col">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100">Conversations</h3>
           </div>
 
           <div className="flex-1 overflow-y-auto">
             {conversations.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">
+              <div className="p-4 text-center text-slate-500 dark:text-slate-400">
                 <p>No conversations yet</p>
                 <p className="text-sm mt-1">Start a chat from a circle or contact</p>
               </div>
@@ -549,15 +549,15 @@ export const ChatManager: React.FC = () => {
                 <button
                   key={conversation.id}
                   onClick={() => setSelectedConversation(conversation)}
-                  className={`w-full p-4 flex items-start gap-3 hover:bg-gray-50 transition-colors border-b border-gray-100 text-left ${
-                    selectedConversation?.id === conversation.id ? 'bg-blue-50' : ''
+                  className={`w-full p-4 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800 text-left ${
+                    selectedConversation?.id === conversation.id ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''
                   }`}
                 >
                   {/* Avatar */}
                   {conversation.type === 'circle' ? (
                     renderAvatarGroup(conversation.participants, 'md')
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0 overflow-hidden">
                       {getConversationAvatar(conversation) ? (
                         <img
                           src={getConversationAvatar(conversation)!}
@@ -565,7 +565,7 @@ export const ChatManager: React.FC = () => {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <span className="text-blue-600 font-medium text-lg">
+                        <span className="text-indigo-600 dark:text-indigo-400 font-medium text-lg">
                           {getConversationName(conversation)[0]?.toUpperCase()}
                         </span>
                       )}
@@ -575,18 +575,18 @@ export const ChatManager: React.FC = () => {
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-900 truncate">
+                      <span className="font-medium text-slate-900 dark:text-slate-100 truncate">
                         {getConversationName(conversation)}
                       </span>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
                         {formatTime(conversation.last_message_at)}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-500 truncate mt-0.5">
+                    <p className="text-sm text-slate-500 dark:text-slate-400 truncate mt-0.5">
                       {conversation.last_message_preview || 'No messages yet'}
                     </p>
                     {conversation.unread_count > 0 && (
-                      <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-white bg-blue-600 rounded-full mt-1">
+                      <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-white bg-indigo-600 dark:bg-indigo-500 rounded-full mt-1">
                         {conversation.unread_count}
                       </span>
                     )}
@@ -602,11 +602,11 @@ export const ChatManager: React.FC = () => {
           {selectedConversation ? (
             <>
               {/* Chat Header */}
-              <div className="p-4 border-b border-gray-200 flex items-center gap-3">
+              <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
                 {selectedConversation.type === 'circle' ? (
                   renderAvatarGroup(selectedConversation.participants, 'sm')
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center overflow-hidden">
+                  <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center overflow-hidden">
                     {getConversationAvatar(selectedConversation) ? (
                       <img
                         src={getConversationAvatar(selectedConversation)!}
@@ -614,30 +614,30 @@ export const ChatManager: React.FC = () => {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className="text-blue-600 font-medium">
+                      <span className="text-indigo-600 dark:text-indigo-400 font-medium">
                         {getConversationName(selectedConversation)[0]?.toUpperCase()}
                       </span>
                     )}
                   </div>
                 )}
                 <div>
-                  <h3 className="font-semibold text-gray-900">
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">
                     {getConversationName(selectedConversation)}
                   </h3>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     {selectedConversation.type === 'circle' ? 'Circle Chat' : 'Direct Message'}
                   </p>
                 </div>
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-950">
                 {messagesLoading ? (
                   <div className="flex items-center justify-center h-full">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
                   </div>
                 ) : messages.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
                     <div className="text-center">
                       <p className="text-4xl mb-2">💬</p>
                       <p>No messages yet</p>
@@ -652,11 +652,11 @@ export const ChatManager: React.FC = () => {
                         <button
                           onClick={loadMoreMessages}
                           disabled={loadingMore}
-                          className="px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-full transition-colors disabled:opacity-50 flex items-center gap-2"
+                          className="px-4 py-2 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full transition-colors disabled:opacity-50 flex items-center gap-2"
                         >
                           {loadingMore ? (
                             <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
                               Loading...
                             </>
                           ) : (
@@ -681,7 +681,7 @@ export const ChatManager: React.FC = () => {
                         <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? 'flex-row-reverse' : ''}`}>
                           {/* Avatar for others */}
                           {!isOwn && (
-                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
                               {message.sender?.avatar_url ? (
                                 <img
                                   src={message.sender.avatar_url}
@@ -689,7 +689,7 @@ export const ChatManager: React.FC = () => {
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
-                                <span className="text-gray-600 text-sm font-medium">
+                                <span className="text-slate-600 dark:text-slate-300 text-sm font-medium">
                                   {message.sender?.full_name?.[0]?.toUpperCase() || '?'}
                                 </span>
                               )}
@@ -702,8 +702,8 @@ export const ChatManager: React.FC = () => {
                             <div
                               className={`rounded-2xl px-4 py-2 ${
                                 isOwn
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-gray-100 text-gray-900'
+                                  ? 'bg-indigo-600 dark:bg-indigo-500 text-white'
+                                  : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700'
                               }`}
                             >
                               {!isOwn && selectedConversation.type === 'circle' && (
@@ -848,13 +848,13 @@ export const ChatManager: React.FC = () => {
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
                     placeholder="Type a message..."
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-slate-400 dark:placeholder-slate-500"
                     disabled={sending || uploading}
                   />
                   <button
                     type="submit"
                     disabled={!messageText.trim() || sending || uploading}
-                    className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="w-10 h-10 bg-indigo-600 dark:bg-indigo-500 text-white rounded-full flex items-center justify-center hover:bg-indigo-700 dark:hover:bg-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {sending ? (
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
@@ -877,13 +877,13 @@ export const ChatManager: React.FC = () => {
 
                 {/* Attachment Picker Popup */}
                 {showAttachmentPicker && (
-                  <div className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-xl border p-4 w-72">
+                  <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 w-72">
                     <div className="flex justify-between items-center mb-3">
-                      <span className="font-semibold text-gray-800">Share</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">Share</span>
                       <button
                         type="button"
                         onClick={() => setShowAttachmentPicker(false)}
-                        className="text-gray-400 hover:text-gray-600"
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -894,14 +894,14 @@ export const ChatManager: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                        className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                       >
                         <div className="w-12 h-12 rounded-full bg-teal-500 flex items-center justify-center">
                           <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         </div>
-                        <span className="text-xs text-gray-700 font-medium">Photos</span>
+                        <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">Photos</span>
                       </button>
                       <button
                         type="button"
@@ -909,12 +909,12 @@ export const ChatManager: React.FC = () => {
                           setShowAttachmentPicker(false);
                           setShowStickerPicker(true);
                         }}
-                        className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                        className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                       >
                         <div className="w-12 h-12 rounded-full bg-yellow-400 flex items-center justify-center">
                           <span className="text-2xl">😀</span>
                         </div>
-                        <span className="text-xs text-gray-700 font-medium">Stickers</span>
+                        <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">Stickers</span>
                       </button>
                       <button
                         type="button"
@@ -922,14 +922,14 @@ export const ChatManager: React.FC = () => {
                           setShowAttachmentPicker(false);
                           alert('Albums sharing coming soon!');
                         }}
-                        className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                        className="flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                       >
                         <div className="w-12 h-12 rounded-full bg-green-400 flex items-center justify-center">
                           <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                           </svg>
                         </div>
-                        <span className="text-xs text-gray-700 font-medium">Albums</span>
+                        <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">Albums</span>
                       </button>
                     </div>
                   </div>
@@ -937,13 +937,13 @@ export const ChatManager: React.FC = () => {
 
                 {/* Sticker Picker Popup */}
                 {showStickerPicker && (
-                  <div className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-xl border w-80">
-                    <div className="flex justify-between items-center p-3 border-b">
-                      <span className="font-semibold text-gray-800">Stickers</span>
+                  <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 w-80">
+                    <div className="flex justify-between items-center p-3 border-b border-slate-200 dark:border-slate-700">
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">Stickers</span>
                       <button
                         type="button"
                         onClick={() => setShowStickerPicker(false)}
-                        className="text-gray-400 hover:text-gray-600"
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -951,7 +951,7 @@ export const ChatManager: React.FC = () => {
                       </button>
                     </div>
                     {/* Category tabs */}
-                    <div className="flex gap-1 p-2 border-b overflow-x-auto">
+                    <div className="flex gap-1 p-2 border-b border-slate-200 dark:border-slate-700 overflow-x-auto">
                       {STICKER_CATEGORIES.map(cat => (
                         <button
                           key={cat.id}
@@ -959,8 +959,8 @@ export const ChatManager: React.FC = () => {
                           onClick={() => setSelectedStickerCategory(cat.id)}
                           className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                             selectedStickerCategory === cat.id
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              ? 'bg-indigo-600 dark:bg-indigo-500 text-white'
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                           }`}
                         >
                           {cat.icon} {cat.name}
@@ -974,7 +974,7 @@ export const ChatManager: React.FC = () => {
                           key={sticker.id}
                           type="button"
                           onClick={() => handleStickerSelect(sticker)}
-                          className="w-12 h-12 flex items-center justify-center text-2xl hover:bg-gray-100 rounded-lg transition-colors"
+                          className="w-12 h-12 flex items-center justify-center text-2xl hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                         >
                           {sticker.emoji}
                         </button>
@@ -985,7 +985,7 @@ export const ChatManager: React.FC = () => {
               </form>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-500">
+            <div className="flex-1 flex items-center justify-center text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950">
               <div className="text-center">
                 <p className="text-6xl mb-4">💬</p>
                 <p className="text-lg font-medium">Select a conversation</p>
@@ -999,12 +999,12 @@ export const ChatManager: React.FC = () => {
       {/* Reaction Details Modal */}
       {showReactionDetailsModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowReactionDetailsModal(null)}>
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold text-gray-900">Reactions</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-md w-full mx-4 max-h-[70vh] flex flex-col border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Reactions</h3>
               <button
                 onClick={() => setShowReactionDetailsModal(null)}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1013,11 +1013,11 @@ export const ChatManager: React.FC = () => {
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               {(messageReactionDetails[showReactionDetailsModal] || []).length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No reactions yet</p>
+                <p className="text-slate-500 dark:text-slate-400 text-center py-8">No reactions yet</p>
               ) : (
                 <div className="space-y-3">
                   {(messageReactionDetails[showReactionDetailsModal] || []).map(reaction => (
-                    <div key={reaction.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
+                    <div key={reaction.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
                       {reaction.user.avatar_url ? (
                         <img
                           src={reaction.user.avatar_url}
@@ -1025,17 +1025,17 @@ export const ChatManager: React.FC = () => {
                           className="w-10 h-10 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                          <span className="text-gray-600 font-medium">
+                        <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                          <span className="text-slate-600 dark:text-slate-300 font-medium">
                             {(reaction.user.name || '?')[0].toUpperCase()}
                           </span>
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 truncate">
+                        <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
                           {reaction.user.name || 'Unknown'}
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
                           {formatTimeAgo(reaction.created_at)}
                         </p>
                       </div>

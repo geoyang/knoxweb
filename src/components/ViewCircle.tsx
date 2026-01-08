@@ -15,6 +15,18 @@ interface InviteData {
   };
 }
 
+interface UserCircle {
+  id: string;
+  circle_id: string;
+  role: string;
+  status: string;
+  circle: {
+    id: string;
+    name: string;
+    description?: string;
+  };
+}
+
 export const ViewCircle: React.FC = () => {
   const { inviteId } = useParams<{ inviteId: string }>();
   const navigate = useNavigate();
@@ -24,6 +36,49 @@ export const ViewCircle: React.FC = () => {
   const [invite, setInvite] = useState<InviteData | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [userCircles, setUserCircles] = useState<UserCircle[]>([]);
+  const [loadingCircles, setLoadingCircles] = useState(false);
+
+  const fetchUserCircles = async (userId: string) => {
+    try {
+      setLoadingCircles(true);
+      const { data: circlesData, error: circlesError } = await supabase
+        .from('circle_users')
+        .select(`
+          id,
+          circle_id,
+          role,
+          status,
+          circles (
+            id,
+            name,
+            description
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('status', 'accepted');
+
+      if (circlesError) {
+        console.error('Error fetching user circles:', circlesError);
+        return;
+      }
+
+      if (circlesData) {
+        const circles = circlesData.map((c: any) => ({
+          id: c.id,
+          circle_id: c.circle_id,
+          role: c.role,
+          status: c.status,
+          circle: c.circles,
+        }));
+        setUserCircles(circles);
+      }
+    } catch (err) {
+      console.error('Error fetching user circles:', err);
+    } finally {
+      setLoadingCircles(false);
+    }
+  };
 
   useEffect(() => {
     checkAuthAndLoadInvite();
@@ -92,6 +147,10 @@ export const ViewCircle: React.FC = () => {
       // Check if already accepted
       if (inviteData.status === 'accepted') {
         setAccepted(true);
+        // Fetch all user circles if already accepted and user is logged in
+        if (session?.user) {
+          fetchUserCircles(session.user.id);
+        }
       }
 
       // If user is logged in and email matches, verify they can accept
@@ -128,6 +187,9 @@ export const ViewCircle: React.FC = () => {
       }
 
       setAccepted(true);
+
+      // Fetch all user circles to show them after acceptance
+      await fetchUserCircles(user.id);
     } catch (err) {
       console.error('Error accepting invitation:', err);
       setError(err instanceof Error ? err.message : 'Failed to accept invitation');
@@ -187,6 +249,8 @@ export const ViewCircle: React.FC = () => {
 
   // Already accepted view
   if (accepted) {
+    const hasMultipleCircles = userCircles.length > 1;
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
@@ -195,11 +259,48 @@ export const ViewCircle: React.FC = () => {
           <p className="text-gray-600 mb-6">
             You've successfully joined the circle as {invite.role === 'read_only' ? 'a Viewer' : `an ${invite.role.charAt(0).toUpperCase() + invite.role.slice(1)}`}.
           </p>
-          <div className="bg-green-50 rounded-lg p-4 mb-6">
-            <p className="text-sm text-green-800">
-              You can now view and {invite.role !== 'read_only' ? 'contribute to ' : ''}albums shared with this circle.
-            </p>
-          </div>
+
+          {/* Show all circles if user is a member of multiple */}
+          {loadingCircles ? (
+            <div className="flex items-center justify-center py-4 mb-6">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
+            </div>
+          ) : hasMultipleCircles ? (
+            <div className="mb-6">
+              <p className="text-sm text-gray-600 mb-3">You're a member of {userCircles.length} circles:</p>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {userCircles.map((uc) => (
+                  <div
+                    key={uc.id}
+                    className="bg-gray-50 rounded-lg p-3 flex items-center justify-between hover:bg-gray-100 cursor-pointer transition-colors"
+                    onClick={() => navigate(`/album/${uc.id}`)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
+                        {uc.circle.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="text-left">
+                        <p className="font-medium text-gray-800">{uc.circle.name}</p>
+                        <p className="text-xs text-gray-500 capitalize">
+                          {uc.role === 'read_only' ? 'Viewer' : uc.role}
+                        </p>
+                      </div>
+                    </div>
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-green-50 rounded-lg p-4 mb-6">
+              <p className="text-sm text-green-800">
+                You can now view and {invite.role !== 'read_only' ? 'contribute to ' : ''}albums shared with this circle.
+              </p>
+            </div>
+          )}
+
           <button
             onClick={handleGoToDashboard}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"

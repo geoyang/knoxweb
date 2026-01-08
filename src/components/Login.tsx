@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { DebugSupabase } from './DebugSupabase';
 import { TokenManager } from '../utils/tokenManager';
+import { ThemeToggle } from './ui/ThemeToggle';
 
 const REMEMBER_EMAIL_KEY = 'knox_remember_email';
 const SAVED_EMAIL_KEY = 'knox_saved_email';
@@ -50,8 +51,8 @@ export const Login: React.FC = () => {
   // Don't redirect while auth is still loading, but allow verification screen to stay
   if (authLoading && !codeSent && !emailSent) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white dark:border-indigo-400"></div>
       </div>
     );
   }
@@ -168,13 +169,18 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4 relative">
+      {/* Theme toggle in corner */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle size="sm" />
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl dark:shadow-2xl dark:shadow-black/20 p-8 w-full max-w-md border border-transparent dark:border-slate-800">
         <div className="text-center mb-8">
           <div className="text-4xl mb-4">📸</div>
-          <h1 className="text-3xl font-bold text-gray-800">Knox Admin</h1>
-          <p className="text-gray-600">
-            {emailSent 
+          <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Knox Admin</h1>
+          <p className="text-slate-600 dark:text-slate-400">
+            {emailSent
               ? 'Check your email for the magic link'
               : codeSent
               ? `Enter the 4-digit code sent to ${email}`
@@ -215,7 +221,7 @@ export const Login: React.FC = () => {
         {!emailSent && !codeSent ? (
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                 Email Address
               </label>
               <input
@@ -224,7 +230,7 @@ export const Login: React.FC = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md shadow-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="your@email.com"
               />
             </div>
@@ -236,9 +242,9 @@ export const Login: React.FC = () => {
                   type="checkbox"
                   checked={rememberEmail}
                   onChange={(e) => handleRememberEmailChange(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 rounded cursor-pointer bg-white dark:bg-slate-800"
                 />
-                <label htmlFor="remember-email" className="ml-2 block text-sm text-gray-700 cursor-pointer">
+                <label htmlFor="remember-email" className="ml-2 block text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
                   Remember my email
                 </label>
               </div>
@@ -246,7 +252,7 @@ export const Login: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-2 px-4 rounded-md transition-colors"
+                className="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 disabled:bg-indigo-300 dark:disabled:bg-indigo-800 text-white font-bold py-2 px-4 rounded-md transition-colors"
               >
                 {loading
                   ? 'Sending...'
@@ -256,12 +262,12 @@ export const Login: React.FC = () => {
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-md">
                 {error}
               </div>
             )}
-            
-            <p className="text-sm text-gray-600 text-center">
+
+            <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
               {authMethod === 'magic-link'
                 ? 'No password needed! We\'ll send you a secure link to sign in.'
                 : 'We\'ll send you a 4-digit code to verify your identity.'
@@ -270,7 +276,7 @@ export const Login: React.FC = () => {
           </form>
         ) : emailSent ? (
           <div className="space-y-6">
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded-md">
               <div className="flex items-center">
                 <div className="text-2xl mr-2">📧</div>
                 <div>
@@ -279,34 +285,34 @@ export const Login: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             <button
               onClick={resetForm}
-              className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition-colors"
+              className="w-full bg-slate-600 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-md transition-colors"
             >
               Try Different Email
             </button>
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded-md">
               <div className="flex items-center">
                 <div className="text-2xl mr-2">🔢</div>
                 <div>
                   <p className="font-medium">Code sent!</p>
                   <p className="text-sm">Enter the 4-digit code sent to {email}</p>
                   {import.meta.env.DEV && devCode && (
-                    <p className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded mt-2">
+                    <p className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 px-2 py-1 rounded mt-2">
                       Dev Code: <strong>{devCode}</strong>
                     </p>
                   )}
                 </div>
               </div>
             </div>
-            
+
             <form onSubmit={handleCodeVerification} className="space-y-6">
               <div>
-                <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="code" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   4-Digit Code
                 </label>
                 <input
@@ -337,14 +343,14 @@ export const Login: React.FC = () => {
                     }
                   }}
                   maxLength={4}
-                  className="w-full px-3 py-3 text-center text-2xl font-bold tracking-widest border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-3 text-center text-2xl font-bold tracking-widest border border-slate-300 dark:border-slate-700 rounded-md shadow-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="----"
                   autoComplete="one-time-code"
                 />
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-md">
                   {error}
                 </div>
               )}
@@ -352,28 +358,28 @@ export const Login: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading || !verificationCode || verificationCode.length !== 4}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-2 px-4 rounded-md transition-colors"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 disabled:bg-indigo-300 dark:disabled:bg-indigo-800 text-white font-bold py-2 px-4 rounded-md transition-colors"
               >
                 {loading ? 'Verifying...' : '✓ Verify Code'}
               </button>
             </form>
-            
+
             <button
               onClick={resetForm}
-              className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition-colors"
+              className="w-full bg-slate-600 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-md transition-colors"
             >
               Try Different Email
             </button>
           </div>
         )}
 
-        <div className="mt-6 text-center text-sm text-gray-600">
+        <div className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
           <p>Don't have an account? Contact your administrator.</p>
           {/* Switch auth method - temporarily disabled
           {(emailSent || codeSent) && (
             <button
               onClick={switchAuthMethod}
-              className="text-blue-600 hover:text-blue-800 underline mt-2"
+              className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 underline mt-2"
             >
               Try {authMethod === 'magic-link' ? '4-digit code' : 'magic link'} instead
             </button>

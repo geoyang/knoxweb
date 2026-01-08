@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { ThemeToggle } from './ui/ThemeToggle';
 
 export const Signup: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -82,10 +83,10 @@ export const Signup: React.FC = () => {
   // Show loading while auth is initializing
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl dark:shadow-2xl dark:shadow-black/20 p-8 w-full max-w-md text-center border border-transparent dark:border-slate-800">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 dark:border-indigo-400 mx-auto"></div>
+          <p className="mt-4 text-slate-600 dark:text-slate-400">Loading...</p>
         </div>
       </div>
     );
@@ -165,42 +166,47 @@ export const Signup: React.FC = () => {
 
   const getRoleColor = (role: string) => {
     const colorMap: Record<string, string> = {
-      admin: 'bg-red-100 text-red-800',
-      editor: 'bg-orange-100 text-orange-800',
-      contributor: 'bg-green-100 text-green-800',
-      read_only: 'bg-gray-100 text-gray-800',
+      admin: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400',
+      editor: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400',
+      contributor: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400',
+      read_only: 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-400',
     };
-    return colorMap[role] || 'bg-gray-100 text-gray-800';
+    return colorMap[role] || 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-400';
   };
 
   if (loadingInvite) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading invitation details...</p>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl dark:shadow-2xl dark:shadow-black/20 p-8 w-full max-w-md text-center border border-transparent dark:border-slate-800">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 dark:border-indigo-400 mx-auto"></div>
+          <p className="mt-4 text-slate-600 dark:text-slate-400">Loading invitation details...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex justify-center p-4 pt-16">
-      <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md h-fit">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 dark:from-slate-900 dark:to-slate-800 flex justify-center p-4 pt-16 relative">
+      {/* Theme toggle in corner */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle size="sm" />
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl dark:shadow-2xl dark:shadow-black/20 p-8 w-full max-w-md h-fit border border-transparent dark:border-slate-800">
         <div className="text-center mb-6">
           <div className="text-4xl mb-4">📸</div>
-          <h1 className="text-3xl font-bold text-gray-800">Join Knox</h1>
+          <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Join Knox</h1>
           {inviteDetails ? (
-            <p className="text-gray-600 mt-2">
+            <p className="text-slate-600 dark:text-slate-400 mt-2">
               {inviteDetails.inviterName} invited you to join{' '}
               <strong>{inviteDetails.circleName}</strong>
             </p>
           ) : inviteId ? (
-            <p className="text-gray-600 mt-2">
+            <p className="text-slate-600 dark:text-slate-400 mt-2">
               You've been invited to join a photo circle. Create your account to get started.
             </p>
           ) : (
-            <p className="text-gray-600 mt-2">
+            <p className="text-slate-600 dark:text-slate-400 mt-2">
               Create your account to get started
             </p>
           )}
@@ -208,11 +214,11 @@ export const Signup: React.FC = () => {
 
         {/* Invitation details card */}
         {inviteDetails && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-blue-900">{inviteDetails.circleName}</p>
-                <p className="text-sm text-blue-700">Photo Circle</p>
+                <p className="font-medium text-indigo-900 dark:text-indigo-300">{inviteDetails.circleName}</p>
+                <p className="text-sm text-indigo-700 dark:text-indigo-400">Photo Circle</p>
               </div>
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${getRoleColor(inviteDetails.role)}`}>
                 {getRoleDisplay(inviteDetails.role)}
@@ -223,7 +229,7 @@ export const Signup: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="fullName" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               Full Name
             </label>
             <input
@@ -232,13 +238,13 @@ export const Signup: React.FC = () => {
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md shadow-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="Your name"
             />
           </div>
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               Email Address
             </label>
             <input
@@ -247,14 +253,14 @@ export const Signup: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md shadow-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:disabled:text-slate-500"
               placeholder="your@email.com"
               disabled={!!inviteEmail}
             />
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-md">
               {error}
             </div>
           )}
@@ -262,18 +268,18 @@ export const Signup: React.FC = () => {
           <button
             type="submit"
             disabled={loading || !fullName || !email}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 px-4 rounded-md transition-colors"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 disabled:bg-indigo-300 dark:disabled:bg-indigo-800 text-white font-bold py-3 px-4 rounded-md transition-colors"
           >
             {loading ? 'Creating account...' : 'Create Account & Sign In'}
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-600">
+        <div className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
           <p>
             Already have an account?{' '}
             <a
               href={inviteId ? `/login?redirect=/view-circle/${inviteId}` : '/login'}
-              className="text-blue-600 hover:text-blue-800 underline"
+              className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 underline"
             >
               Sign in
             </a>

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { MemoriesPanel } from '../MemoriesPanel';
 import { memoriesApi, Memory, MemoryInput } from '../../services/memoriesApi';
+import { MemoryInputBar } from '../MemoryInputBar';
 import { VideoPlayer } from '../VideoPlayer';
 import { AlbumPhotoGrid, AlbumAsset, ContextMenuItem, getDisplayUrl } from '../AlbumPhotoGrid';
 import { PhotoPicker } from './PhotoPicker';
@@ -76,8 +77,6 @@ const AssetModalWithMemories: React.FC<AssetModalWithMemoriesProps> = ({
 }) => {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [memoriesLoading, setMemoriesLoading] = useState(true);
-  const [showAddMemoryForm, setShowAddMemoryForm] = useState(false);
-  const [submittingMemory, setSubmittingMemory] = useState(false);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
 
   // Edit/Delete memory state
@@ -95,14 +94,6 @@ const AssetModalWithMemories: React.FC<AssetModalWithMemoriesProps> = ({
     if (['editor', 'admin'].includes(userRole)) return true;
     // Check if user owns this memory (would need current user ID)
     return false;
-  };
-
-  const handleAddMemoryClick = () => {
-    if (hasMemoryPermission) {
-      setShowAddMemoryForm(true);
-    } else {
-      setShowPermissionDialog(true);
-    }
   };
 
   const handleEditMemory = (memory: Memory) => {
@@ -143,24 +134,6 @@ const AssetModalWithMemories: React.FC<AssetModalWithMemoriesProps> = ({
     }
   };
 
-  // Add memory form state
-  const [formType, setFormType] = useState<'text' | 'video' | 'audio'>('text');
-  const [textContent, setTextContent] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-  // Recording state
-  const [inputMode, setInputMode] = useState<'file' | 'record'>('file');
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
-  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
-  const videoPreviewRef = React.useRef<HTMLVideoElement>(null);
-  const recordedChunksRef = React.useRef<Blob[]>([]);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const recordingTimerRef = React.useRef<NodeJS.Timeout | null>(null);
-
-  const MAX_TEXT_LENGTH = 4000;
 
   const loadMemories = useCallback(async () => {
     try {
@@ -183,7 +156,6 @@ const AssetModalWithMemories: React.FC<AssetModalWithMemoriesProps> = ({
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (showAddMemoryForm) return; // Don't navigate when form is open
       if (e.key === 'ArrowLeft' && hasPrevious && onPrevious) {
         e.preventDefault();
         onPrevious();
@@ -197,168 +169,7 @@ const AssetModalWithMemories: React.FC<AssetModalWithMemoriesProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showAddMemoryForm, hasPrevious, hasNext, onPrevious, onNext, onClose]);
-
-  const cleanupMediaStream = () => {
-    if (mediaStream) {
-      mediaStream.getTracks().forEach(track => track.stop());
-      setMediaStream(null);
-    }
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-  };
-
-  const closeForm = () => {
-    stopRecording();
-    cleanupMediaStream();
-    setShowAddMemoryForm(false);
-    setTextContent('');
-    setSelectedFile(null);
-    setInputMode('file');
-    setRecordedBlob(null);
-    setRecordingTime(0);
-    setFormType('text');
-  };
-
-  const startRecording = async () => {
-    try {
-      const constraints: MediaStreamConstraints = formType === 'video'
-        ? { video: { facingMode: 'user' }, audio: true }
-        : { audio: true };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      setMediaStream(stream);
-
-      if (videoPreviewRef.current && formType === 'video') {
-        videoPreviewRef.current.srcObject = stream;
-        videoPreviewRef.current.play();
-      }
-
-      const mimeType = formType === 'video'
-        ? (MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm')
-        : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4');
-
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = mediaRecorder;
-      recordedChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunksRef.current, { type: mimeType });
-        setRecordedBlob(blob);
-        cleanupMediaStream();
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      setRecordingTime(0);
-
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => {
-          if (prev >= 30) {
-            stopRecording();
-            return 30;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-
-    } catch (err) {
-      console.error('Error accessing media devices:', err);
-      alert(`Could not access ${formType === 'video' ? 'camera' : 'microphone'}. Please check permissions.`);
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    setIsRecording(false);
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-  };
-
-  const discardRecording = () => {
-    setRecordedBlob(null);
-    setRecordingTime(0);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const isVideo = file.type.startsWith('video/');
-      const isAudio = file.type.startsWith('audio/');
-      setSelectedFile(file);
-      if (isAudio) setFormType('audio');
-      else if (isVideo) setFormType('video');
-    }
-  };
-
-  const handleAddMemory = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (formType === 'text' && !textContent.trim()) {
-      alert('Please enter some text');
-      return;
-    }
-
-    const hasMedia = selectedFile || recordedBlob;
-    if ((formType === 'video' || formType === 'audio') && !hasMedia) {
-      alert('Please select or record a file');
-      return;
-    }
-
-    try {
-      setSubmittingMemory(true);
-      let input: MemoryInput;
-
-      if (formType === 'text') {
-        input = {
-          memory_type: 'text',
-          content_text: textContent.trim(),
-        };
-      } else {
-        let fileToUpload: File;
-        if (recordedBlob) {
-          const extension = 'webm';
-          const filename = `recorded_${formType}_${Date.now()}.${extension}`;
-          fileToUpload = new File([recordedBlob], filename, { type: recordedBlob.type });
-        } else {
-          fileToUpload = selectedFile!;
-        }
-
-        const uploadResult = await memoriesApi.uploadMemoryMedia(fileToUpload, asset.asset_id, formType);
-        if (!uploadResult) throw new Error('Failed to upload file');
-
-        input = {
-          memory_type: formType,
-          content_url: uploadResult.url,
-          thumbnail_url: uploadResult.thumbnailUrl,
-        };
-      }
-
-      const result = await memoriesApi.addMemory(asset.asset_id, input);
-      if (result.success) {
-        closeForm();
-        loadMemories();
-      } else {
-        throw new Error(result.error || 'Failed to add memory');
-      }
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add memory');
-    } finally {
-      setSubmittingMemory(false);
-    }
-  };
+  }, [hasPrevious, hasNext, onPrevious, onNext, onClose]);
 
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
@@ -409,7 +220,7 @@ const AssetModalWithMemories: React.FC<AssetModalWithMemoriesProps> = ({
   return (
     <div className="fixed inset-0 bg-black/95 z-50 flex" onClick={onClose}>
       {/* Left side - Photo */}
-      <div className={`flex flex-col p-4 transition-all duration-300 ${showAddMemoryForm ? 'w-1/4' : 'flex-1'}`} onClick={(e) => e.stopPropagation()}>
+      <div className="flex flex-col p-4 flex-1" onClick={(e) => e.stopPropagation()}>
         {/* Close button */}
         <div className="flex justify-end mb-2">
           <button onClick={onClose} className="text-white/70 hover:text-white text-3xl leading-none">&times;</button>
@@ -483,158 +294,25 @@ const AssetModalWithMemories: React.FC<AssetModalWithMemoriesProps> = ({
       </div>
 
       {/* Right side - Memories pane */}
-      <div className={`bg-white flex flex-col transition-all duration-300 ${showAddMemoryForm ? 'flex-1' : 'w-96'}`} onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white flex flex-col w-96" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b">
           <h3 className="font-bold text-gray-900 text-lg">
-            {showAddMemoryForm ? 'Add Memory' : <>Memories {memories.length > 0 && <span className="text-gray-500 font-normal">({memories.length})</span>}</>}
+            Memories {memories.length > 0 && <span className="text-gray-500 font-normal">({memories.length})</span>}
           </h3>
-          {showAddMemoryForm ? (
-            <button
-              onClick={closeForm}
-              className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
-            >
-              &times;
-            </button>
-          ) : (
-            <button
-              onClick={handleAddMemoryClick}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1"
-            >
-              <span>+</span> Add
-            </button>
-          )}
         </div>
 
-        {/* Add Memory Form (inline) */}
-        {showAddMemoryForm ? (
-          <div className="flex-1 overflow-y-auto p-6">
-            <form onSubmit={handleAddMemory} className="max-w-2xl mx-auto">
-              {/* Type Tabs */}
-              <div className="flex gap-3 mb-6">
-                <button type="button" onClick={() => { setFormType('text'); setSelectedFile(null); setRecordedBlob(null); cleanupMediaStream(); }}
-                  className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-colors ${formType === 'text' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                  💬 Text
-                </button>
-                <button type="button" onClick={() => { setFormType('video'); setInputMode('record'); setSelectedFile(null); setRecordedBlob(null); cleanupMediaStream(); }}
-                  className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-colors ${formType === 'video' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                  🎥 Video
-                </button>
-                <button type="button" onClick={() => { setFormType('audio'); setSelectedFile(null); setRecordedBlob(null); cleanupMediaStream(); }}
-                  className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-colors ${formType === 'audio' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                  🎤 Audio
-                </button>
-              </div>
-
-              {/* Content Input */}
-              {formType === 'text' ? (
-                <div className="mb-6">
-                  <textarea
-                    value={textContent}
-                    onChange={(e) => setTextContent(e.target.value.slice(0, MAX_TEXT_LENGTH))}
-                    placeholder="Share a memory, thought, or story..."
-                    className="w-full h-48 px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                    autoFocus
-                  />
-                  <div className="text-right text-sm text-gray-500 mt-2">{textContent.length}/{MAX_TEXT_LENGTH}</div>
-                </div>
-              ) : (
-                <div className="mb-6">
-                  {/* Input Mode Toggle */}
-                  <div className="flex gap-3 mb-4">
-                    <button type="button" onClick={() => { setInputMode('file'); setRecordedBlob(null); cleanupMediaStream(); }}
-                      className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${inputMode === 'file' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                      📁 Upload File
-                    </button>
-                    <button type="button" onClick={() => { setInputMode('record'); setSelectedFile(null); }}
-                      className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${inputMode === 'record' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                      {formType === 'video' ? '📹 Use Camera' : '🎙️ Use Microphone'}
-                    </button>
-                  </div>
-
-                  {inputMode === 'file' ? (
-                    <>
-                      <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept={formType === 'video' ? 'video/*' : 'audio/*'} className="hidden" />
-                      <button type="button" onClick={() => fileInputRef.current?.click()}
-                        className={`w-full py-12 border-2 border-dashed rounded-xl transition-colors text-center ${formType === 'audio' ? 'border-orange-400 hover:border-orange-500 hover:bg-orange-50' : 'border-purple-400 hover:border-purple-500 hover:bg-purple-50'}`}>
-                        {selectedFile ? (
-                          <div>
-                            <div className="text-4xl mb-2">{formType === 'video' ? '🎥' : '🎤'}</div>
-                            <p className="text-sm text-gray-900">{selectedFile.name}</p>
-                            <p className="text-xs text-gray-500 mt-1">Click to change</p>
-                          </div>
-                        ) : (
-                          <div>
-                            <div className="text-4xl mb-2">📁</div>
-                            <p className="text-sm text-gray-600">Click to select {formType === 'video' ? 'a video' : 'an audio file'}</p>
-                            <p className="text-xs text-gray-400 mt-1">Max 30 seconds</p>
-                          </div>
-                        )}
-                      </button>
-                    </>
-                  ) : (
-                    <div className={`rounded-xl border-2 ${formType === 'video' ? 'border-purple-300 bg-purple-50' : 'border-orange-300 bg-orange-50'} p-4`}>
-                      {formType === 'video' && (
-                        <div className="relative mb-4 rounded-xl overflow-hidden bg-black aspect-video">
-                          <video ref={videoPreviewRef} muted playsInline className={`w-full h-full object-cover ${!mediaStream && !recordedBlob ? 'hidden' : ''}`} />
-                          {recordedBlob && !mediaStream && <video src={URL.createObjectURL(recordedBlob)} controls className="w-full h-full object-cover" />}
-                          {!mediaStream && !recordedBlob && <div className="absolute inset-0 flex items-center justify-center text-gray-500"><span className="text-5xl">📹</span></div>}
-                          {isRecording && <div className="absolute top-3 right-3 bg-red-600 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1.5"><span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>REC {recordingTime}s</div>}
-                        </div>
-                      )}
-                      {formType === 'audio' && (
-                        <div className="mb-4">
-                          {recordedBlob ? <audio src={URL.createObjectURL(recordedBlob)} controls className="w-full" /> : (
-                            <div className="flex items-center justify-center py-8">
-                              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-orange-500'}`}>
-                                <span className="text-2xl">{isRecording ? '🔴' : '🎤'}</span>
-                              </div>
-                              {isRecording && <span className="ml-4 text-lg font-mono text-gray-700">{recordingTime}s / 30s</span>}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      <div className="flex gap-2">
-                        {!isRecording && !recordedBlob && (
-                          <button type="button" onClick={startRecording} className={`flex-1 py-2 px-4 rounded-lg text-white text-sm font-medium transition-colors ${formType === 'video' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-orange-600 hover:bg-orange-700'}`}>Start Recording</button>
-                        )}
-                        {isRecording && <button type="button" onClick={stopRecording} className="flex-1 py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors">Stop Recording</button>}
-                        {recordedBlob && !isRecording && <button type="button" onClick={discardRecording} className="flex-1 py-2 px-4 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors">Discard & Re-record</button>}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-3 text-center">Maximum recording length: 30 seconds</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex gap-3">
-                <button type="button" onClick={closeForm} className="flex-1 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-medium transition-colors">Cancel</button>
-                <button type="submit" disabled={submittingMemory || (formType === 'text' && !textContent.trim()) || ((formType === 'video' || formType === 'audio') && !selectedFile && !recordedBlob)}
-                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2">
-                  {submittingMemory ? (<><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Posting...</>) : 'Post Memory'}
-                </button>
-              </div>
-            </form>
-          </div>
-        ) : (
-          /* Memories list */
-          <div className="flex-1 overflow-y-auto p-4">
+        {/* Memories list */}
+        <div className="flex-1 overflow-y-auto p-4">
           {memoriesLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : memories.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-8 text-gray-500">
               <div className="text-5xl mb-4">💭</div>
               <p className="text-lg font-medium text-gray-700 mb-2">No memories yet</p>
-              <p className="text-sm text-gray-500 mb-4">Share your thoughts about this photo</p>
-              <button
-                onClick={handleAddMemoryClick}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
-              >
-                Add the first memory
-              </button>
+              <p className="text-sm text-gray-500">Share your thoughts about this photo</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -747,6 +425,17 @@ const AssetModalWithMemories: React.FC<AssetModalWithMemoriesProps> = ({
             </div>
           )}
         </div>
+
+        {/* Memory Input Bar - always visible at bottom */}
+        {hasMemoryPermission && (
+          <div className="px-4 py-3 border-t bg-white">
+            <MemoryInputBar
+              assetId={asset.asset_id}
+              onMemoryAdded={loadMemories}
+              placeholder="Add a memory..."
+              variant="inline"
+            />
+          </div>
         )}
       </div>
 

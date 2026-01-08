@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { VideoPlayer } from './VideoPlayer';
 import { ReactionBar } from './ReactionBar';
-import { memoriesApi, Memory, MemoryInput } from '../services/memoriesApi';
+import { MemoryInputBar } from './MemoryInputBar';
+import { memoriesApi, Memory } from '../services/memoriesApi';
 
 interface MediaAsset {
   id?: string;
@@ -64,9 +65,6 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({
   // Memories state
   const [memories, setMemories] = useState<Memory[]>([]);
   const [memoriesLoading, setMemoriesLoading] = useState(true);
-  const [showAddMemoryForm, setShowAddMemoryForm] = useState(false);
-  const [memoryText, setMemoryText] = useState('');
-  const [submittingMemory, setSubmittingMemory] = useState(false);
 
   const assetId = asset.asset_id || asset.id || '';
 
@@ -88,29 +86,6 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({
   useEffect(() => {
     loadMemories();
   }, [loadMemories]);
-
-  const handleAddMemory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!memoryText.trim()) return;
-
-    try {
-      setSubmittingMemory(true);
-      const input: MemoryInput = {
-        memory_type: 'text',
-        content_text: memoryText.trim(),
-      };
-      const result = await memoriesApi.addMemory(assetId, input);
-      if (result.success) {
-        setMemoryText('');
-        setShowAddMemoryForm(false);
-        loadMemories();
-      }
-    } catch (err) {
-      console.error('Failed to add memory:', err);
-    } finally {
-      setSubmittingMemory(false);
-    }
-  };
 
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
@@ -179,55 +154,18 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({
             <h3 className="font-semibold text-gray-800">
               Memories {memories.length > 0 && `(${memories.length})`}
             </h3>
-            {!showAddMemoryForm && (
-              <button
-                onClick={() => setShowAddMemoryForm(true)}
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-              >
-                <span>+</span> Add Memory
-              </button>
-            )}
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
-            {/* Add memory form */}
-            {showAddMemoryForm && (
-              <form onSubmit={handleAddMemory} className="mb-4 pb-4 border-b">
-                <textarea
-                  value={memoryText}
-                  onChange={(e) => setMemoryText(e.target.value)}
-                  placeholder="Share a memory, thought, or story..."
-                  className="w-full h-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
-                  autoFocus
-                />
-                <div className="flex justify-end gap-2 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAddMemoryForm(false);
-                      setMemoryText('');
-                    }}
-                    className="px-3 py-1.5 text-sm text-gray-600 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submittingMemory || !memoryText.trim()}
-                    className="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 rounded-lg transition-colors flex items-center gap-1"
-                  >
-                    {submittingMemory ? (
-                      <>
-                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Posting...
-                      </>
-                    ) : (
-                      'Post'
-                    )}
-                  </button>
-                </div>
-              </form>
-            )}
+            {/* Memory Input Bar */}
+            <div className="mb-4">
+              <MemoryInputBar
+                assetId={assetId}
+                onMemoryAdded={loadMemories}
+                placeholder="Share a memory..."
+                variant="inline"
+              />
+            </div>
 
             {/* Memories list */}
             {memoriesLoading ? (
@@ -235,17 +173,9 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({
                 <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : memories.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-4 text-gray-500">
                 <div className="text-3xl mb-2">💭</div>
-                <p className="text-sm">No memories yet</p>
-                {!showAddMemoryForm && (
-                  <button
-                    onClick={() => setShowAddMemoryForm(true)}
-                    className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
-                  >
-                    Be the first to add one!
-                  </button>
-                )}
+                <p className="text-sm">No memories yet. Be the first to share one!</p>
               </div>
             ) : (
               <div className="space-y-3">

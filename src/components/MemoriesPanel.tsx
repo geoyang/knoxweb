@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { memoriesApi, Memory, MemoryInput } from '../services/memoriesApi';
 import { ReactionBar } from './ReactionBar';
+import { MemoryInputBar } from './MemoryInputBar';
 
 interface MemoriesPanelProps {
   assetId: string;
@@ -578,14 +579,6 @@ export const MemoriesPanel: React.FC<MemoriesPanelProps> = ({
         <div className="flex items-center justify-between px-6 py-4 border-b bg-white rounded-t-xl">
           <h2 className="text-xl font-bold text-gray-900">Memories</h2>
           <div className="flex items-center gap-3">
-            {canAddMemory && (
-              <button
-                onClick={openAddForm}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-              >
-                <span>➕</span> Add Memory
-              </button>
-            )}
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
@@ -607,17 +600,22 @@ export const MemoriesPanel: React.FC<MemoriesPanelProps> = ({
               <p className="text-gray-600">{error}</p>
             </div>
           ) : memories.length === 0 ? (
-            <div className="text-center py-12">
+            <div className="text-center py-8">
               <div className="text-4xl mb-4">💭</div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">No memories yet</h3>
-              <p className="text-gray-500 mb-4">Be the first to share a memory about this photo!</p>
+              <p className="text-gray-500 mb-6">Be the first to share a memory about this photo!</p>
               {canAddMemory && (
-                <button
-                  onClick={openAddForm}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  Add Memory
-                </button>
+                <div className="max-w-md mx-auto">
+                  <MemoryInputBar
+                    assetId={assetId}
+                    onMemoryAdded={() => {
+                      loadMemories();
+                      onMemoriesUpdated?.();
+                    }}
+                    placeholder="Share a memory..."
+                    variant="inline"
+                  />
+                </div>
               )}
             </div>
           ) : (
@@ -626,6 +624,21 @@ export const MemoriesPanel: React.FC<MemoriesPanelProps> = ({
             </div>
           )}
         </div>
+
+        {/* Input Bar Footer - show when memories exist */}
+        {!loading && !error && memories.length > 0 && canAddMemory && !showAddForm && (
+          <div className="px-4 py-3 border-t bg-white rounded-b-xl">
+            <MemoryInputBar
+              assetId={assetId}
+              onMemoryAdded={() => {
+                loadMemories();
+                onMemoriesUpdated?.();
+              }}
+              placeholder="Add a memory..."
+              variant="inline"
+            />
+          </div>
+        )}
 
         {/* Add Memory Form Modal */}
         {showAddForm && (

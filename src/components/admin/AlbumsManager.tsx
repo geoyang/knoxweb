@@ -656,7 +656,7 @@ export const AlbumsManager: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="spinner w-12 h-12"></div>
       </div>
     );
   }
@@ -664,29 +664,25 @@ export const AlbumsManager: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Albums</h2>
+        <h2 className="text-2xl font-bold text-theme-primary">Albums</h2>
         <div className="flex items-center space-x-4">
           <button
             onClick={() => setShowCreateAlbum(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+            className="btn-primary flex items-center gap-2"
           >
             <span>+</span>
             Create Album
           </button>
-          <div className="flex bg-gray-200 rounded-lg p-1">
+          <div className="toggle-group flex">
             <button
               onClick={() => setViewMode('grid')}
-              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'grid' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'
-              }`}
+              className={`toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
             >
               Grid
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'list' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'
-              }`}
+              className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
             >
               List
             </button>
@@ -695,7 +691,7 @@ export const AlbumsManager: React.FC = () => {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
+        <div className="alert-error">
           {error}
         </div>
       )}
@@ -705,54 +701,26 @@ export const AlbumsManager: React.FC = () => {
           {albums.map(album => (
             <div
               key={album.id}
-              className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
+              className="card hover:shadow-lg transition-shadow cursor-pointer"
               onClick={() => navigate(`/admin/albums/${album.id}`)}
             >
-              <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 rounded-t-lg overflow-hidden flex items-center justify-center">
+              <div className="aspect-square bg-surface-elevated rounded-t-lg overflow-hidden flex items-center justify-center">
                 {(() => {
                   const displayImage = getDisplayImage(album);
                   return (
-                    <div className="relative flex items-center justify-center">
-                      {/* Photo album icon - stacked photos style */}
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 64 64"
-                        className="w-64 h-64 md:w-80 md:h-80"
-                      >
-                        {/* Back photo - tilted left */}
-                        <g transform="rotate(-8 32 32)">
-                          <rect x="12" y="14" width="40" height="36" rx="2" fill="#e0e0e0" stroke="#bdbdbd" strokeWidth="1"/>
-                          <rect x="15" y="17" width="34" height="26" fill="#f5f5f5"/>
-                        </g>
-                        {/* Middle photo - tilted right */}
-                        <g transform="rotate(5 32 32)">
-                          <rect x="12" y="14" width="40" height="36" rx="2" fill="#eeeeee" stroke="#bdbdbd" strokeWidth="1"/>
-                          <rect x="15" y="17" width="34" height="26" fill="#fafafa"/>
-                        </g>
-                        {/* Front photo - main */}
-                        <rect x="12" y="14" width="40" height="36" rx="2" fill="#ffffff" stroke="#9e9e9e" strokeWidth="1.5"/>
-                        <rect x="15" y="17" width="34" height="26" rx="1" fill="#f0f0f0"/>
-                        {/* Mountain/landscape icon placeholder */}
-                        <path d="M15 40 L25 30 L32 36 L42 24 L49 32 L49 43 L15 43 Z" fill="#a5d6a7"/>
-                        <circle cx="22" cy="24" r="4" fill="#ffeb3b"/>
-                      </svg>
-                      {/* Keyphoto overlay */}
+                    <div className="relative flex items-center justify-center w-full h-full">
                       {displayImage && !failedImages.has(album.id) ? (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <img
-                            src={displayImage}
-                            alt={album.title}
-                            className="w-28 h-28 md:w-36 md:h-36 object-cover rounded-lg border-2 border-white shadow-lg"
-                            loading="lazy"
-                            crossOrigin="anonymous"
-                            onError={() => handleImageError(album.id, displayImage)}
-                          />
-                        </div>
+                        <img
+                          src={displayImage}
+                          alt={album.title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          crossOrigin="anonymous"
+                          onError={() => handleImageError(album.id, displayImage)}
+                        />
                       ) : (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-28 h-28 md:w-36 md:h-36 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg border-2 border-white shadow-lg flex items-center justify-center">
-                            <span className="text-4xl">📷</span>
-                          </div>
+                        <div className="w-full h-full bg-gradient-to-br from-indigo-50 to-slate-100 dark:from-indigo-900/20 dark:to-slate-800 flex items-center justify-center">
+                          <i className="fi fi-sr-images text-5xl text-indigo-300 dark:text-indigo-600"></i>
                         </div>
                       )}
                     </div>
@@ -761,9 +729,9 @@ export const AlbumsManager: React.FC = () => {
               </div>
               <div className="p-3">
                 <div className="flex items-center gap-1.5 mb-1">
-                  <h3 className="font-semibold text-gray-900 truncate flex-1 text-sm">{album.title}</h3>
+                  <h3 className="font-semibold text-theme-primary truncate flex-1 text-sm">{album.title}</h3>
                   {album.isOwner ? (
-                    <span className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800">
+                    <span className="flex-shrink-0 badge-warning text-[10px] py-0.5 px-1.5 inline-flex items-center gap-0.5">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
                         <path fillRule="evenodd" d="M12.516 2.17a.75.75 0 00-1.032 0 11.209 11.209 0 01-7.877 3.08.75.75 0 00-.722.515A12.74 12.74 0 002.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.749.749 0 00.374 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.39-.223-2.73-.635-3.985a.75.75 0 00-.722-.516 11.209 11.209 0 01-7.877-3.08z" clipRule="evenodd" />
                       </svg>
@@ -775,11 +743,11 @@ export const AlbumsManager: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-theme-muted">
                   {album.album_assets?.length || 0} photos • {new Date(album.date_created).toLocaleDateString()}
                 </p>
                 {album.isOwner === false && album.shared_via && album.shared_via.length > 0 && (
-                  <p className="text-[10px] text-blue-600 mt-0.5 truncate">
+                  <p className="text-[10px] text-theme-accent mt-0.5 truncate">
                     via {album.shared_via.map(s => s.circle_name).join(', ')}
                   </p>
                 )}
@@ -793,11 +761,11 @@ export const AlbumsManager: React.FC = () => {
                         className="w-4 h-4 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center text-white text-[8px] font-medium">
+                      <div className="avatar w-4 h-4 text-[8px]">
                         {(album.profiles.full_name || album.profiles.email || '?')[0].toUpperCase()}
                       </div>
                     )}
-                    <span className="text-[10px] text-gray-500 truncate">
+                    <span className="text-[10px] text-theme-muted truncate">
                       {album.profiles.full_name || album.profiles.email || 'Unknown'}
                     </span>
                   </div>
@@ -807,36 +775,36 @@ export const AlbumsManager: React.FC = () => {
           ))}
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="card overflow-hidden">
+          <table className="min-w-full">
+            <thead className="table-header">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-secondary uppercase tracking-wider">
                   Album
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-secondary uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-secondary uppercase tracking-wider">
                   Photos
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-secondary uppercase tracking-wider">
                   Sharing
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-secondary uppercase tracking-wider">
                   Created
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-theme-secondary uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody>
               {albums.map(album => (
-                <tr key={album.id} className="hover:bg-gray-50">
+                <tr key={album.id} className="table-row">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-lg overflow-hidden">
+                      <div className="flex-shrink-0 h-10 w-10 bg-surface-elevated rounded-lg overflow-hidden">
                         {(() => {
                           const displayImage = getDisplayImage(album);
                           return displayImage && !failedImages.has(album.id) ? (
@@ -849,16 +817,16 @@ export const AlbumsManager: React.FC = () => {
                               onError={() => handleImageError(album.id, displayImage)}
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
+                            <div className="w-full h-full flex items-center justify-center text-theme-muted">
                               <span className="text-lg">📷</span>
                             </div>
                           );
                         })()}
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{album.title}</div>
+                        <div className="text-sm font-medium text-theme-primary">{album.title}</div>
                         {album.description && (
-                          <div className="text-sm text-gray-500 truncate max-w-xs">
+                          <div className="text-sm text-theme-secondary truncate max-w-xs">
                             {album.description}
                           </div>
                         )}
@@ -867,7 +835,7 @@ export const AlbumsManager: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {album.isOwner ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                      <span className="badge-warning inline-flex items-center gap-1">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                           <path fillRule="evenodd" d="M12.516 2.17a.75.75 0 00-1.032 0 11.209 11.209 0 01-7.877 3.08.75.75 0 00-.722.515A12.74 12.74 0 002.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.749.749 0 00.374 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.39-.223-2.73-.635-3.985a.75.75 0 00-.722-.516 11.209 11.209 0 01-7.877-3.08z" clipRule="evenodd" />
                         </svg>
@@ -879,24 +847,24 @@ export const AlbumsManager: React.FC = () => {
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-primary">
                     {album.album_assets?.length || 0}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {album.isOwner ? (
                       album.album_shares && album.album_shares.filter(s => s.is_active).length > 0 ? (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <span className="badge-success">
                           {album.album_shares.filter(s => s.is_active).length} circle(s)
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        <span className="badge-primary">
                           Not shared
                         </span>
                       )
                     ) : (
                       <div className="space-y-1">
                         {album.shared_via && album.shared_via.length > 0 && (
-                          <span className="text-xs text-blue-600 block">
+                          <span className="text-xs text-theme-accent block">
                             via {album.shared_via.map(s => s.circle_name).join(', ')}
                           </span>
                         )}
@@ -909,11 +877,11 @@ export const AlbumsManager: React.FC = () => {
                                 className="w-5 h-5 rounded-full object-cover"
                               />
                             ) : (
-                              <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-[10px] font-medium">
+                              <div className="avatar w-5 h-5 text-[10px]">
                                 {(album.profiles.full_name || album.profiles.email || '?')[0].toUpperCase()}
                               </div>
                             )}
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-theme-muted">
                               {album.profiles.full_name || album.profiles.email || 'Unknown'}
                             </span>
                           </div>
@@ -921,17 +889,17 @@ export const AlbumsManager: React.FC = () => {
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-muted">
                     {new Date(album.date_created).toLocaleDateString()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex space-x-2">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           navigate(`/admin/albums/${album.id}`);
                         }}
-                        className="text-blue-600 hover:text-blue-800"
+                        className="link-primary"
                       >
                         View
                       </button>
@@ -943,7 +911,7 @@ export const AlbumsManager: React.FC = () => {
                               setSelectedAlbum(album);
                               setShowShareForm(true);
                             }}
-                            className="text-green-600 hover:text-green-800"
+                            className="link-success"
                           >
                             Share
                           </button>
@@ -952,7 +920,7 @@ export const AlbumsManager: React.FC = () => {
                               e.stopPropagation();
                               handleDeleteAlbum(album.id);
                             }}
-                            className="text-red-600 hover:text-red-800"
+                            className="link-danger"
                           >
                             Delete
                           </button>
@@ -968,17 +936,17 @@ export const AlbumsManager: React.FC = () => {
       )}
 
       {albums.length === 0 && (
-        <div className="text-center py-16">
-          <div className="text-6xl mb-4 opacity-50">📁</div>
-          <h3 className="text-2xl font-bold text-gray-700 mb-2">No Albums Found</h3>
-          <p className="text-gray-500">Your albums will appear here when you create them.</p>
+        <div className="empty-state">
+          <div className="empty-state-icon">📁</div>
+          <h3 className="empty-state-title">No Albums Found</h3>
+          <p className="empty-state-text">Your albums will appear here when you create them.</p>
         </div>
       )}
 
       {/* Album Details Modal */}
       {selectedAlbum && !showShareForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 pt-4 overflow-y-auto">
-          <div className="bg-white rounded-lg p-6 w-full max-w-[95vw] xl:max-w-7xl mb-4 mx-4">
+        <div className="modal-overlay items-start pt-4 overflow-y-auto">
+          <div className="modal-content p-6 w-full max-w-[95vw] xl:max-w-7xl mb-4 mx-4">
             <div className="flex justify-between items-start mb-6">
               <div className="flex-1">
                 <div className="flex items-center gap-3">
@@ -989,7 +957,7 @@ export const AlbumsManager: React.FC = () => {
                         type="text"
                         value={editedTitle}
                         onChange={(e) => setEditedTitle(e.target.value)}
-                        className="text-2xl font-bold text-gray-900 border-b-2 border-blue-500 outline-none bg-transparent"
+                        className="text-2xl font-bold text-theme-primary border-b-2 border-default focus:border-focus outline-none bg-transparent"
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') handleUpdateAlbumTitle();
@@ -1015,14 +983,14 @@ export const AlbumsManager: React.FC = () => {
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <h3 className="text-2xl font-bold text-gray-900">{selectedAlbum.title}</h3>
+                      <h3 className="text-2xl font-bold text-theme-primary">{selectedAlbum.title}</h3>
                       {selectedAlbum.isOwner && (
                         <button
                           onClick={() => {
                             setEditedTitle(selectedAlbum.title);
                             setIsEditingTitle(true);
                           }}
-                          className="p-1 text-gray-400 hover:text-blue-600"
+                          className="p-1 text-theme-muted hover:text-theme-accent"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
@@ -1032,7 +1000,7 @@ export const AlbumsManager: React.FC = () => {
                     </div>
                   )}
                   {selectedAlbum.isOwner ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                    <span className="badge-warning inline-flex items-center gap-1">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                         <path fillRule="evenodd" d="M12.516 2.17a.75.75 0 00-1.032 0 11.209 11.209 0 01-7.877 3.08.75.75 0 00-.722.515A12.74 12.74 0 002.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.749.749 0 00.374 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.39-.223-2.73-.635-3.985a.75.75 0 00-.722-.516 11.209 11.209 0 01-7.877-3.08z" clipRule="evenodd" />
                       </svg>
@@ -1045,10 +1013,10 @@ export const AlbumsManager: React.FC = () => {
                   )}
                 </div>
                 {selectedAlbum.description && (
-                  <p className="text-gray-600 mt-1">{selectedAlbum.description}</p>
+                  <p className="text-theme-secondary mt-1">{selectedAlbum.description}</p>
                 )}
                 {selectedAlbum.isOwner === false && selectedAlbum.shared_via && selectedAlbum.shared_via.length > 0 && (
-                  <p className="text-sm text-blue-600 mt-2">
+                  <p className="text-sm text-theme-accent mt-2">
                     via {selectedAlbum.shared_via.map(s => s.circle_name).join(', ')}
                   </p>
                 )}
@@ -1060,7 +1028,7 @@ export const AlbumsManager: React.FC = () => {
                   setAlbumDetailViewMode('grid');
                   setCarouselIndex(0);
                 }}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
+                className="text-theme-muted hover:text-theme-secondary text-2xl"
               >
                 ×
               </button>
@@ -1070,17 +1038,17 @@ export const AlbumsManager: React.FC = () => {
             {selectedAlbum.isOwner && (
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-semibold text-gray-900">Shared with Circles</h4>
+                  <h4 className="font-semibold text-theme-primary">Shared with Circles</h4>
                   <button
                     onClick={() => setShowShareForm(true)}
-                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+                    className="btn-primary text-sm py-1 px-3"
                   >
                     Share with Circle
                   </button>
                 </div>
                 <div className="space-y-2">
                   {selectedAlbum.album_shares?.filter(s => s.is_active).map(share => (
-                    <div key={share.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div key={share.id} className="flex items-center justify-between p-3 bg-surface-elevated rounded-lg">
                       <div>
                         <span className="font-medium">{share.circles.name}</span>
                         <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(share.role)}`}>
@@ -1089,14 +1057,14 @@ export const AlbumsManager: React.FC = () => {
                       </div>
                       <button
                         onClick={() => handleRemoveShare(share.id)}
-                        className="text-red-600 hover:text-red-800 text-sm"
+                        className="link-danger text-sm"
                       >
                         Remove
                       </button>
                     </div>
                   )) || []}
                   {selectedAlbum.album_shares?.filter(s => s.is_active).length === 0 && (
-                    <p className="text-gray-500 text-sm">Not shared with any circles</p>
+                    <p className="text-theme-muted text-sm">Not shared with any circles</p>
                   )}
                 </div>
               </div>
@@ -1106,18 +1074,14 @@ export const AlbumsManager: React.FC = () => {
             <div className="flex-1">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-4">
-                  <h4 className="font-semibold text-gray-900">
+                  <h4 className="font-semibold text-theme-primary">
                     Photos ({selectedAlbum.album_assets?.length || 0})
                   </h4>
                   {/* View mode toggle */}
-                  <div className="flex bg-gray-100 rounded-lg p-1">
+                  <div className="toggle-group flex">
                     <button
                       onClick={() => setAlbumDetailViewMode('grid')}
-                      className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                        albumDetailViewMode === 'grid'
-                          ? 'bg-white text-blue-600 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                      className={`toggle-btn ${albumDetailViewMode === 'grid' ? 'active text-theme-accent' : ''}`}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -1125,11 +1089,7 @@ export const AlbumsManager: React.FC = () => {
                     </button>
                     <button
                       onClick={() => setAlbumDetailViewMode('carousel')}
-                      className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                        albumDetailViewMode === 'carousel'
-                          ? 'bg-white text-blue-600 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                      className={`toggle-btn ${albumDetailViewMode === 'carousel' ? 'active text-theme-accent' : ''}`}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
@@ -1140,14 +1100,14 @@ export const AlbumsManager: React.FC = () => {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowImageUploader(true)}
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+                    className="btn-primary flex items-center gap-2"
                   >
                     <span>📱</span>
                     Upload New
                   </button>
                   <button
                     onClick={() => setShowPhotoPicker(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+                    className="btn-secondary flex items-center gap-2"
                   >
                     <span>📂</span>
                     Add Existing

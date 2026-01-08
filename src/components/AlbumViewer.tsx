@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Memory } from '../services/memoriesApi';
+import { MemoryInputBar } from './MemoryInputBar';
+import { ReactionBar } from './ReactionBar';
 
 // Public memories API helper (no auth required, uses invite ID for access)
 const publicMemoriesApi = {
@@ -107,6 +109,13 @@ interface Album {
   owner?: AlbumOwner;
 }
 
+interface AssetTag {
+  id: string;
+  type: 'person' | 'object';
+  value: string;
+  contact_id?: string;
+}
+
 interface AlbumAsset {
   id: string;
   album_id: string;
@@ -137,6 +146,8 @@ interface AlbumAsset {
   focal_length_35mm?: number;
   flash?: string;
   white_balance?: string;
+  // Tags
+  tags?: AssetTag[];
 }
 
 interface UserProfile {
@@ -834,6 +845,10 @@ export const AlbumDetailView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<AlbumAsset | null>(null);
 
+  // Account and invite state
+  const [accountInfo, setAccountInfo] = useState<AccountStatus | null>(null);
+  const [inviteInfo, setInviteInfo] = useState<CircleInvite | null>(null);
+
   // Memories state
   const [memoriesAssetId, setMemoriesAssetId] = useState<string | null>(null);
   const [memoryCounts, setMemoryCounts] = useState<Record<string, number>>({});
@@ -842,6 +857,20 @@ export const AlbumDetailView: React.FC = () => {
   const [showInlineRegistration, setShowInlineRegistration] = useState(false);
   const [inlineRegEmail, setInlineRegEmail] = useState('');
   const [inlineRegName, setInlineRegName] = useState('');
+
+  // Determine if user can add memories
+  const isReadOnly = inviteInfo?.role === 'read_only';
+  const canAddMemory = !isReadOnly && accountInfo?.hasAccount;
+
+  // Debug logging
+  console.log('[AlbumDetailView] Debug:', {
+    inviteInfo,
+    accountInfo,
+    isReadOnly,
+    canAddMemory,
+    hasAccount: accountInfo?.hasAccount,
+    role: inviteInfo?.role,
+  });
 
   // Fetch album data
   useEffect(() => {
@@ -867,6 +896,36 @@ export const AlbumDetailView: React.FC = () => {
         }
 
         const data = await response.json();
+
+        // Debug: Log the API response
+        console.log('[AlbumDetailView] API Response:', {
+          account: data.account,
+          invite: data.invite,
+          albumsCount: data.albums?.length,
+        });
+
+        // Store account and invite info for permission checks
+        if (data.account) {
+          console.log('[AlbumDetailView] Setting accountInfo:', data.account);
+          setAccountInfo(data.account);
+        } else {
+          console.log('[AlbumDetailView] No account data in response');
+        }
+        if (data.invite) {
+          console.log('[AlbumDetailView] Setting inviteInfo, role:', data.invite.role);
+          setInviteInfo({
+            id: data.invite.id,
+            circle_id: data.invite.circle?.id,
+            email: data.invite.email,
+            role: data.invite.role,
+            status: data.invite.status,
+            date_invited: data.invite.date_invited,
+            circle: data.invite.circle,
+          });
+        } else {
+          console.log('[AlbumDetailView] No invite data in response');
+        }
+
         const foundAlbum = data.albums?.find((a: Album) => a.id === albumId);
         if (foundAlbum) {
           setAlbum(foundAlbum);
@@ -1145,24 +1204,102 @@ export const AlbumDetailView: React.FC = () => {
                 )}
               </div>
 
+              {/* Reactions bar */}
+              <div className="mt-4 flex justify-center">
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
+                  <ReactionBar
+                    targetId={selectedAsset.asset_id}
+                    targetType="asset"
+                    className="justify-center"
+                  />
+                </div>
+              </div>
+
+              {/* Tags section */}
+              {selectedAsset.tags && selectedAsset.tags.length > 0 && (
+                <div className="mt-4 flex justify-center">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                      <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                      {selectedAsset.tags.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                            tag.type === 'person'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}
+                        >
+                          {tag.type === 'person' ? (
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                            </svg>
+                          )}
+                          {tag.value}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Inline Memories Section */}
               <div className="mt-4 bg-white rounded-xl max-h-[35vh] overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
                   <h3 className="font-semibold text-gray-800">
-                    Memories {memoryCounts[selectedAsset.asset_id] > 0 && `(${memoryCounts[selectedAsset.asset_id]})`}
+                    Memories {memories.length > 0 && `(${memories.length})`}
                   </h3>
+                  {/* Debug indicator */}
+                  <span className="text-xs text-gray-400">
+                    {canAddMemory ? '✓ Can add' : `✗ Cannot add (role: ${inviteInfo?.role}, hasAccount: ${accountInfo?.hasAccount})`}
+                  </span>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4">
+                  {/* Memory Input Bar - show at top for users who can add */}
+                  {console.log('[AlbumDetailView] Rendering memories section, canAddMemory:', canAddMemory)}
+                  {canAddMemory && (
+                    <div className="mb-4">
+                      <MemoryInputBar
+                        assetId={selectedAsset.asset_id}
+                        onMemoryAdded={async () => {
+                          // Reload memories after adding
+                          if (!inviteId) return;
+                          setLoadingMemories(true);
+                          const result = await publicMemoriesApi.getMemories(inviteId, selectedAsset.asset_id);
+                          if (result.success && result.memories) {
+                            setMemories(result.memories);
+                            // Update count
+                            setMemoryCounts(prev => ({
+                              ...prev,
+                              [selectedAsset.asset_id]: result.memories!.length
+                            }));
+                          }
+                          setLoadingMemories(false);
+                        }}
+                        placeholder="Share a memory..."
+                        variant="inline"
+                      />
+                    </div>
+                  )}
+
                   {loadingMemories ? (
                     <div className="flex items-center justify-center py-8">
                       <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                     </div>
                   ) : memories.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
+                    <div className="text-center py-4 text-gray-500">
                       <div className="text-3xl mb-2">💭</div>
                       <p className="text-sm">No memories yet</p>
-                      <p className="text-xs text-gray-400 mt-1">Be the first to add one in the app!</p>
+                      {!canAddMemory && (
+                        <p className="text-xs text-gray-400 mt-1">Sign in to add memories</p>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -1210,10 +1347,9 @@ export const AlbumDetailView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Action buttons */}
-              <div className="mt-4 flex justify-center gap-3">
-                {/* Download Original button */}
-                {getOriginalUrl(selectedAsset) && (
+              {/* Action buttons - hide download in read-only mode */}
+              {!isReadOnly && getOriginalUrl(selectedAsset) && (
+                <div className="mt-4 flex justify-center gap-3">
                   <a
                     href={getOriginalUrl(selectedAsset)!}
                     download
@@ -1227,8 +1363,8 @@ export const AlbumDetailView: React.FC = () => {
                     </svg>
                     Download Original
                   </a>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
