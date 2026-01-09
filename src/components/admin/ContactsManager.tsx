@@ -887,62 +887,56 @@ export const ContactsManager: React.FC = () => {
 
       {/* Edit/Create Modal */}
       {showEditModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto relative">
+        <div className="modal-overlay">
+          <div className="modal-content p-6 max-h-[90vh] overflow-y-auto relative">
             <button
               type="button"
               onClick={() => {
                 stopSound();
                 setShowEditModal(false);
               }}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              className="icon-btn absolute top-4 right-4"
               title="Close"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            <h3 className="text-lg font-semibold mb-4 pr-8 text-gray-900 dark:text-white">
+            <h3 className="text-lg font-semibold mb-4 pr-8 text-theme-primary">
               {editingContact ? 'Edit Contact' : 'New Contact'}
             </h3>
             <form onSubmit={handleSaveContact} className="space-y-4">
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                    First Name
-                  </label>
+                  <label className="form-label">First Name</label>
                   <input
                     type="text"
                     value={formData.first_name || ''}
                     onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                    className="input"
                     placeholder="First name"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                    Last Name
-                  </label>
+                  <label className="form-label">Last Name</label>
                   <input
                     type="text"
                     value={formData.last_name || ''}
                     onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                    className="input"
                     placeholder="Last name"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                  Display Name
-                </label>
+                <label className="form-label">Display Name</label>
                 <input
                   type="text"
                   value={formData.display_name || ''}
                   onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                  className="input"
                   placeholder="Display name (optional)"
                 />
               </div>
@@ -950,26 +944,22 @@ export const ContactsManager: React.FC = () => {
               {/* Email and Phone */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                    Email
-                  </label>
+                  <label className="form-label">Email</label>
                   <input
                     type="email"
                     value={formData.email || ''}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                    className="input"
                     placeholder="email@example.com"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                    Phone
-                  </label>
+                  <label className="form-label">Phone</label>
                   <input
                     type="tel"
                     value={formData.phone || ''}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                    className="input"
                     placeholder="+1 (555) 123-4567"
                   />
                 </div>
@@ -977,9 +967,7 @@ export const ContactsManager: React.FC = () => {
 
               {/* Relationship Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                  Relationship
-                </label>
+                <label className="form-label">Relationship</label>
                 <div className="flex flex-wrap gap-2">
                   {RELATIONSHIP_TYPES.map((type) => (
                     <button
@@ -989,11 +977,7 @@ export const ContactsManager: React.FC = () => {
                         ...formData,
                         relationship_type: formData.relationship_type === type ? '' : type
                       })}
-                      className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${
-                        formData.relationship_type === type
-                          ? 'bg-blue-100 border-blue-500 text-blue-700'
-                          : 'bg-gray-50 dark:bg-slate-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600'
-                      }`}
+                      className={`chip ${formData.relationship_type === type ? 'active' : ''}`}
                     >
                       {type}
                     </button>
@@ -1002,52 +986,52 @@ export const ContactsManager: React.FC = () => {
               </div>
 
               {/* Social Media */}
-              <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">Social Media</h4>
+              <div className="section-divider">
+                <h4 className="section-title">Social Media</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Instagram</label>
-                    <div className="flex">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-slate-600 text-gray-500 dark:text-gray-300 text-sm">@</span>
+                    <label className="form-label text-xs">Instagram</label>
+                    <div className="input-group">
+                      <span className="input-prefix">@</span>
                       <input
                         type="text"
                         value={formData.instagram_handle || ''}
                         onChange={(e) => setFormData({ ...formData, instagram_handle: e.target.value })}
-                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                        className="input-with-prefix"
                         placeholder="username"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Twitter / X</label>
-                    <div className="flex">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-slate-600 text-gray-500 dark:text-gray-300 text-sm">@</span>
+                    <label className="form-label text-xs">Twitter / X</label>
+                    <div className="input-group">
+                      <span className="input-prefix">@</span>
                       <input
                         type="text"
                         value={formData.twitter_handle || ''}
                         onChange={(e) => setFormData({ ...formData, twitter_handle: e.target.value })}
-                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                        className="input-with-prefix"
                         placeholder="username"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Facebook</label>
+                    <label className="form-label text-xs">Facebook</label>
                     <input
                       type="text"
                       value={formData.facebook_handle || ''}
                       onChange={(e) => setFormData({ ...formData, facebook_handle: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                      className="input"
                       placeholder="Profile name or ID"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">LinkedIn</label>
+                    <label className="form-label text-xs">LinkedIn</label>
                     <input
                       type="text"
                       value={formData.linkedin_handle || ''}
                       onChange={(e) => setFormData({ ...formData, linkedin_handle: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                      className="input"
                       placeholder="Profile username"
                     />
                   </div>
@@ -1055,27 +1039,19 @@ export const ContactsManager: React.FC = () => {
               </div>
 
               {/* Notification Sound */}
-              <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                  Notification Sound
-                </label>
-                <div className="max-h-64 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md">
+              <div className="section-divider">
+                <label className="form-label">Notification Sound</label>
+                <div className="max-h-64 overflow-y-auto border border-default rounded-md">
                   {SOUND_CATEGORIES.map((category) => {
                     const categorySounds = NOTIFICATION_SOUNDS.filter(s => s.category === category.id);
                     if (categorySounds.length === 0) return null;
                     return (
                       <div key={category.id}>
-                        <div className="px-3 py-1.5 bg-gray-100 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase sticky top-0">
-                          {category.name}
-                        </div>
+                        <div className="sound-category">{category.name}</div>
                         {categorySounds.map((sound) => (
                           <div
                             key={sound.id}
-                            className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-                              formData.notification_sound === sound.id
-                                ? 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500'
-                                : 'hover:bg-gray-50 dark:hover:bg-slate-700 border-l-4 border-transparent'
-                            }`}
+                            className={`sound-item ${formData.notification_sound === sound.id ? 'selected' : ''}`}
                             onClick={() => setFormData({ ...formData, notification_sound: sound.id })}
                           >
                             <button
@@ -1084,11 +1060,7 @@ export const ContactsManager: React.FC = () => {
                                 e.stopPropagation();
                                 playSound(sound.id);
                               }}
-                              className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
-                                playingSoundId === sound.id
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-gray-200 dark:bg-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-slate-500'
-                              }`}
+                              className={`play-btn ${playingSoundId === sound.id ? 'playing' : ''}`}
                               title={playingSoundId === sound.id ? 'Stop' : 'Preview'}
                             >
                               <FontAwesomeIcon
@@ -1098,14 +1070,14 @@ export const ContactsManager: React.FC = () => {
                             </button>
                             <FontAwesomeIcon
                               icon={getIcon(sound.icon)}
-                              className="text-blue-500 w-4"
+                              className="text-theme-accent w-4"
                             />
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{sound.name}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{sound.description}</p>
+                              <p className="text-sm font-medium text-theme-primary truncate">{sound.name}</p>
+                              <p className="text-xs text-theme-muted truncate">{sound.description}</p>
                             </div>
                             {formData.notification_sound === sound.id && (
-                              <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <svg className="w-5 h-5 text-theme-accent flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                               </svg>
                             )}
@@ -1115,21 +1087,19 @@ export const ContactsManager: React.FC = () => {
                     );
                   })}
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="hint-text">
                   Click play to preview, click the row to select
                 </p>
               </div>
 
               {/* Notes */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                  Notes
-                </label>
+                <label className="form-label">Notes</label>
                 <textarea
                   value={formData.notes || ''}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                  className="textarea"
                   placeholder="Add notes about this contact..."
                 />
               </div>
@@ -1138,7 +1108,7 @@ export const ContactsManager: React.FC = () => {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-2 px-4 rounded-md font-medium transition-colors"
+                  className="btn-primary flex-1 py-2"
                 >
                   {saving ? 'Saving...' : (editingContact ? 'Save Changes' : 'Create Contact')}
                 </button>
@@ -1148,7 +1118,7 @@ export const ContactsManager: React.FC = () => {
                     stopSound();
                     setShowEditModal(false);
                   }}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 dark:bg-slate-600 dark:hover:bg-slate-500 text-gray-700 dark:text-gray-200 py-2 px-4 rounded-md font-medium transition-colors"
+                  className="btn-secondary flex-1 py-2"
                 >
                   Cancel
                 </button>
