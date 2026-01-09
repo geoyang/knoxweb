@@ -78,9 +78,21 @@ export const AuthCallback: React.FC = () => {
         console.log('Session established:', data);
         setStatus('Authentication successful! Redirecting...');
 
-        // Check if there's an invite parameter to redirect to
+        // Check for redirect parameters in priority order:
+        // 1. 'next' parameter - for magic links with custom destinations
+        // 2. 'invite' parameter - for circle invitations
+        // 3. Default to /admin
+        const nextPath = searchParams.get('next');
         const inviteId = searchParams.get('invite');
-        const redirectPath = inviteId ? `/view-circle/${inviteId}` : '/admin';
+
+        let redirectPath = '/admin';
+        if (nextPath) {
+          // Decode and use the next parameter (already URL-decoded by searchParams)
+          redirectPath = nextPath;
+          console.log('Using next parameter for redirect:', redirectPath);
+        } else if (inviteId) {
+          redirectPath = `/view-circle/${inviteId}`;
+        }
 
         console.log('Redirecting to:', redirectPath);
 

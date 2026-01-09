@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CirclesManager } from './admin/CirclesManager';
+import { CircleMemberEdit } from './admin/CircleMemberEdit';
 import { AlbumsManager } from './admin/AlbumsManager';
 import { AdminAlbumDetail } from './admin/AdminAlbumDetail';
 import { ImagesManager } from './admin/ImagesManager';
@@ -386,6 +387,7 @@ export const AdminDashboard: React.FC = () => {
             <Route path="albums/:albumId" element={<AdminAlbumDetail />} />
             <Route path="images" element={<ImagesManager />} />
             <Route path="circles" element={<CirclesManager />} />
+            <Route path="circles/:circleId/members/:memberId" element={<CircleMemberEdit />} />
             <Route path="invites" element={<InvitesManager />} />
             <Route path="contacts" element={<ContactsManager />} />
             <Route path="import" element={<ImportManager />} />

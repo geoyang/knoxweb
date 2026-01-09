@@ -110,6 +110,7 @@ export const CirclesManager: React.FC = () => {
       }
 
       console.log('Circles API response:', result.data?.circles);
+      console.log('Circles API debug:', result.data?.debug);
       setCircles(result.data?.circles || []);
       setError(null);
     } catch (err) {

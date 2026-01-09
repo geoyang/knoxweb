@@ -171,19 +171,29 @@ export const ViewCircle: React.FC = () => {
     try {
       setAccepting(true);
 
-      // Update the circle_users record
-      const { error: updateError } = await supabase
-        .from('circle_users')
-        .update({
-          status: 'accepted',
-          user_id: user.id,
-          date_responded: new Date().toISOString(),
-        })
-        .eq('id', invite.id);
+      // Get the current session for authorization
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
 
-      if (updateError) {
-        console.error('Update error:', updateError);
-        throw new Error('Failed to accept invitation');
+      // Call the accept-circle-invite edge function (uses service role to bypass RLS)
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/accept-circle-invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ invite_id: invite.id }),
+      });
+
+      const result = await response.json();
+      console.log('Accept invitation result:', result);
+
+      if (!response.ok) {
+        throw new Error(result.details || result.error || 'Failed to accept invitation');
       }
 
       setAccepted(true);
