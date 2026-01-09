@@ -113,6 +113,195 @@ class FriendsApiService {
   }>> {
     return this.makeApiCall('stats', { method: 'GET', userId });
   }
+
+  // Check friendship status with a specific user
+  async checkFriendship(profileId: string): Promise<ApiResponse<{
+    isFriend: boolean;
+    pendingRequest: { id: string; isIncoming: boolean } | null;
+  }>> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/friends-api?action=check&user_id=${profileId}`,
+        {
+          method: 'GET',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        return { success: false, error: data.error || 'Failed to check friendship' };
+      }
+
+      return {
+        success: true,
+        data: {
+          isFriend: data.is_friend || false,
+          pendingRequest: data.pending_request ? {
+            id: data.pending_request.id,
+            isIncoming: data.pending_request.is_incoming,
+          } : null,
+        },
+      };
+    } catch (error) {
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  // Send a friend request
+  async sendFriendRequest(recipientId: string, message?: string): Promise<ApiResponse<{ request: FriendRequest }>> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/friends-api?action=send`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ recipient_id: recipientId, message }),
+        }
+      );
+
+      const data = await response.json();
+      return { success: data.success, data, error: data.error };
+    } catch (error) {
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  // Accept a friend request
+  async acceptFriendRequest(requestId: string): Promise<ApiResponse> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/friends-api?action=accept`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ request_id: requestId }),
+        }
+      );
+
+      const data = await response.json();
+      return { success: data.success, error: data.error };
+    } catch (error) {
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  // Decline a friend request
+  async declineFriendRequest(requestId: string): Promise<ApiResponse> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/friends-api?action=decline`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ request_id: requestId }),
+        }
+      );
+
+      const data = await response.json();
+      return { success: data.success, error: data.error };
+    } catch (error) {
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  // Cancel a sent friend request
+  async cancelFriendRequest(requestId: string): Promise<ApiResponse> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/friends-api?action=cancel`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ request_id: requestId }),
+        }
+      );
+
+      const data = await response.json();
+      return { success: data.success, error: data.error };
+    } catch (error) {
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  // Remove a friend
+  async unfriend(friendId: string): Promise<ApiResponse> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/friends-api?action=unfriend`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ friend_id: friendId }),
+        }
+      );
+
+      const data = await response.json();
+      return { success: data.success, error: data.error };
+    } catch (error) {
+      return { success: false, error: 'Network error' };
+    }
+  }
 }
 
 export const friendsApi = new FriendsApiService();

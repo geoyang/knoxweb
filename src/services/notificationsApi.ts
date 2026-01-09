@@ -1,0 +1,262 @@
+import { supabase } from '../lib/supabase';
+
+interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+export interface NotificationActor {
+  id: string;
+  full_name: string;
+  avatar_url?: string;
+}
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  title: string;
+  body: string;
+  notification_type: string;
+  deep_link_type?: string;
+  deep_link_id?: string;
+  is_read: boolean;
+  created_at: string;
+  actor?: NotificationActor;
+}
+
+class NotificationsApiService {
+  private async getAuthHeaders(): Promise<{ Authorization: string; apikey: string } | null> {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session?.access_token) return null;
+      return {
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async getNotifications(page = 1, limit = 20): Promise<ApiResponse<{
+    notifications: Notification[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }>> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/notifications-api?page=${page}&limit=${limit}`,
+        {
+          method: 'GET',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Failed to fetch notifications' };
+      }
+
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  async getUnreadCount(): Promise<number> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) return 0;
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/notifications-api?unread_count=true`,
+        {
+          method: 'GET',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+      return data.unread_count || 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  async markAsRead(notificationId: string): Promise<ApiResponse> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/notifications-api/mark-read`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ notification_id: notificationId }),
+        }
+      );
+
+      const data = await response.json();
+      return { success: response.ok, error: data.error };
+    } catch {
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  async markAllAsRead(): Promise<ApiResponse> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/notifications-api/mark-all-read`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+      return { success: response.ok, error: data.error };
+    } catch {
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  async deleteNotification(notificationId: string): Promise<ApiResponse> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/notifications-api?notification_id=${notificationId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+      return { success: response.ok, error: data.error };
+    } catch {
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  // Friend request actions
+  async acceptFriendRequest(requestId: string): Promise<ApiResponse> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/friends-api?action=respond`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ request_id: requestId, response: 'accept' }),
+        }
+      );
+
+      const data = await response.json();
+      return { success: data.success, error: data.error };
+    } catch {
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  async declineFriendRequest(requestId: string): Promise<ApiResponse> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/friends-api?action=respond`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ request_id: requestId, response: 'decline' }),
+        }
+      );
+
+      const data = await response.json();
+      return { success: data.success, error: data.error };
+    } catch {
+      return { success: false, error: 'Network error' };
+    }
+  }
+
+  // Get pending friend requests for current user
+  async getPendingFriendRequests(): Promise<ApiResponse<{ requests: any[] }>> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      if (!authHeaders) {
+        return { success: false, error: 'Authentication required' };
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/friends-api?action=requests&type=received`,
+        {
+          method: 'GET',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+      return { success: data.success, data, error: data.error };
+    } catch {
+      return { success: false, error: 'Network error' };
+    }
+  }
+}
+
+export const notificationsApi = new NotificationsApiService();

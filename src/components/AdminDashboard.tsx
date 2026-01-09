@@ -16,6 +16,8 @@ import PushNotificationTest from './admin/PushNotificationTest';
 import { PromoCodesManager } from './admin/PromoCodesManager';
 import { ExportManager } from './admin/ExportManager';
 import { ImportManager } from './admin/ImportManager';
+import { NotificationsManager } from './admin/NotificationsManager';
+import { notificationsApi } from '../services/notificationsApi';
 import { AIProcessingManager } from './admin/ai';
 import { ThemeToggle } from './ui/ThemeToggle';
 import { chatApi } from '../services/chatApi';
@@ -29,6 +31,7 @@ export const AdminDashboard: React.FC = () => {
   const [showAccountScreen, setShowAccountScreen] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [totalChatCount, setTotalChatCount] = useState(0);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   // Tab counts
   const [countsLoading, setCountsLoading] = useState(true);
@@ -104,6 +107,21 @@ export const AdminDashboard: React.FC = () => {
     fetchUnreadCount();
     // Refresh every 30 seconds
     const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Fetch unread notification count
+  useEffect(() => {
+    const fetchNotificationCount = async () => {
+      if (user) {
+        const count = await notificationsApi.getUnreadCount();
+        setUnreadNotificationCount(count);
+      }
+    };
+
+    fetchNotificationCount();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchNotificationCount, 30000);
     return () => clearInterval(interval);
   }, [user]);
   
@@ -189,6 +207,24 @@ export const AdminDashboard: React.FC = () => {
         <nav className="bg-white dark:bg-slate-900 w-64 min-h-screen border-r border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="p-4">
             <ul className="space-y-2">
+              <li>
+                <Link
+                  to="/admin/notifications"
+                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                    location.pathname.includes('/admin/notifications')
+                      ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                  }`}
+                >
+                  <i className="fi fi-sr-bell mr-3 text-lg"></i>
+                  Notifications
+                  {unreadNotificationCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                      {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                    </span>
+                  )}
+                </Link>
+              </li>
               <li>
                 <Link
                   to="/admin/chat"
@@ -381,7 +417,8 @@ export const AdminDashboard: React.FC = () => {
         {/* Main Content */}
         <main className="flex-1 p-8 bg-slate-50 dark:bg-slate-950">
           <Routes>
-            <Route index element={<Navigate to="/admin/chat" replace />} />
+            <Route index element={<Navigate to="/admin/notifications" replace />} />
+            <Route path="notifications" element={<NotificationsManager />} />
             <Route path="folders" element={<FoldersManager />} />
             <Route path="albums" element={<AlbumsManager />} />
             <Route path="albums/:albumId" element={<AdminAlbumDetail />} />

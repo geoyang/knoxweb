@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { contactsApi, Contact, ContactInput, RELATIONSHIP_TYPES, RELATIONSHIP_COLORS } from '../../services/contactsApi';
+import { friendsApi } from '../../services/friendsApi';
 import { aiApi } from '../../services/aiApi';
 import { NOTIFICATION_SOUNDS, getSoundById, SOUND_CATEGORIES } from '../../config/notificationSounds';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -52,6 +53,12 @@ export const ContactsManager: React.FC = () => {
   const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
   const [contactImages, setContactImages] = useState<{ asset_id: string; thumbnail_url: string }[]>([]);
   const [loadingImages, setLoadingImages] = useState(false);
+  const [friendshipStatus, setFriendshipStatus] = useState<{
+    isFriend: boolean;
+    pendingRequest: { id: string; isIncoming: boolean } | null;
+  } | null>(null);
+  const [friendshipLoading, setFriendshipLoading] = useState(false);
+  const [friendshipActionLoading, setFriendshipActionLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Sound playback functions
@@ -103,7 +110,7 @@ export const ContactsManager: React.FC = () => {
   }, []);
 
   // Form state
-  const [formData, setFormData] = useState<ContactInput>({
+  const [formData, setFormData] = useState<ContactInput & { email?: string; phone?: string }>({
     first_name: '',
     last_name: '',
     display_name: '',
@@ -114,6 +121,8 @@ export const ContactsManager: React.FC = () => {
     linkedin_handle: '',
     notes: '',
     notification_sound: 'default',
+    email: '',
+    phone: '',
   });
 
   const { user, signOut } = useAuth();
@@ -153,6 +162,7 @@ export const ContactsManager: React.FC = () => {
   const handleSelectContact = async (contact: Contact) => {
     setSelectedContact(contact);
     setContactImages([]);
+    setFriendshipStatus(null);
 
     // Load images for this contact
     setLoadingImages(true);
@@ -165,6 +175,21 @@ export const ContactsManager: React.FC = () => {
       console.error('Failed to load contact images:', err);
     } finally {
       setLoadingImages(false);
+    }
+
+    // Check friendship status if contact has a linked profile
+    if (contact.linked_profile?.id) {
+      setFriendshipLoading(true);
+      try {
+        const result = await friendsApi.checkFriendship(contact.linked_profile.id);
+        if (result.success && result.data) {
+          setFriendshipStatus(result.data);
+        }
+      } catch (err) {
+        console.error('Failed to check friendship status:', err);
+      } finally {
+        setFriendshipLoading(false);
+      }
     }
   };
 
@@ -181,12 +206,17 @@ export const ContactsManager: React.FC = () => {
       linkedin_handle: '',
       notes: '',
       notification_sound: 'default',
+      email: '',
+      phone: '',
     });
     setShowEditModal(true);
   };
 
   const handleEditContact = (contact: Contact) => {
     setEditingContact(contact);
+    // Get primary email and phone from arrays
+    const primaryEmail = contact.email_addresses?.[0]?.email || '';
+    const primaryPhone = contact.phone_numbers?.[0]?.number || '';
     setFormData({
       first_name: contact.first_name || '',
       last_name: contact.last_name || '',
@@ -198,6 +228,8 @@ export const ContactsManager: React.FC = () => {
       linkedin_handle: contact.linkedin_handle || '',
       notes: contact.notes || '',
       notification_sound: contact.notification_sound || 'default',
+      email: primaryEmail,
+      phone: primaryPhone,
     });
     setShowEditModal(true);
   };
@@ -221,6 +253,16 @@ export const ContactsManager: React.FC = () => {
     if (formData.twitter_handle?.trim()) input.twitter_handle = formData.twitter_handle.trim().replace('@', '');
     if (formData.linkedin_handle?.trim()) input.linkedin_handle = formData.linkedin_handle.trim();
     if (formData.notes?.trim()) input.notes = formData.notes.trim();
+
+    // Add email addresses
+    if (formData.email?.trim()) {
+      input.email_addresses = [{ type: 'personal', email: formData.email.trim() }];
+    }
+
+    // Add phone numbers
+    if (formData.phone?.trim()) {
+      input.phone_numbers = [{ type: 'mobile', number: formData.phone.trim() }];
+    }
 
     // Always include notification_sound - use null for default, otherwise the sound ID
     input.notification_sound = formData.notification_sound === 'default' ? null : formData.notification_sound;
@@ -284,6 +326,104 @@ export const ContactsManager: React.FC = () => {
     } catch (err) {
       console.error('Error deleting contact:', err);
       alert('Failed to delete contact');
+    }
+  };
+
+  // Friendship action handlers
+  const handleSendFriendRequest = async () => {
+    if (!selectedContact?.linked_profile?.id) return;
+    setFriendshipActionLoading(true);
+    try {
+      const result = await friendsApi.sendFriendRequest(selectedContact.linked_profile.id);
+      if (result.success) {
+        // Re-check friendship status
+        const checkResult = await friendsApi.checkFriendship(selectedContact.linked_profile.id);
+        if (checkResult.success && checkResult.data) {
+          setFriendshipStatus(checkResult.data);
+        }
+      } else {
+        alert(result.error || 'Failed to send friend request');
+      }
+    } catch (err) {
+      console.error('Error sending friend request:', err);
+      alert('Failed to send friend request');
+    } finally {
+      setFriendshipActionLoading(false);
+    }
+  };
+
+  const handleAcceptFriendRequest = async () => {
+    if (!friendshipStatus?.pendingRequest?.id) return;
+    setFriendshipActionLoading(true);
+    try {
+      const result = await friendsApi.acceptFriendRequest(friendshipStatus.pendingRequest.id);
+      if (result.success) {
+        setFriendshipStatus({ isFriend: true, pendingRequest: null });
+      } else {
+        alert(result.error || 'Failed to accept friend request');
+      }
+    } catch (err) {
+      console.error('Error accepting friend request:', err);
+      alert('Failed to accept friend request');
+    } finally {
+      setFriendshipActionLoading(false);
+    }
+  };
+
+  const handleDeclineFriendRequest = async () => {
+    if (!friendshipStatus?.pendingRequest?.id) return;
+    setFriendshipActionLoading(true);
+    try {
+      const result = await friendsApi.declineFriendRequest(friendshipStatus.pendingRequest.id);
+      if (result.success) {
+        setFriendshipStatus({ isFriend: false, pendingRequest: null });
+      } else {
+        alert(result.error || 'Failed to decline friend request');
+      }
+    } catch (err) {
+      console.error('Error declining friend request:', err);
+      alert('Failed to decline friend request');
+    } finally {
+      setFriendshipActionLoading(false);
+    }
+  };
+
+  const handleCancelFriendRequest = async () => {
+    if (!friendshipStatus?.pendingRequest?.id) return;
+    setFriendshipActionLoading(true);
+    try {
+      const result = await friendsApi.cancelFriendRequest(friendshipStatus.pendingRequest.id);
+      if (result.success) {
+        setFriendshipStatus({ isFriend: false, pendingRequest: null });
+      } else {
+        alert(result.error || 'Failed to cancel friend request');
+      }
+    } catch (err) {
+      console.error('Error cancelling friend request:', err);
+      alert('Failed to cancel friend request');
+    } finally {
+      setFriendshipActionLoading(false);
+    }
+  };
+
+  const handleRemoveFriend = async () => {
+    if (!selectedContact?.linked_profile?.id) return;
+    if (!confirm(`Are you sure you want to remove ${selectedContact.display_name || 'this contact'} as a friend?`)) {
+      return;
+    }
+    setFriendshipActionLoading(true);
+    try {
+      const result = await friendsApi.unfriend(selectedContact.linked_profile.id);
+      if (result.success) {
+        setFriendshipStatus({ isFriend: false, pendingRequest: null });
+      } else {
+        alert(result.error || 'Failed to remove friend');
+      }
+    } catch (err) {
+      console.error('Error removing friend:', err);
+      alert('Failed to remove friend');
+    } finally {
+      setFriendshipActionLoading(false);
     }
   };
 
@@ -368,7 +508,7 @@ export const ContactsManager: React.FC = () => {
                 <div
                   key={contact.id}
                   className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
-                    selectedContact?.id === contact.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                    selectedContact?.id === contact.id ? 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500' : ''
                   }`}
                   onClick={() => handleSelectContact(contact)}
                 >
@@ -401,11 +541,15 @@ export const ContactsManager: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
                         {contact.linked_profile && (
-                          <span className="inline-flex items-center gap-1 text-green-600">
+                          <span className={`inline-flex items-center gap-1 ${
+                            selectedContact?.id === contact.id && friendshipStatus?.isFriend
+                              ? 'text-emerald-600'
+                              : 'text-green-600'
+                          }`}>
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
-                            On Kizu
+                            {selectedContact?.id === contact.id && friendshipStatus?.isFriend ? 'Connected' : 'On Kizu'}
                           </span>
                         )}
                         {contact.notification_sound && contact.notification_sound !== 'default' && (
@@ -476,24 +620,89 @@ export const ContactsManager: React.FC = () => {
                 {selectedContact.linked_profile && (
                   <div>
                     <h4 className="text-sm font-medium text-gray-500 mb-2">Kizu Profile</h4>
-                    <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                      <div className="w-10 h-10 rounded-full bg-green-200 flex items-center justify-center">
-                        {selectedContact.linked_profile.avatar_url ? (
-                          <img
-                            src={selectedContact.linked_profile.avatar_url}
-                            alt=""
-                            className="w-full h-full rounded-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-green-700 font-medium">
-                            {(selectedContact.linked_profile.full_name || '?')[0].toUpperCase()}
+                    <div className="p-3 bg-green-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-green-200 flex items-center justify-center">
+                          {selectedContact.linked_profile.avatar_url ? (
+                            <img
+                              src={selectedContact.linked_profile.avatar_url}
+                              alt=""
+                              className="w-full h-full rounded-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-green-700 font-medium">
+                              {(selectedContact.linked_profile.full_name || '?')[0].toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-green-800">{selectedContact.linked_profile.full_name}</p>
+                          <p className="text-sm text-green-600">{selectedContact.linked_profile.email}</p>
+                        </div>
+                        {/* Friendship Status Badge */}
+                        {friendshipLoading ? (
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600"></div>
+                        ) : friendshipStatus?.isFriend ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            Connected
                           </span>
-                        )}
+                        ) : null}
                       </div>
-                      <div>
-                        <p className="font-medium text-green-800">{selectedContact.linked_profile.full_name}</p>
-                        <p className="text-sm text-green-600">{selectedContact.linked_profile.email}</p>
-                      </div>
+
+                      {/* Friendship Actions */}
+                      {!friendshipLoading && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {friendshipStatus?.isFriend ? (
+                            // Already friends - show Remove Friend button
+                            <button
+                              onClick={handleRemoveFriend}
+                              disabled={friendshipActionLoading}
+                              className="px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              {friendshipActionLoading ? 'Removing...' : 'Remove Friend'}
+                            </button>
+                          ) : friendshipStatus?.pendingRequest?.isIncoming ? (
+                            // Incoming request - show Accept/Decline buttons
+                            <>
+                              <button
+                                onClick={handleAcceptFriendRequest}
+                                disabled={friendshipActionLoading}
+                                className="px-3 py-1.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                {friendshipActionLoading ? 'Accepting...' : 'Accept'}
+                              </button>
+                              <button
+                                onClick={handleDeclineFriendRequest}
+                                disabled={friendshipActionLoading}
+                                className="px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                Decline
+                              </button>
+                            </>
+                          ) : friendshipStatus?.pendingRequest ? (
+                            // Outgoing request - show Cancel button
+                            <button
+                              onClick={handleCancelFriendRequest}
+                              disabled={friendshipActionLoading}
+                              className="px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              {friendshipActionLoading ? 'Cancelling...' : 'Cancel Request'}
+                            </button>
+                          ) : (
+                            // No relationship - show Friend Request button
+                            <button
+                              onClick={handleSendFriendRequest}
+                              disabled={friendshipActionLoading}
+                              className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              {friendshipActionLoading ? 'Sending...' : 'Friend Request'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -679,68 +888,96 @@ export const ContactsManager: React.FC = () => {
       {/* Edit/Create Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto relative">
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto relative">
             <button
               type="button"
               onClick={() => {
                 stopSound();
                 setShowEditModal(false);
               }}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               title="Close"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            <h3 className="text-lg font-semibold mb-4 pr-8">
+            <h3 className="text-lg font-semibold mb-4 pr-8 text-gray-900 dark:text-white">
               {editingContact ? 'Edit Contact' : 'New Contact'}
             </h3>
             <form onSubmit={handleSaveContact} className="space-y-4">
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     First Name
                   </label>
                   <input
                     type="text"
                     value={formData.first_name || ''}
                     onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                     placeholder="First name"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Last Name
                   </label>
                   <input
                     type="text"
                     value={formData.last_name || ''}
                     onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                     placeholder="Last name"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Display Name
                 </label>
                 <input
                   type="text"
                   value={formData.display_name || ''}
                   onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                   placeholder="Display name (optional)"
                 />
               </div>
 
+              {/* Email and Phone */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.email || ''}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                    placeholder="email@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.phone || ''}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                    placeholder="+1 (555) 123-4567"
+                  />
+                </div>
+              </div>
+
               {/* Relationship Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Relationship
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -755,7 +992,7 @@ export const ContactsManager: React.FC = () => {
                       className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${
                         formData.relationship_type === type
                           ? 'bg-blue-100 border-blue-500 text-blue-700'
-                          : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'
+                          : 'bg-gray-50 dark:bg-slate-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600'
                       }`}
                     >
                       {type}
@@ -765,52 +1002,52 @@ export const ContactsManager: React.FC = () => {
               </div>
 
               {/* Social Media */}
-              <div className="border-t pt-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Social Media</h4>
+              <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3">Social Media</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Instagram</label>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Instagram</label>
                     <div className="flex">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">@</span>
+                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-slate-600 text-gray-500 dark:text-gray-300 text-sm">@</span>
                       <input
                         type="text"
                         value={formData.instagram_handle || ''}
                         onChange={(e) => setFormData({ ...formData, instagram_handle: e.target.value })}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                         placeholder="username"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Twitter / X</label>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Twitter / X</label>
                     <div className="flex">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">@</span>
+                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-slate-600 text-gray-500 dark:text-gray-300 text-sm">@</span>
                       <input
                         type="text"
                         value={formData.twitter_handle || ''}
                         onChange={(e) => setFormData({ ...formData, twitter_handle: e.target.value })}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                         placeholder="username"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Facebook</label>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Facebook</label>
                     <input
                       type="text"
                       value={formData.facebook_handle || ''}
                       onChange={(e) => setFormData({ ...formData, facebook_handle: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                       placeholder="Profile name or ID"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">LinkedIn</label>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">LinkedIn</label>
                     <input
                       type="text"
                       value={formData.linkedin_handle || ''}
                       onChange={(e) => setFormData({ ...formData, linkedin_handle: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                       placeholder="Profile username"
                     />
                   </div>
@@ -818,17 +1055,17 @@ export const ContactsManager: React.FC = () => {
               </div>
 
               {/* Notification Sound */}
-              <div className="border-t pt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+              <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                   Notification Sound
                 </label>
-                <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md">
+                <div className="max-h-64 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md">
                   {SOUND_CATEGORIES.map((category) => {
                     const categorySounds = NOTIFICATION_SOUNDS.filter(s => s.category === category.id);
                     if (categorySounds.length === 0) return null;
                     return (
                       <div key={category.id}>
-                        <div className="px-3 py-1.5 bg-gray-100 text-xs font-semibold text-gray-500 uppercase sticky top-0">
+                        <div className="px-3 py-1.5 bg-gray-100 dark:bg-slate-700 text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase sticky top-0">
                           {category.name}
                         </div>
                         {categorySounds.map((sound) => (
@@ -836,8 +1073,8 @@ export const ContactsManager: React.FC = () => {
                             key={sound.id}
                             className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
                               formData.notification_sound === sound.id
-                                ? 'bg-blue-50 border-l-4 border-blue-500'
-                                : 'hover:bg-gray-50 border-l-4 border-transparent'
+                                ? 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500'
+                                : 'hover:bg-gray-50 dark:hover:bg-slate-700 border-l-4 border-transparent'
                             }`}
                             onClick={() => setFormData({ ...formData, notification_sound: sound.id })}
                           >
@@ -850,7 +1087,7 @@ export const ContactsManager: React.FC = () => {
                               className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
                                 playingSoundId === sound.id
                                   ? 'bg-blue-600 text-white'
-                                  : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                                  : 'bg-gray-200 dark:bg-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-slate-500'
                               }`}
                               title={playingSoundId === sound.id ? 'Stop' : 'Preview'}
                             >
@@ -864,8 +1101,8 @@ export const ContactsManager: React.FC = () => {
                               className="text-blue-500 w-4"
                             />
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">{sound.name}</p>
-                              <p className="text-xs text-gray-500 truncate">{sound.description}</p>
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{sound.name}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{sound.description}</p>
                             </div>
                             {formData.notification_sound === sound.id && (
                               <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -878,21 +1115,21 @@ export const ContactsManager: React.FC = () => {
                     );
                   })}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Click play to preview, click the row to select
                 </p>
               </div>
 
               {/* Notes */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Notes
                 </label>
                 <textarea
                   value={formData.notes || ''}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                   placeholder="Add notes about this contact..."
                 />
               </div>
@@ -911,7 +1148,7 @@ export const ContactsManager: React.FC = () => {
                     stopSound();
                     setShowEditModal(false);
                   }}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-md font-medium transition-colors"
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 dark:bg-slate-600 dark:hover:bg-slate-500 text-gray-700 dark:text-gray-200 py-2 px-4 rounded-md font-medium transition-colors"
                 >
                   Cancel
                 </button>
