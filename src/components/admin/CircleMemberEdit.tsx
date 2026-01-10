@@ -25,10 +25,10 @@ interface Circle {
 }
 
 const ROLES = [
-  { value: 'admin', label: 'Admin', description: 'Full management, invite members, edit albums', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' },
-  { value: 'editor', label: 'Editor', description: 'Add/remove photos, set key photos, reorder', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' },
-  { value: 'contributor', label: 'Contributor', description: 'Add photos and memories', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' },
-  { value: 'read_only', label: 'Viewer', description: 'View only', color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' },
+  { value: 'admin', label: 'Admin', description: 'Full management, invite members, edit albums', color: 'badge-error' },
+  { value: 'editor', label: 'Editor', description: 'Add/remove photos, set key photos, reorder', color: 'badge-warning' },
+  { value: 'contributor', label: 'Contributor', description: 'Add photos and memories', color: 'badge-success' },
+  { value: 'read_only', label: 'Viewer', description: 'View only', color: 'badge-default' },
 ];
 
 export const CircleMemberEdit: React.FC = () => {
@@ -170,13 +170,13 @@ export const CircleMemberEdit: React.FC = () => {
   if (error && !member) {
     return (
       <div className="max-w-2xl mx-auto p-6">
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
+        <div className="alert-error rounded-lg p-6 text-center">
           <div className="text-4xl mb-4">:(</div>
-          <h2 className="text-xl font-semibold text-red-800 dark:text-red-400 mb-2">Error</h2>
-          <p className="text-red-600 dark:text-red-300">{error}</p>
+          <h2 className="text-xl font-semibold text-error mb-2">Error</h2>
+          <p className="text-error">{error}</p>
           <button
             onClick={() => navigate('/admin/circles')}
-            className="mt-4 px-4 py-2 bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200 rounded-lg hover:bg-red-200 dark:hover:bg-red-700 transition-colors"
+            className="mt-4 px-4 py-2 bg-error-light text-error rounded-lg hover:opacity-80 transition-colors"
           >
             Back to Circles
           </button>
@@ -195,27 +195,27 @@ export const CircleMemberEdit: React.FC = () => {
       <div className="mb-6">
         <button
           onClick={() => navigate('/admin/circles')}
-          className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 mb-4"
+          className="text-theme-secondary hover:text-theme-primary flex items-center gap-2 mb-4"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Back to Circles
         </button>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Change Member Role</h1>
-        <p className="text-slate-500 dark:text-slate-400 mt-1">
+        <h1 className="text-2xl font-bold text-theme-primary">Change Member Role</h1>
+        <p className="text-theme-secondary mt-1">
           {circle?.name}
         </p>
       </div>
 
       {/* Access Request Banner */}
       {action === 'change-role' && requestedRole && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-6">
+        <div className="alert-warning rounded-lg p-4 mb-6">
           <div className="flex items-start gap-3">
             <div className="text-2xl">!</div>
             <div>
-              <h3 className="font-semibold text-amber-800 dark:text-amber-400">Access Request</h3>
-              <p className="text-amber-700 dark:text-amber-300 text-sm mt-1">
+              <h3 className="font-semibold text-warning">Access Request</h3>
+              <p className="text-warning text-sm mt-1">
                 <strong>{memberName}</strong> is requesting to upgrade their role from{' '}
                 <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${currentRoleInfo.color}`}>
                   {currentRoleInfo.label}
@@ -231,7 +231,7 @@ export const CircleMemberEdit: React.FC = () => {
       )}
 
       {/* Member Info Card */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
+      <div className="bg-surface rounded-xl shadow-sm border-default p-6 mb-6">
         <div className="flex items-center gap-4 mb-6">
           {member?.profiles?.avatar_url ? (
             <img
@@ -240,19 +240,19 @@ export const CircleMemberEdit: React.FC = () => {
               className="w-16 h-16 rounded-full object-cover"
             />
           ) : (
-            <div className="w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-              <span className="text-2xl font-semibold text-indigo-600 dark:text-indigo-400">
+            <div className="w-16 h-16 rounded-full bg-primary-light flex items-center justify-center">
+              <span className="text-2xl font-semibold text-theme-accent">
                 {memberName[0].toUpperCase()}
               </span>
             </div>
           )}
           <div>
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{memberName}</h2>
+            <h2 className="text-xl font-semibold text-theme-primary">{memberName}</h2>
             {member?.profiles?.email && member.profiles.email !== member.email && (
-              <p className="text-slate-500 dark:text-slate-400">{member.profiles.email}</p>
+              <p className="text-theme-secondary">{member.profiles.email}</p>
             )}
             {member?.email && (
-              <p className="text-slate-500 dark:text-slate-400 text-sm">{member.email}</p>
+              <p className="text-theme-secondary text-sm">{member.email}</p>
             )}
             <div className="flex items-center gap-2 mt-2">
               <span className={`px-2 py-1 rounded-full text-xs font-medium ${currentRoleInfo.color}`}>
@@ -260,8 +260,8 @@ export const CircleMemberEdit: React.FC = () => {
               </span>
               <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                 member?.status === 'accepted'
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                  : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                  ? 'badge-success'
+                  : 'badge-warning'
               }`}>
                 {member?.status}
               </span>
@@ -271,7 +271,7 @@ export const CircleMemberEdit: React.FC = () => {
 
         {/* Role Selection */}
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+          <label className="block text-sm font-medium text-theme-secondary mb-3">
             Select New Role
           </label>
           <div className="space-y-2">
@@ -280,8 +280,8 @@ export const CircleMemberEdit: React.FC = () => {
                 key={role.value}
                 className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all ${
                   selectedRole === role.value
-                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                    : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
+                    ? 'border-indigo-500 bg-primary-light'
+                    : 'border-default hover:border-slate-400'
                 } ${requestedRole === role.value ? 'ring-2 ring-amber-400' : ''}`}
               >
                 <input
@@ -298,17 +298,17 @@ export const CircleMemberEdit: React.FC = () => {
                       {role.label}
                     </span>
                     {requestedRole === role.value && (
-                      <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                      <span className="text-xs text-warning font-medium">
                         (Requested)
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{role.description}</p>
+                  <p className="text-sm text-theme-secondary mt-1">{role.description}</p>
                 </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
                   selectedRole === role.value
                     ? 'border-indigo-500 bg-indigo-500'
-                    : 'border-slate-300 dark:border-slate-500'
+                    : 'border-default'
                 }`}>
                   {selectedRole === role.value && (
                     <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -324,13 +324,13 @@ export const CircleMemberEdit: React.FC = () => {
 
       {/* Error/Success Messages */}
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
-          <p className="text-red-600 dark:text-red-400">{error}</p>
+        <div className="alert-error rounded-lg p-4 mb-4">
+          <p className="text-error">{error}</p>
         </div>
       )}
       {success && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
-          <p className="text-green-600 dark:text-green-400">{success}</p>
+        <div className="alert-success rounded-lg p-4 mb-4">
+          <p className="text-success">{success}</p>
         </div>
       )}
 
@@ -338,7 +338,7 @@ export const CircleMemberEdit: React.FC = () => {
       <div className="flex gap-3">
         <button
           onClick={() => navigate('/admin/circles')}
-          className="flex-1 px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          className="flex-1 px-4 py-3 border-default rounded-lg text-theme-secondary hover:bg-surface-hover transition-colors"
         >
           Cancel
         </button>
@@ -347,7 +347,7 @@ export const CircleMemberEdit: React.FC = () => {
           disabled={saving || selectedRole === member?.role}
           className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
             saving || selectedRole === member?.role
-              ? 'bg-slate-300 dark:bg-slate-600 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+              ? 'bg-disabled text-theme-muted cursor-not-allowed'
               : 'bg-indigo-600 text-white hover:bg-indigo-700'
           }`}
         >

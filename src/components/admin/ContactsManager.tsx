@@ -508,7 +508,7 @@ export const ContactsManager: React.FC = () => {
                 <div
                   key={contact.id}
                   className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
-                    selectedContact?.id === contact.id ? 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500' : ''
+                    selectedContact?.id === contact.id ? 'bg-primary-light border-l-4 border-primary' : ''
                   }`}
                   onClick={() => handleSelectContact(contact)}
                 >

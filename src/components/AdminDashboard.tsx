@@ -89,10 +89,10 @@ export const AdminDashboard: React.FC = () => {
   const renderCount = (count: number) => {
     if (countsLoading) {
       return (
-        <span className="ml-1 inline-block w-4 h-4 border-2 border-slate-300 dark:border-slate-600 border-t-slate-500 dark:border-t-slate-400 rounded-full animate-spin"></span>
+        <span className="ml-1 inline-block w-4 h-4 border-2 loading-spinner rounded-full animate-spin"></span>
       );
     }
-    return <span className="ml-1 text-slate-400 dark:text-slate-500 text-sm">({count})</span>;
+    return <span className="ml-1 text-theme-muted text-sm">({count})</span>;
   };
 
   // Fetch unread chat count
@@ -134,10 +134,10 @@ export const AdminDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-app flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 dark:border-indigo-400 mx-auto mb-4"></div>
-          <p className="text-slate-600 dark:text-slate-400">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-theme-secondary">Loading...</p>
         </div>
       </div>
     );
@@ -156,21 +156,21 @@ export const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-app">
       {/* Header */}
-      <header className="bg-white dark:bg-slate-900 shadow-sm border-b border-slate-200 dark:border-slate-800">
+      <header className="bg-surface shadow-sm border-b border-default">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <span className="text-2xl mr-3">📸</span>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Knox Admin</h1>
+              <h1 className="text-xl font-bold text-theme-primary">Knox Admin</h1>
             </div>
 
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-slate-600 dark:text-slate-400">
+              <span className="text-sm text-theme-secondary">
                 Welcome, {userProfile?.full_name || user.email}
                 {isSuperAdmin && (
-                  <span className="ml-2 px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400 text-xs rounded-full font-medium">
+                  <span className="ml-2 px-2 py-1 badge-admin text-xs rounded-full font-medium">
                     Super Admin
                   </span>
                 )}
@@ -178,7 +178,7 @@ export const AdminDashboard: React.FC = () => {
               <ThemeToggle size="sm" />
               <button
                 onClick={() => setShowAccountScreen(true)}
-                className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 hover:bg-indigo-200 dark:hover:bg-indigo-800/40 rounded-full flex items-center justify-center transition-colors group overflow-hidden"
+                className="w-10 h-10 avatar-btn"
                 title="Account Settings"
               >
                 {userProfile?.avatar_url ? (
@@ -192,7 +192,7 @@ export const AdminDashboard: React.FC = () => {
                     }}
                   />
                 ) : (
-                  <span className="text-lg text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
+                  <span className="text-lg text-theme-accent">
                     {userProfile?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
                   </span>
                 )}
@@ -204,7 +204,7 @@ export const AdminDashboard: React.FC = () => {
 
       <div className="flex">
         {/* Sidebar */}
-        <nav className="bg-white dark:bg-slate-900 w-64 min-h-screen border-r border-slate-200 dark:border-slate-800 shadow-sm">
+        <nav className="bg-surface w-64 min-h-screen border-r border-default shadow-sm">
           <div className="p-4">
             <ul className="space-y-2">
               <li>
@@ -212,8 +212,8 @@ export const AdminDashboard: React.FC = () => {
                   to="/admin/notifications"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                     location.pathname.includes('/admin/notifications')
-                      ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                      ? 'bg-primary-light text-theme-accent font-medium'
+                      : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                   }`}
                 >
                   <i className="fi fi-sr-bell mr-3 text-lg"></i>
@@ -230,8 +230,8 @@ export const AdminDashboard: React.FC = () => {
                   to="/admin/chat"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                     location.pathname.includes('/admin/chat')
-                      ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                      ? 'bg-primary-light text-theme-accent font-medium'
+                      : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                   }`}
                 >
                   <i className="fi fi-sr-messages mr-3 text-lg"></i>
@@ -249,8 +249,8 @@ export const AdminDashboard: React.FC = () => {
                   to="/admin/albums"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                     location.pathname.includes('/admin/albums')
-                      ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                      ? 'bg-primary-light text-theme-accent font-medium'
+                      : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                   }`}
                 >
                   <i className="fi fi-sr-picture mr-3 text-lg"></i>
@@ -263,8 +263,8 @@ export const AdminDashboard: React.FC = () => {
                   to="/admin/images"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                     location.pathname.includes('/admin/images')
-                      ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                      ? 'bg-primary-light text-theme-accent font-medium'
+                      : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                   }`}
                 >
                   <i className="fi fi-sr-gallery mr-3 text-lg"></i>
@@ -277,8 +277,8 @@ export const AdminDashboard: React.FC = () => {
                   to="/admin/folders"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                     location.pathname.includes('/admin/folders')
-                      ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                      ? 'bg-primary-light text-theme-accent font-medium'
+                      : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                   }`}
                 >
                   <i className="fi fi-sr-folder mr-3 text-lg"></i>
@@ -291,8 +291,8 @@ export const AdminDashboard: React.FC = () => {
                   to="/admin/circles"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                     location.pathname.includes('/admin/circles')
-                      ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                      ? 'bg-primary-light text-theme-accent font-medium'
+                      : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                   }`}
                 >
                   <i className="fi fi-sr-users mr-3 text-lg"></i>
@@ -305,8 +305,8 @@ export const AdminDashboard: React.FC = () => {
                   to="/admin/contacts"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                     location.pathname.includes('/admin/contacts')
-                      ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                      ? 'bg-primary-light text-theme-accent font-medium'
+                      : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                   }`}
                 >
                   <i className="fi fi-sr-address-book mr-3 text-lg"></i>
@@ -319,8 +319,8 @@ export const AdminDashboard: React.FC = () => {
                   to="/admin/invites"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                     location.pathname.includes('/admin/invites')
-                      ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                      ? 'bg-primary-light text-theme-accent font-medium'
+                      : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                   }`}
                 >
                   <i className="fi fi-sr-envelope mr-3 text-lg"></i>
@@ -333,8 +333,8 @@ export const AdminDashboard: React.FC = () => {
                   to="/admin/import"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                     location.pathname.includes('/admin/import')
-                      ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                      ? 'bg-primary-light text-theme-accent font-medium'
+                      : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                   }`}
                 >
                   <i className="fi fi-sr-inbox-in mr-3 text-lg"></i>
@@ -346,8 +346,8 @@ export const AdminDashboard: React.FC = () => {
                   to="/admin/ai-processing"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                     location.pathname.includes('/admin/ai-processing')
-                      ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                      ? 'bg-primary-light text-theme-accent font-medium'
+                      : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                   }`}
                 >
                   <i className="fi fi-sr-microchip-ai mr-3 text-lg"></i>
@@ -361,8 +361,8 @@ export const AdminDashboard: React.FC = () => {
                       to="/admin/users"
                       className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                         location.pathname.includes('/admin/users')
-                          ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                          ? 'bg-primary-light text-theme-accent font-medium'
+                          : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                       }`}
                     >
                       <i className="fi fi-sr-user mr-3 text-lg"></i>
@@ -374,8 +374,8 @@ export const AdminDashboard: React.FC = () => {
                       to="/admin/push-test"
                       className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                         location.pathname.includes('/admin/push-test')
-                          ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                          ? 'bg-primary-light text-theme-accent font-medium'
+                          : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                       }`}
                     >
                       <i className="fi fi-sr-bell mr-3 text-lg"></i>
@@ -387,8 +387,8 @@ export const AdminDashboard: React.FC = () => {
                       to="/admin/promo-codes"
                       className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                         location.pathname.includes('/admin/promo-codes')
-                          ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                          ? 'bg-primary-light text-theme-accent font-medium'
+                          : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                       }`}
                     >
                       <i className="fi fi-sr-ticket mr-3 text-lg"></i>
@@ -400,8 +400,8 @@ export const AdminDashboard: React.FC = () => {
                       to="/admin/exports"
                       className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                         location.pathname.includes('/admin/exports')
-                          ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-300'
+                          ? 'bg-primary-light text-theme-accent font-medium'
+                          : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
                       }`}
                     >
                       <i className="fi fi-sr-box mr-3 text-lg"></i>
@@ -415,7 +415,7 @@ export const AdminDashboard: React.FC = () => {
         </nav>
 
         {/* Main Content */}
-        <main className="flex-1 p-8 bg-slate-50 dark:bg-slate-950">
+        <main className="flex-1 p-8 bg-app">
           <Routes>
             <Route index element={<Navigate to="/admin/notifications" replace />} />
             <Route path="notifications" element={<NotificationsManager />} />

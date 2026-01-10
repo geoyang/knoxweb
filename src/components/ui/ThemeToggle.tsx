@@ -30,7 +30,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
     <div className={`flex items-center gap-2 ${className}`}>
       <button
         onClick={toggleTheme}
-        className={`${sizeClasses[size]} flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`}
+        className={`${sizeClasses[size]} flex items-center justify-center rounded-lg bg-surface-elevated hover:bg-surface-hover transition-colors`}
         aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
         title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
       >
@@ -52,7 +52,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         ) : (
           // Moon icon for light mode (click to switch to dark)
           <svg
-            className={`${iconSizes[size]} text-slate-600`}
+            className={`${iconSizes[size]} text-theme-secondary`}
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -67,7 +67,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         )}
       </button>
       {showLabel && (
-        <span className="text-sm text-slate-600 dark:text-slate-400 capitalize">
+        <span className="text-sm text-theme-secondary capitalize">
           {theme === 'system' ? `System (${resolvedTheme})` : theme}
         </span>
       )}
@@ -87,7 +87,7 @@ export const ThemeSelect: React.FC<ThemeSelectProps> = ({ className = '' }) => {
     <select
       value={theme}
       onChange={(e) => setTheme(e.target.value as 'light' | 'dark' | 'system')}
-      className={`px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${className}`}
+      className={`select focus:ring-2 focus:ring-indigo-500 ${className}`}
     >
       <option value="system">System</option>
       <option value="light">Light</option>

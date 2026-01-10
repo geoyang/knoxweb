@@ -719,8 +719,8 @@ export const AlbumsManager: React.FC = () => {
                           onError={() => handleImageError(album.id, displayImage)}
                         />
                       ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-indigo-50 to-slate-100 dark:from-indigo-900/20 dark:to-slate-800 flex items-center justify-center">
-                          <i className="fi fi-sr-images text-5xl text-indigo-300 dark:text-indigo-600"></i>
+                        <div className="w-full h-full bg-primary-light flex items-center justify-center">
+                          <i className="fi fi-sr-images text-5xl text-theme-accent opacity-50"></i>
                         </div>
                       )}
                     </div>

@@ -24,22 +24,22 @@ function formatRelativeTime(dateString: string): string {
 function getNotificationStyle(type: string): { icon: string; bgColor: string; iconColor: string } {
   switch (type) {
     case 'new_comments':
-      return { icon: 'fi-sr-comment', bgColor: 'bg-blue-100 dark:bg-blue-900/30', iconColor: 'text-blue-600 dark:text-blue-400' };
+      return { icon: 'fi-sr-comment', bgColor: 'notif-bg-blue', iconColor: 'notif-icon-blue' };
     case 'new_photos':
-      return { icon: 'fi-sr-picture', bgColor: 'bg-green-100 dark:bg-green-900/30', iconColor: 'text-green-600 dark:text-green-400' };
+      return { icon: 'fi-sr-picture', bgColor: 'notif-bg-green', iconColor: 'notif-icon-green' };
     case 'new_members':
-      return { icon: 'fi-sr-user-add', bgColor: 'bg-purple-100 dark:bg-purple-900/30', iconColor: 'text-purple-600 dark:text-purple-400' };
+      return { icon: 'fi-sr-user-add', bgColor: 'notif-bg-purple', iconColor: 'notif-icon-purple' };
     case 'album_shared':
-      return { icon: 'fi-sr-share', bgColor: 'bg-orange-100 dark:bg-orange-900/30', iconColor: 'text-orange-600 dark:text-orange-400' };
+      return { icon: 'fi-sr-share', bgColor: 'notif-bg-orange', iconColor: 'notif-icon-orange' };
     case 'new_messages':
     case 'chat_message':
-      return { icon: 'fi-sr-messages', bgColor: 'bg-pink-100 dark:bg-pink-900/30', iconColor: 'text-pink-600 dark:text-pink-400' };
+      return { icon: 'fi-sr-messages', bgColor: 'notif-bg-pink', iconColor: 'notif-icon-pink' };
     case 'friend_requests':
-      return { icon: 'fi-sr-user-add', bgColor: 'bg-emerald-100 dark:bg-emerald-900/30', iconColor: 'text-emerald-600 dark:text-emerald-400' };
+      return { icon: 'fi-sr-user-add', bgColor: 'notif-bg-emerald', iconColor: 'notif-icon-emerald' };
     case 'contact_activity':
-      return { icon: 'fi-sr-address-book', bgColor: 'bg-violet-100 dark:bg-violet-900/30', iconColor: 'text-violet-600 dark:text-violet-400' };
+      return { icon: 'fi-sr-address-book', bgColor: 'notif-bg-violet', iconColor: 'notif-icon-violet' };
     default:
-      return { icon: 'fi-sr-bell', bgColor: 'bg-slate-100 dark:bg-slate-800', iconColor: 'text-slate-600 dark:text-slate-400' };
+      return { icon: 'fi-sr-bell', bgColor: 'bg-surface-elevated', iconColor: 'text-theme-secondary' };
   }
 }
 
@@ -164,15 +164,15 @@ export const NotificationsManager: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Notifications</h2>
-          <p className="text-slate-500 dark:text-slate-400">
+          <h2 className="text-2xl font-bold text-theme-primary">Notifications</h2>
+          <p className="text-theme-secondary">
             {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
           </p>
         </div>
         {unreadCount > 0 && (
           <button
             onClick={handleMarkAllAsRead}
-            className="px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+            className="px-4 py-2 text-sm font-medium text-theme-accent hover:opacity-80"
           >
             Mark all as read
           </button>
@@ -180,7 +180,7 @@ export const NotificationsManager: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-200 dark:border-slate-700">
+      <div className="border-b border-default">
         <div className="flex space-x-8">
           {(['all', 'unread', 'friend_requests'] as Tab[]).map(tab => (
             <button
@@ -188,8 +188,8 @@ export const NotificationsManager: React.FC = () => {
               onClick={() => setActiveTab(tab)}
               className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === tab
-                  ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                  ? 'border-primary text-theme-accent'
+                  : 'border-transparent text-theme-secondary hover:text-theme-primary'
               }`}
             >
               {tab === 'all' && 'All'}
@@ -203,17 +203,17 @@ export const NotificationsManager: React.FC = () => {
       {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
+          <div className="loading-spinner h-8 w-8"></div>
         </div>
       ) : error ? (
-        <div className="text-center py-12 text-red-500">{error}</div>
+        <div className="text-center py-12 text-error">{error}</div>
       ) : filteredNotifications.length === 0 ? (
         <div className="text-center py-12">
-          <i className="fi fi-sr-bell text-4xl text-slate-300 dark:text-slate-600 mb-4 block"></i>
-          <p className="text-slate-500 dark:text-slate-400">No notifications</p>
+          <i className="fi fi-sr-bell text-4xl text-theme-muted mb-4 block"></i>
+          <p className="text-theme-secondary">No notifications</p>
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-900 rounded-lg shadow divide-y divide-slate-100 dark:divide-slate-800">
+        <div className="bg-surface rounded-lg shadow divide-y divide-default">
           {filteredNotifications.map(notification => {
             const style = getNotificationStyle(notification.notification_type);
             const isFriendRequest = isFriendRequestNotification(notification);
@@ -222,8 +222,8 @@ export const NotificationsManager: React.FC = () => {
             return (
               <div
                 key={notification.id}
-                className={`p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${
-                  !notification.is_read ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''
+                className={`p-4 hover:bg-surface-hover transition-colors ${
+                  !notification.is_read ? 'bg-primary-light' : ''
                 }`}
               >
                 <div className="flex items-start gap-4">
@@ -244,21 +244,21 @@ export const NotificationsManager: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className={`text-sm font-medium text-slate-900 dark:text-slate-100 ${
+                        <p className={`text-sm font-medium text-theme-primary ${
                           !notification.is_read ? 'font-semibold' : ''
                         }`}>
                           {notification.title}
                         </p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+                        <p className="text-sm text-theme-secondary mt-0.5">
                           {notification.body}
                         </p>
                         {notification.actor && (
-                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                          <p className="text-xs text-theme-muted mt-1">
                             From {notification.actor.full_name}
                           </p>
                         )}
                       </div>
-                      <span className="text-xs text-slate-400 dark:text-slate-500 flex-shrink-0">
+                      <span className="text-xs text-theme-muted flex-shrink-0">
                         {formatRelativeTime(notification.created_at)}
                       </span>
                     </div>
@@ -279,7 +279,7 @@ export const NotificationsManager: React.FC = () => {
                             </button>
                             <button
                               onClick={() => handleDeclineRequest(pendingRequest.id, notification.id)}
-                              className="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                              className="px-3 py-1.5 text-sm font-medium text-theme-secondary bg-surface-elevated hover:bg-surface-hover rounded-lg transition-colors"
                             >
                               Decline
                             </button>
@@ -294,14 +294,14 @@ export const NotificationsManager: React.FC = () => {
                         {!notification.is_read && (
                           <button
                             onClick={() => handleMarkAsRead(notification.id)}
-                            className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                            className="text-xs text-theme-accent hover:opacity-80"
                           >
                             Mark as read
                           </button>
                         )}
                         <button
                           onClick={() => handleDelete(notification.id)}
-                          className="text-xs text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                          className="text-xs text-theme-muted hover:text-error"
                         >
                           Delete
                         </button>
@@ -311,7 +311,7 @@ export const NotificationsManager: React.FC = () => {
 
                   {/* Unread indicator */}
                   {!notification.is_read && (
-                    <div className="w-2 h-2 rounded-full bg-indigo-600 dark:bg-indigo-400 flex-shrink-0 mt-2"></div>
+                    <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-2"></div>
                   )}
                 </div>
               </div>

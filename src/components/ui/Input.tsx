@@ -17,14 +17,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5"
+            className="form-label"
           >
             {label}
           </label>
         )}
         <div className="relative">
           {leftIcon && (
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none icon-muted">
               {leftIcon}
             </div>
           )}
@@ -32,34 +32,28 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             className={`
-              w-full px-3 py-2
+              input placeholder-muted
               ${leftIcon ? 'pl-10' : ''}
               ${rightIcon ? 'pr-10' : ''}
-              border rounded-lg shadow-sm
-              bg-white dark:bg-slate-800
-              text-slate-900 dark:text-slate-100
-              placeholder-slate-400 dark:placeholder-slate-500
-              focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500
-              disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:disabled:text-slate-500 disabled:cursor-not-allowed
-              ${error
-                ? 'border-red-500 dark:border-red-400 focus:ring-red-500 focus:border-red-500'
-                : 'border-slate-300 dark:border-slate-700'
-              }
+              shadow-sm
+              focus:outline-none focus:ring-2 focus:ring-indigo-500
+              disabled:input-disabled
+              ${error ? 'border-error focus:ring-red-500' : ''}
               ${className}
             `}
             {...props}
           />
           {rightIcon && (
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none icon-muted">
               {rightIcon}
             </div>
           )}
         </div>
         {error && (
-          <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="mt-1.5 text-sm text-error">{error}</p>
         )}
         {hint && !error && (
-          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{hint}</p>
+          <p className="mt-1.5 text-sm text-theme-muted">{hint}</p>
         )}
       </div>
     );
@@ -84,7 +78,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5"
+            className="form-label"
           >
             {label}
           </label>
@@ -93,27 +87,20 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           id={inputId}
           className={`
-            w-full px-3 py-2
-            border rounded-lg shadow-sm
-            bg-white dark:bg-slate-800
-            text-slate-900 dark:text-slate-100
-            placeholder-slate-400 dark:placeholder-slate-500
-            focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500
-            disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:disabled:text-slate-500 disabled:cursor-not-allowed
-            resize-y min-h-[80px]
-            ${error
-              ? 'border-red-500 dark:border-red-400 focus:ring-red-500 focus:border-red-500'
-              : 'border-slate-300 dark:border-slate-700'
-            }
+            textarea placeholder-muted
+            shadow-sm
+            focus:outline-none focus:ring-2 focus:ring-indigo-500
+            disabled:input-disabled
+            ${error ? 'border-error focus:ring-red-500' : ''}
             ${className}
           `}
           {...props}
         />
         {error && (
-          <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="mt-1.5 text-sm text-error">{error}</p>
         )}
         {hint && !error && (
-          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{hint}</p>
+          <p className="mt-1.5 text-sm text-theme-muted">{hint}</p>
         )}
       </div>
     );

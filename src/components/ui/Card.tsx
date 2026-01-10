@@ -48,10 +48,10 @@ export const Card: React.FC<CardProps> = ({
   return (
     <div
       className={`
-        bg-white dark:bg-slate-900
-        border border-slate-200 dark:border-slate-800
-        rounded-lg shadow-sm dark:shadow-black/10
-        ${hover ? 'hover:shadow-md dark:hover:shadow-black/20 transition-shadow' : ''}
+        bg-surface
+        border border-default
+        rounded-lg card-shadow
+        ${hover ? 'card-shadow-hover transition-shadow' : ''}
         ${paddingClasses[padding]}
         ${className}
       `}
@@ -77,7 +77,7 @@ export const CardTitle: React.FC<CardTitleProps> = ({
   className = '',
 }) => {
   return (
-    <h3 className={`text-lg font-semibold text-slate-900 dark:text-slate-100 ${className}`}>
+    <h3 className={`text-lg font-semibold text-theme-primary ${className}`}>
       {children}
     </h3>
   );
@@ -88,7 +88,7 @@ export const CardDescription: React.FC<CardDescriptionProps> = ({
   className = '',
 }) => {
   return (
-    <p className={`text-sm text-slate-600 dark:text-slate-400 ${className}`}>
+    <p className={`text-sm text-theme-secondary ${className}`}>
       {children}
     </p>
   );
@@ -106,7 +106,7 @@ export const CardFooter: React.FC<CardFooterProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`flex items-center pt-4 border-t border-slate-200 dark:border-slate-800 ${className}`}>
+    <div className={`flex items-center pt-4 border-t border-default ${className}`}>
       {children}
     </div>
   );
