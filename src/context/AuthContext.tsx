@@ -105,17 +105,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
-    // Add a timeout to prevent infinite loading
+    // Track if we've received a valid session to prevent timeout from clearing it
+    let hasReceivedSession = false;
+
+    // Add a timeout to prevent infinite loading - but don't clear session if we have one
     const loadingTimeout = setTimeout(() => {
-      console.warn('Auth loading timeout reached, setting loading to false');
-      console.warn('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
-      console.warn('Supabase Key:', import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Present' : 'Missing');
-      setUser(null);
-      setUserProfile(null);
-      setSession(null);
-      setIsSuperAdmin(false);
+      console.warn('Auth loading timeout reached');
+      if (!hasReceivedSession) {
+        console.warn('No session received, clearing auth state');
+        setUser(null);
+        setUserProfile(null);
+        setSession(null);
+        setIsSuperAdmin(false);
+      } else {
+        console.warn('Session exists, keeping auth state');
+      }
       setLoading(false);
-    }, 5000); // Reduced to 5 seconds for faster debugging
+    }, 5000);
 
     console.log('Starting auth session check...');
     console.log('Supabase client:', !!supabase);
@@ -156,6 +162,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       clearTimeout(loadingTimeout);
       console.log('Auth session loaded:', !!session);
+      if (session) {
+        hasReceivedSession = true;
+      }
       setSession(session);
       setUser(session?.user || null);
     
@@ -212,6 +221,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       async (event, session) => {
         try {
           console.log('Auth state change:', event, !!session);
+
+          // Clear the loading timeout when we receive a valid session
+          if (session) {
+            hasReceivedSession = true;
+            clearTimeout(loadingTimeout);
+          }
+
           setSession(session);
           setUser(session?.user || null);
 

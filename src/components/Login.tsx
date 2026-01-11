@@ -18,8 +18,10 @@ export const Login: React.FC = () => {
   const [verificationCode, setVerificationCode] = useState('');
   const [devCode, setDevCode] = useState<string | null>(null);
   const [rememberEmail, setRememberEmail] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [signUpSuccess, setSignUpSuccess] = useState(false);
 
-  const { user, loading: authLoading, signInWithMagicLink, signInWithCode, verifyCode, checkUserExists } = useAuth();
+  const { user, loading: authLoading, signInWithMagicLink, signInWithCode, verifyCode, checkUserExists, signUp } = useAuth();
   const navigate = useNavigate();
 
   // Load saved email on mount
@@ -90,7 +92,8 @@ export const Login: React.FC = () => {
     }
 
     if (!exists) {
-      setError(`No account found for ${email}. Please contact your administrator.`);
+      setError(`No account found for ${email}.`);
+      setIsSignUp(true);
       return;
     }
 
@@ -112,7 +115,8 @@ export const Login: React.FC = () => {
     }
 
     if (!exists) {
-      setError(`No account found for ${email}. Please contact your administrator.`);
+      setError(`No account found for ${email}.`);
+      setIsSignUp(true);
       return;
     }
 
@@ -161,6 +165,27 @@ export const Login: React.FC = () => {
     setDevCode(null);
     setEmail('');
     setError(null);
+    setIsSignUp(false);
+    setSignUpSuccess(false);
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { error } = await signUp(email);
+      if (error) {
+        setError(error.message);
+      } else {
+        setSignUpSuccess(true);
+      }
+    } catch (err) {
+      setError('Failed to create account. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const switchAuthMethod = () => {
@@ -180,7 +205,11 @@ export const Login: React.FC = () => {
           <div className="text-4xl mb-4">📸</div>
           <h1 className="text-3xl font-bold text-theme-primary">Knox Admin</h1>
           <p className="text-theme-secondary">
-            {emailSent
+            {signUpSuccess
+              ? 'Account created successfully!'
+              : isSignUp
+              ? 'Create your account'
+              : emailSent
               ? 'Check your email for the magic link'
               : codeSent
               ? `Enter the 4-digit code sent to ${email}`
@@ -189,7 +218,61 @@ export const Login: React.FC = () => {
           </p>
         </div>
 
-        {!emailSent && !codeSent ? (
+        {signUpSuccess ? (
+          <div className="space-y-6">
+            <div className="alert-success">
+              <div className="flex items-center">
+                <div className="text-2xl mr-2">📧</div>
+                <div>
+                  <p className="font-medium">Check your email!</p>
+                  <p className="text-sm">We sent a verification link to {email}. Click the link to activate your account.</p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => { setSignUpSuccess(false); setIsSignUp(false); setEmail(''); }}
+              className="w-full btn-secondary"
+            >
+              Back to Sign In
+            </button>
+          </div>
+        ) : isSignUp ? (
+          <form onSubmit={handleSignUp} className="space-y-6">
+            <div>
+              <label htmlFor="email" className="form-label">
+                Email Address
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="input placeholder-muted"
+                placeholder="your@email.com"
+              />
+            </div>
+
+            {error && (
+              <div className="alert-error">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !email}
+              className="w-full btn-primary"
+            >
+              {loading ? 'Creating Account...' : 'Create Account'}
+            </button>
+
+            <p className="text-sm text-theme-secondary text-center">
+              We'll create your account and you can sign in immediately.
+            </p>
+          </form>
+        ) : !emailSent && !codeSent ? (
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="email" className="form-label">
@@ -345,7 +428,27 @@ export const Login: React.FC = () => {
         )}
 
         <div className="mt-6 text-center text-sm text-theme-secondary">
-          <p>Don't have an account? Contact your administrator.</p>
+          {isSignUp ? (
+            <p>
+              Already have an account?{' '}
+              <button
+                onClick={() => { setIsSignUp(false); setError(null); }}
+                className="text-theme-link hover:underline font-medium"
+              >
+                Sign in
+              </button>
+            </p>
+          ) : (
+            <p>
+              Don't have an account?{' '}
+              <button
+                onClick={() => setIsSignUp(true)}
+                className="text-theme-link hover:underline font-medium"
+              >
+                Create one
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>
