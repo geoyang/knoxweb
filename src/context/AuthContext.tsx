@@ -88,8 +88,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchSuperAdminStatus = async (userId: string): Promise<boolean> => {
     try {
-      // Call the RPC function to check super admin status
-      const { data, error } = await supabase.rpc('is_current_user_superadmin');
+      console.log('Fetching super admin status for user:', userId);
+      // Call the RPC function with timeout to prevent hanging
+      const result = await Promise.race([
+        supabase.rpc('is_current_user_superadmin'),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Super admin check timeout')), 5000)
+        )
+      ]) as any;
+
+      const { data, error } = result;
 
       if (error) {
         console.error('Error checking super admin status:', error);
