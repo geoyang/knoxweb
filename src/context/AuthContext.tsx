@@ -20,6 +20,7 @@ interface AuthContextType {
   signInWithCode: (email: string) => Promise<{ error: any; code?: string }>;
   verifyCode: (email: string, code: string) => Promise<{ error: any; success?: boolean; profile?: UserProfile | null }>;
   checkUserExists: (email: string) => Promise<{ exists: boolean; error?: any }>;
+  signUp: (email: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -87,23 +88,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchSuperAdminStatus = async (userId: string): Promise<boolean> => {
     try {
-      // Try to fetch from auth.users table using admin API or RPC
-      // For now, we'll check if the user object has the field
-      const currentUser = user || session?.user;
-      if (currentUser) {
-        console.log('Checking super admin status for user:', currentUser);
-        const superAdminField = (currentUser as any).is_super_admin;
-        console.log('is_super_admin field from user object:', superAdminField);
-        
-        if (superAdminField !== undefined) {
-          return superAdminField === true;
-        }
+      // Call the RPC function to check super admin status
+      const { data, error } = await supabase.rpc('is_current_user_superadmin');
+
+      if (error) {
+        console.error('Error checking super admin status:', error);
+        return false;
       }
-      
-      // If not available in user object, try alternative approach
-      // This might require an RPC function or Edge Function
-      console.log('is_super_admin not available in user object, defaulting to false');
-      return false;
+
+      console.log('Super admin status from RPC:', data);
+      return data === true;
     } catch (err) {
       console.error('Error fetching super admin status:', err);
       return false;
@@ -480,6 +474,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const signUp = async (email: string) => {
+    try {
+      console.log('Creating account for:', email);
+
+      // Use Edge Function to create user account
+      const { data: response, error } = await supabase.functions.invoke('create-user', {
+        body: { email: email.toLowerCase().trim() }
+      });
+
+      if (error) {
+        console.error('Error creating user account', error);
+        return { error };
+      }
+
+      if (!response?.success) {
+        return { error: new Error(response?.error || 'Failed to create account') };
+      }
+
+      console.log('Account created successfully');
+      return { error: null };
+    } catch (error) {
+      console.error('Exception creating user account', error);
+      return { error };
+    }
+  };
+
   const signOut = async () => {
     // Clear state immediately to prevent redirect loops
     setUser(null);
@@ -502,6 +522,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signInWithCode,
     verifyCode,
     checkUserExists,
+    signUp,
     signOut,
   };
 
