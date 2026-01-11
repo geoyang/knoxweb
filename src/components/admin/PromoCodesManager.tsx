@@ -15,11 +15,18 @@ interface PromoCode {
   expires_at: string | null;
   is_active: boolean;
   date_created: string;
+  subscription_plan_id: string | null;
   created_by_profile?: {
     display_name: string | null;
     email: string | null;
   };
   usage_count?: number;
+}
+
+interface SubscriptionPlan {
+  id: string;
+  name: string;
+  display_name: string;
 }
 
 interface PromoCodeStats {
@@ -48,6 +55,7 @@ const DURATION_PRESETS = [
 
 export const PromoCodesManager: React.FC = () => {
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
   const [selectedPromoCode, setSelectedPromoCode] = useState<PromoCode | null>(null);
   const [promoStats, setPromoStats] = useState<PromoCodeStats | null>(null);
   const [promoUsers, setPromoUsers] = useState<PromoCodeUser[]>([]);
@@ -66,6 +74,7 @@ export const PromoCodesManager: React.FC = () => {
   const [formDiscountPercent, setFormDiscountPercent] = useState('0');
   const [formMaxUses, setFormMaxUses] = useState('');
   const [formExpiresAt, setFormExpiresAt] = useState('');
+  const [formSubscriptionPlanId, setFormSubscriptionPlanId] = useState<string>('');
 
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -73,10 +82,22 @@ export const PromoCodesManager: React.FC = () => {
   useEffect(() => {
     if (user?.id) {
       loadPromoCodes();
+      loadSubscriptionPlans();
     } else {
       setLoading(false);
     }
   }, [user?.id]);
+
+  const loadSubscriptionPlans = async () => {
+    try {
+      const result = await adminApi.getSubscriptionPlans();
+      if (result.success && result.data?.plans) {
+        setSubscriptionPlans(result.data.plans);
+      }
+    } catch (err) {
+      console.error('Error loading subscription plans:', err);
+    }
+  };
 
   const loadPromoCodes = async () => {
     try {
@@ -137,6 +158,7 @@ export const PromoCodesManager: React.FC = () => {
     setFormDiscountPercent('0');
     setFormMaxUses('');
     setFormExpiresAt('');
+    setFormSubscriptionPlanId('');
   };
 
   const populateEditForm = (promo: PromoCode) => {
@@ -145,6 +167,7 @@ export const PromoCodesManager: React.FC = () => {
     setFormDiscountPercent(String(promo.discount_percent || 0));
     setFormMaxUses(promo.max_uses ? String(promo.max_uses) : '');
     setFormExpiresAt(promo.expires_at ? promo.expires_at.split('T')[0] : '');
+    setFormSubscriptionPlanId(promo.subscription_plan_id || '');
 
     if (promo.is_perpetual_trial) {
       setFormDurationPreset('perpetual');
@@ -202,6 +225,7 @@ export const PromoCodesManager: React.FC = () => {
         discount_percent: parseInt(formDiscountPercent) || 0,
         max_uses: formMaxUses ? parseInt(formMaxUses) : undefined,
         expires_at: formExpiresAt || undefined,
+        subscription_plan_id: formSubscriptionPlanId || undefined,
       });
 
       if (!result.success) {
@@ -238,6 +262,7 @@ export const PromoCodesManager: React.FC = () => {
         discount_percent: parseInt(formDiscountPercent) || 0,
         max_uses: formMaxUses ? parseInt(formMaxUses) : undefined,
         expires_at: formExpiresAt || undefined,
+        subscription_plan_id: formSubscriptionPlanId || undefined,
       });
 
       if (!result.success) {
@@ -303,8 +328,8 @@ export const PromoCodesManager: React.FC = () => {
 
   const generateRandomCode = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = 'KNOX-';
-    for (let i = 0; i < 6; i++) {
+    let code = 'KIZU-';
+    for (let i = 0; i < 5; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     setFormCode(code);
@@ -329,12 +354,18 @@ export const PromoCodesManager: React.FC = () => {
     return 'Standard';
   };
 
+  const getPlanLabel = (planId: string | null): string => {
+    if (!planId) return 'Not Set';
+    const plan = subscriptionPlans.find(p => p.id === planId);
+    return plan?.display_name || 'Unknown';
+  };
+
   // Render promo code form
   const renderPromoForm = (isEdit: boolean) => (
     <form onSubmit={isEdit ? handleUpdatePromoCode : handleCreatePromoCode} className="space-y-4">
       {/* Code */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-theme-primary mb-1">
           Promo Code *
         </label>
         <div className="flex gap-2">
@@ -344,14 +375,14 @@ export const PromoCodesManager: React.FC = () => {
             onChange={(e) => setFormCode(e.target.value.toUpperCase())}
             disabled={isEdit}
             placeholder="e.g., KNOX-ABC123"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase disabled:bg-gray-100"
+            className="flex-1 input uppercase"
             required
           />
           {!isEdit && (
             <button
               type="button"
               onClick={generateRandomCode}
-              className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+              className="px-3 py-2 btn-secondary"
             >
               Generate
             </button>
@@ -361,7 +392,7 @@ export const PromoCodesManager: React.FC = () => {
 
       {/* Description */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-theme-primary mb-1">
           Description
         </label>
         <input
@@ -369,14 +400,37 @@ export const PromoCodesManager: React.FC = () => {
           value={formDescription}
           onChange={(e) => setFormDescription(e.target.value)}
           placeholder="e.g., Beta tester reward"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full input"
         />
+      </div>
+
+      {/* Subscription Plan */}
+      <div>
+        <label className="block text-sm font-medium text-theme-primary mb-1">
+          Subscription Level *
+        </label>
+        <select
+          value={formSubscriptionPlanId}
+          onChange={(e) => setFormSubscriptionPlanId(e.target.value)}
+          className="w-full input"
+          required
+        >
+          <option value="">Select a plan...</option>
+          {subscriptionPlans.filter(p => p.name !== 'free').map((plan) => (
+            <option key={plan.id} value={plan.id}>
+              {plan.display_name}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-theme-tertiary mt-1">
+          The subscription tier users get when redeeming this code
+        </p>
       </div>
 
       {/* Duration */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Free Account Duration *
+        <label className="block text-sm font-medium text-theme-primary mb-1">
+          Subscription Duration *
         </label>
         <select
           value={formDurationPreset}
@@ -384,7 +438,7 @@ export const PromoCodesManager: React.FC = () => {
             setFormDurationPreset(e.target.value);
             setFormIsPerpetual(e.target.value === 'perpetual');
           }}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full input"
         >
           {DURATION_PRESETS.map((preset) => (
             <option key={preset.label} value={preset.isPerpetual ? 'perpetual' : preset.days === -1 ? 'custom' : preset.days}>
@@ -400,15 +454,18 @@ export const PromoCodesManager: React.FC = () => {
             onChange={(e) => setFormCustomDays(e.target.value)}
             placeholder="Number of days"
             min="1"
-            className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full mt-2 input"
             required
           />
         )}
+        <p className="text-xs text-theme-tertiary mt-1">
+          How long the subscription lasts after redemption
+        </p>
       </div>
 
       {/* Discount (optional) */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-theme-primary mb-1">
           Discount % (optional, for paid plans after trial)
         </label>
         <input
@@ -417,13 +474,13 @@ export const PromoCodesManager: React.FC = () => {
           onChange={(e) => setFormDiscountPercent(e.target.value)}
           min="0"
           max="100"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full input"
         />
       </div>
 
       {/* Max Uses */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-theme-primary mb-1">
           Max Uses (leave empty for unlimited)
         </label>
         <input
@@ -432,21 +489,24 @@ export const PromoCodesManager: React.FC = () => {
           onChange={(e) => setFormMaxUses(e.target.value)}
           min="1"
           placeholder="Unlimited"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full input"
         />
       </div>
 
       {/* Expires At */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Code Expires On (optional)
+        <label className="block text-sm font-medium text-theme-primary mb-1">
+          Code Valid Until (optional)
         </label>
         <input
           type="date"
           value={formExpiresAt}
           onChange={(e) => setFormExpiresAt(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full input"
         />
+        <p className="text-xs text-theme-tertiary mt-1">
+          Last date this code can be redeemed
+        </p>
       </div>
 
       {/* Submit buttons */}
@@ -454,7 +514,7 @@ export const PromoCodesManager: React.FC = () => {
         <button
           type="submit"
           disabled={saving}
-          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+          className="flex-1 btn-primary"
         >
           {saving ? 'Saving...' : isEdit ? 'Update Code' : 'Create Code'}
         </button>
@@ -464,7 +524,7 @@ export const PromoCodesManager: React.FC = () => {
             isEdit ? setShowEditForm(false) : setShowNewPromoForm(false);
             resetForm();
           }}
-          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+          className="btn-secondary"
         >
           Cancel
         </button>
@@ -483,7 +543,7 @@ export const PromoCodesManager: React.FC = () => {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Promo Codes</h2>
+        <h2 className="text-2xl font-bold text-theme-primary">Promo Codes</h2>
         <button
           onClick={() => {
             resetForm();
@@ -506,54 +566,56 @@ export const PromoCodesManager: React.FC = () => {
 
       {/* New Promo Code Form */}
       {showNewPromoForm && (
-        <div className="mb-6 p-6 bg-white rounded-lg shadow-md border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4">Create New Promo Code</h3>
+        <div className="mb-6 p-6 card-themed rounded-lg shadow-md">
+          <h3 className="text-lg font-semibold mb-4 text-theme-primary">Create New Promo Code</h3>
           {renderPromoForm(false)}
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Promo Codes List */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="p-4 bg-gray-50 border-b">
-            <h3 className="font-semibold text-gray-700">
+        <div className="card-themed rounded-lg shadow-md overflow-hidden">
+          <div className="p-4 bg-theme-secondary/10 border-b border-theme-border">
+            <h3 className="font-semibold text-theme-primary">
               All Promo Codes ({promoCodes.length})
             </h3>
           </div>
 
           {promoCodes.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-theme-secondary">
               No promo codes yet. Create one to get started.
             </div>
           ) : (
-            <div className="divide-y">
+            <div className="divide-y divide-theme-border">
               {promoCodes.map((promo) => (
                 <div
                   key={promo.id}
                   onClick={() => handleSelectPromoCode(promo)}
-                  className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
-                    selectedPromoCode?.id === promo.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                  className={`p-4 cursor-pointer hover:bg-theme-hover transition-colors ${
+                    selectedPromoCode?.id === promo.id ? 'bg-blue-500/10 border-l-4 border-blue-500' : ''
                   }`}
                 >
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-lg">{promo.code}</span>
+                        <span className="font-mono font-bold text-lg text-theme-primary">{promo.code}</span>
                         {!promo.is_active && (
-                          <span className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs rounded">
+                          <span className="px-2 py-0.5 bg-gray-500/20 text-theme-secondary text-xs rounded">
                             Inactive
                           </span>
                         )}
                         {promo.is_perpetual_trial && (
-                          <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded">
+                          <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded">
                             Perpetual
                           </span>
                         )}
                       </div>
                       {promo.description && (
-                        <p className="text-sm text-gray-600 mt-1">{promo.description}</p>
+                        <p className="text-sm text-theme-secondary mt-1">{promo.description}</p>
                       )}
-                      <div className="text-xs text-gray-500 mt-2 space-x-3">
+                      <div className="text-xs text-theme-tertiary mt-2 space-x-3">
+                        <span className="text-blue-400">{getPlanLabel(promo.subscription_plan_id)}</span>
+                        <span>|</span>
                         <span>{getDurationLabel(promo)}</span>
                         <span>|</span>
                         <span>{promo.usage_count || 0} uses</span>
@@ -573,8 +635,8 @@ export const PromoCodesManager: React.FC = () => {
                         }}
                         className={`px-2 py-1 text-xs rounded ${
                           promo.is_active
-                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                            : 'bg-gray-500/20 text-theme-secondary hover:bg-gray-500/30'
                         }`}
                       >
                         {promo.is_active ? 'Active' : 'Disabled'}
@@ -588,11 +650,11 @@ export const PromoCodesManager: React.FC = () => {
         </div>
 
         {/* Promo Code Details */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="card-themed rounded-lg shadow-md overflow-hidden">
           {selectedPromoCode ? (
             <>
-              <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
-                <h3 className="font-semibold text-gray-700">
+              <div className="p-4 bg-theme-secondary/10 border-b border-theme-border flex justify-between items-center">
+                <h3 className="font-semibold text-theme-primary">
                   {selectedPromoCode.code} Details
                 </h3>
                 <div className="flex gap-2">
@@ -601,13 +663,13 @@ export const PromoCodesManager: React.FC = () => {
                       populateEditForm(selectedPromoCode);
                       setShowEditForm(true);
                     }}
-                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm"
+                    className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 text-sm"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDeletePromoCode(selectedPromoCode.id)}
-                    className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm"
+                    className="px-3 py-1 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 text-sm"
                   >
                     Delete
                   </button>
@@ -616,7 +678,7 @@ export const PromoCodesManager: React.FC = () => {
 
               {showEditForm ? (
                 <div className="p-4">
-                  <h4 className="font-medium mb-4">Edit Promo Code</h4>
+                  <h4 className="font-medium mb-4 text-theme-primary">Edit Promo Code</h4>
                   {renderPromoForm(true)}
                 </div>
               ) : (
@@ -624,47 +686,51 @@ export const PromoCodesManager: React.FC = () => {
                   {/* Stats */}
                   {promoStats && (
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="p-3 bg-blue-50 rounded-lg">
-                        <div className="text-2xl font-bold text-blue-700">{promoStats.total_uses}</div>
-                        <div className="text-sm text-blue-600">Total Uses</div>
+                      <div className="p-3 bg-blue-500/10 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-400">{promoStats.total_uses}</div>
+                        <div className="text-sm text-blue-400/80">Total Uses</div>
                       </div>
-                      <div className="p-3 bg-green-50 rounded-lg">
-                        <div className="text-2xl font-bold text-green-700">{promoStats.active_users}</div>
-                        <div className="text-sm text-green-600">Active Users</div>
+                      <div className="p-3 bg-green-500/10 rounded-lg">
+                        <div className="text-2xl font-bold text-green-400">{promoStats.active_users}</div>
+                        <div className="text-sm text-green-400/80">Active Users</div>
                       </div>
                       {promoStats.remaining_uses !== null && (
-                        <div className="p-3 bg-orange-50 rounded-lg">
-                          <div className="text-2xl font-bold text-orange-700">{promoStats.remaining_uses}</div>
-                          <div className="text-sm text-orange-600">Remaining</div>
+                        <div className="p-3 bg-orange-500/10 rounded-lg">
+                          <div className="text-2xl font-bold text-orange-400">{promoStats.remaining_uses}</div>
+                          <div className="text-sm text-orange-400/80">Remaining</div>
                         </div>
                       )}
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <div className="text-2xl font-bold text-gray-700">{promoStats.cancelled_users}</div>
-                        <div className="text-sm text-gray-600">Cancelled</div>
+                      <div className="p-3 bg-theme-secondary/10 rounded-lg">
+                        <div className="text-2xl font-bold text-theme-primary">{promoStats.cancelled_users}</div>
+                        <div className="text-sm text-theme-secondary">Cancelled</div>
                       </div>
                     </div>
                   )}
 
                   {/* Details */}
                   <div className="space-y-2 text-sm">
-                    <div className="flex justify-between py-2 border-b">
-                      <span className="text-gray-500">Duration:</span>
-                      <span className="font-medium">{getDurationLabel(selectedPromoCode)}</span>
+                    <div className="flex justify-between py-2 border-b border-theme-border">
+                      <span className="text-theme-secondary">Subscription Level:</span>
+                      <span className="font-medium text-blue-400">{getPlanLabel(selectedPromoCode.subscription_plan_id)}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-theme-border">
+                      <span className="text-theme-secondary">Duration:</span>
+                      <span className="font-medium text-theme-primary">{getDurationLabel(selectedPromoCode)}</span>
                     </div>
                     {selectedPromoCode.discount_percent > 0 && (
-                      <div className="flex justify-between py-2 border-b">
-                        <span className="text-gray-500">Discount:</span>
-                        <span className="font-medium">{selectedPromoCode.discount_percent}%</span>
+                      <div className="flex justify-between py-2 border-b border-theme-border">
+                        <span className="text-theme-secondary">Discount:</span>
+                        <span className="font-medium text-theme-primary">{selectedPromoCode.discount_percent}%</span>
                       </div>
                     )}
-                    <div className="flex justify-between py-2 border-b">
-                      <span className="text-gray-500">Created:</span>
-                      <span className="font-medium">{formatDate(selectedPromoCode.date_created)}</span>
+                    <div className="flex justify-between py-2 border-b border-theme-border">
+                      <span className="text-theme-secondary">Created:</span>
+                      <span className="font-medium text-theme-primary">{formatDate(selectedPromoCode.date_created)}</span>
                     </div>
                     {selectedPromoCode.expires_at && (
-                      <div className="flex justify-between py-2 border-b">
-                        <span className="text-gray-500">Expires:</span>
-                        <span className="font-medium">{formatDate(selectedPromoCode.expires_at)}</span>
+                      <div className="flex justify-between py-2 border-b border-theme-border">
+                        <span className="text-theme-secondary">Expires:</span>
+                        <span className="font-medium text-theme-primary">{formatDate(selectedPromoCode.expires_at)}</span>
                       </div>
                     )}
                   </div>
@@ -672,12 +738,12 @@ export const PromoCodesManager: React.FC = () => {
                   {/* Users who used this code */}
                   {promoUsers.length > 0 && (
                     <div className="mt-4">
-                      <h4 className="font-medium mb-2">Users ({promoUsers.length})</h4>
-                      <div className="max-h-48 overflow-y-auto border rounded-md divide-y">
+                      <h4 className="font-medium mb-2 text-theme-primary">Users ({promoUsers.length})</h4>
+                      <div className="max-h-48 overflow-y-auto border border-theme-border rounded-md divide-y divide-theme-border">
                         {promoUsers.map((user) => (
                           <div key={user.user_id} className="p-2 text-sm">
-                            <div className="font-medium">{user.display_name || user.email}</div>
-                            <div className="text-xs text-gray-500 flex justify-between">
+                            <div className="font-medium text-theme-primary">{user.display_name || user.email}</div>
+                            <div className="text-xs text-theme-tertiary flex justify-between">
                               <span>{user.status}</span>
                               <span>{formatDate(user.signed_up_at)}</span>
                             </div>
@@ -690,7 +756,7 @@ export const PromoCodesManager: React.FC = () => {
               )}
             </>
           ) : (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-theme-secondary">
               Select a promo code to view details
             </div>
           )}

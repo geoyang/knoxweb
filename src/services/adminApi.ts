@@ -266,6 +266,7 @@ class AdminApiService {
     is_perpetual_trial?: boolean;
     max_uses?: number;
     expires_at?: string;
+    subscription_plan_id?: string;
   }): Promise<ApiResponse<{ promo_code: any }>> {
     return this.makeApiCall('promo-codes-api?action=create', {
       method: 'POST',
@@ -282,6 +283,7 @@ class AdminApiService {
     max_uses?: number;
     expires_at?: string;
     is_active?: boolean;
+    subscription_plan_id?: string;
   }): Promise<ApiResponse<{ promo_code: any }>> {
     return this.makeApiCall('promo-codes-api?action=update', {
       method: 'POST',
@@ -302,6 +304,13 @@ class AdminApiService {
     users: any[];
   }>> {
     return this.makeApiCall(`promo-codes-api?action=stats&promo_id=${promoId}`, {
+      method: 'GET'
+    });
+  }
+
+  // Subscription Plans API
+  async getSubscriptionPlans(): Promise<ApiResponse<{ plans: Array<{ id: string; name: string; display_name: string }> }>> {
+    return this.makeApiCall('subscription-api?action=plans', {
       method: 'GET'
     });
   }
