@@ -203,12 +203,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (err) {
       clearTimeout(loadingTimeout);
       console.error('Error loading initial session:', err);
-      console.warn('Falling back to no session state');
-      setSession(null);
-      setUser(null);
-      setUserProfile(null);
-      userProfileRef.current = null;
-      setIsSuperAdmin(false);
+      // Only clear state if we haven't received a valid session from onAuthStateChange
+      if (!hasReceivedSession) {
+        console.warn('Falling back to no session state');
+        setSession(null);
+        setUser(null);
+        setUserProfile(null);
+        userProfileRef.current = null;
+        setIsSuperAdmin(false);
+      } else {
+        console.warn('Session already received via onAuthStateChange, keeping state');
+      }
       setLoading(false);
     }
     };
