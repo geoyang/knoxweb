@@ -244,8 +244,16 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    await signOut();
-    navigate('/login');
+    console.log('🔒 LOGOUT: Sign Out button clicked');
+    try {
+      await signOut();
+      console.log('🔒 LOGOUT: signOut() completed, navigating to /login');
+      navigate('/login');
+    } catch (err) {
+      console.error('🔒 LOGOUT ERROR:', err);
+      // Still navigate to login even if signOut fails
+      navigate('/login');
+    }
   };
 
   const handleImageError = (albumId: string) => {

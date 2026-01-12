@@ -530,16 +530,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signOut = async () => {
+    console.log('🔒 SIGN OUT: Starting sign out process...');
+    console.log('🔒 SIGN OUT: Current session before sign out:', !!session);
+    console.log('🔒 SIGN OUT: Current user before sign out:', user?.email);
+
     // Clear state immediately to prevent redirect loops
     setUser(null);
     setUserProfile(null);
     setSession(null);
     setIsSuperAdmin(false);
     userProfileRef.current = null;
+    console.log('🔒 SIGN OUT: Local state cleared');
 
     // Use global scope to invalidate tokens on all devices
+    console.log('🔒 SIGN OUT: Calling supabase.auth.signOut with scope: global...');
     const { error } = await supabase.auth.signOut({ scope: 'global' });
-    if (error) throw error;
+
+    if (error) {
+      console.error('🔒 SIGN OUT ERROR:', error);
+      throw error;
+    }
+
+    console.log('🔒 SIGN OUT: Successfully signed out - tokens invalidated on all devices');
+    console.log('🔒 SIGN OUT: Session after sign out:', session);
   };
 
   const value: AuthContextType = {
