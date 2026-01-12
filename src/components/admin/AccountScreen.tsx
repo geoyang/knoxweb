@@ -314,7 +314,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
                     type="text"
                     value={editedName}
                     onChange={(e) => setEditedName(e.target.value)}
-                    className="px-2 py-1 border border-gray-300 rounded text-sm w-40 text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="px-2 py-1 border border-gray-300 rounded text-sm w-40 text-right text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Your name"
                   />
                 </div>
