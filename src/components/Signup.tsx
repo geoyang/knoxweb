@@ -110,10 +110,12 @@ export const Signup: React.FC = () => {
     try {
       // Create account and log in directly - no verification code needed
       // The user already received an invite email, so we trust the email address
+      console.log('🔑 SIGNUP: Creating account with full_name:', fullName);
       const { data: authResponse, error: authError } = await supabase.functions.invoke('create-session-with-code', {
         body: {
           email: email.toLowerCase().trim(),
           code: 'SIGNUP', // Special code to indicate direct signup
+          full_name: fullName.trim() || null,
         }
       });
 
