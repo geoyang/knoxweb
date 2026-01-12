@@ -369,6 +369,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const verifyCode = async (email: string, code: string, fullName?: string) => {
     try {
+      console.log('🔐 VERIFY CODE: Starting verification');
+      console.log('🔐 VERIFY CODE: Received fullName parameter:', fullName ? `"${fullName}"` : 'undefined');
       console.log('Verifying code:', { email, code });
       
       // Verify against local storage
@@ -412,7 +414,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       // Get fullName from localCode if available, otherwise use parameter
       const nameToSave = fullName?.trim() || localCode.fullName || null;
-      console.log('Calling create-session-with-code with full_name:', nameToSave);
+      console.log('🔐 VERIFY CODE: fullName parameter:', fullName ? `"${fullName}"` : 'undefined');
+      console.log('🔐 VERIFY CODE: localCode.fullName:', localCode.fullName ? `"${localCode.fullName}"` : 'undefined');
+      console.log('🔐 VERIFY CODE: nameToSave (final):', nameToSave ? `"${nameToSave}"` : 'null');
+      console.log('🔐 VERIFY CODE: Calling create-session-with-code Edge Function...');
 
       const { data: authResponse, error: authError } = await supabase.functions.invoke('create-session-with-code', {
         body: {

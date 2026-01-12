@@ -144,8 +144,13 @@ export const Login: React.FC = () => {
     setLoading(true);
     setError(null);
 
+    console.log('🔑 CODE VERIFICATION: Starting verification');
+    console.log('🔑 CODE VERIFICATION: fullName state value:', fullName ? `"${fullName}"` : 'EMPTY');
+    console.log('🔑 CODE VERIFICATION: email:', email);
+
     try {
       const { error, success } = await verifyCode(email, verificationCode, fullName || undefined);
+      console.log('🔑 CODE VERIFICATION: verifyCode called with fullName:', fullName || 'undefined');
       if (error) {
         setError(error.message);
       } else if (success) {
@@ -416,10 +421,13 @@ export const Login: React.FC = () => {
                     setVerificationCode(code);
                     // Auto-submit when 4 characters are entered
                     if (code.length === 4) {
+                      console.log('🔑 AUTO-SUBMIT: Code complete, auto-submitting');
+                      console.log('🔑 AUTO-SUBMIT: fullName state value:', fullName ? `"${fullName}"` : 'EMPTY');
                       setTimeout(async () => {
                         setLoading(true);
                         setError(null);
                         try {
+                          console.log('🔑 AUTO-SUBMIT: Calling verifyCode with fullName:', fullName || 'undefined');
                           const { error, success } = await verifyCode(email, code, fullName || undefined);
                           if (error) {
                             setError(error.message);
