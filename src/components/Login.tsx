@@ -145,7 +145,7 @@ export const Login: React.FC = () => {
     setError(null);
 
     try {
-      const { error, success } = await verifyCode(email, verificationCode);
+      const { error, success } = await verifyCode(email, verificationCode, fullName || undefined);
       if (error) {
         setError(error.message);
       } else if (success) {
@@ -389,6 +389,21 @@ export const Login: React.FC = () => {
 
             <form onSubmit={handleCodeVerification} className="space-y-6">
               <div>
+                <label htmlFor="nameForCode" className="form-label">
+                  Your Name (for new accounts)
+                </label>
+                <input
+                  id="nameForCode"
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="input placeholder-muted"
+                  placeholder="Enter your name if this is your first login"
+                  autoComplete="name"
+                />
+              </div>
+
+              <div>
                 <label htmlFor="code" className="form-label">
                   4-Digit Code
                 </label>
@@ -405,7 +420,7 @@ export const Login: React.FC = () => {
                         setLoading(true);
                         setError(null);
                         try {
-                          const { error, success } = await verifyCode(email, code);
+                          const { error, success } = await verifyCode(email, code, fullName || undefined);
                           if (error) {
                             setError(error.message);
                           } else if (success) {

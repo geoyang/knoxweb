@@ -18,7 +18,7 @@ interface AuthContextType {
   isSuperAdmin: boolean;
   signInWithMagicLink: (email: string) => Promise<{ error: any }>;
   signInWithCode: (email: string) => Promise<{ error: any; code?: string }>;
-  verifyCode: (email: string, code: string) => Promise<{ error: any; success?: boolean; profile?: UserProfile | null }>;
+  verifyCode: (email: string, code: string, fullName?: string) => Promise<{ error: any; success?: boolean; profile?: UserProfile | null }>;
   checkUserExists: (email: string) => Promise<{ exists: boolean; error?: any }>;
   signUp: (email: string, fullName?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -367,7 +367,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const verifyCode = async (email: string, code: string) => {
+  const verifyCode = async (email: string, code: string, fullName?: string) => {
     try {
       console.log('Verifying code:', { email, code });
       
@@ -410,10 +410,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Clear the verification data
       sessionStorage.removeItem('pendingVerification');
       
+      // Get fullName from localCode if available, otherwise use parameter
+      const nameToSave = fullName?.trim() || localCode.fullName || null;
+      console.log('Calling create-session-with-code with full_name:', nameToSave);
+
       const { data: authResponse, error: authError } = await supabase.functions.invoke('create-session-with-code', {
         body: {
           email: email.toLowerCase().trim(),
-          code: code.toUpperCase()
+          code: code.toUpperCase(),
+          full_name: nameToSave
         }
       });
 
