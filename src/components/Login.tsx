@@ -10,6 +10,7 @@ const SAVED_EMAIL_KEY = 'knox_saved_email';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(false);
@@ -171,11 +172,17 @@ export const Login: React.FC = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!fullName.trim()) {
+      setError('Please enter your name');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const { error } = await signUp(email);
+      const { error } = await signUp(email, fullName.trim());
       if (error) {
         setError(error.message);
       } else {
@@ -240,6 +247,22 @@ export const Login: React.FC = () => {
         ) : isSignUp ? (
           <form onSubmit={handleSignUp} className="space-y-6">
             <div>
+              <label htmlFor="fullName" className="form-label">
+                Your Name
+              </label>
+              <input
+                id="fullName"
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+                className="input placeholder-muted"
+                placeholder="John Smith"
+                autoComplete="name"
+              />
+            </div>
+
+            <div>
               <label htmlFor="email" className="form-label">
                 Email Address
               </label>
@@ -262,7 +285,7 @@ export const Login: React.FC = () => {
 
             <button
               type="submit"
-              disabled={loading || !email}
+              disabled={loading || !email || !fullName.trim()}
               className="w-full btn-primary"
             >
               {loading ? 'Creating Account...' : 'Create Account'}

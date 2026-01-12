@@ -20,7 +20,7 @@ interface AuthContextType {
   signInWithCode: (email: string) => Promise<{ error: any; code?: string }>;
   verifyCode: (email: string, code: string) => Promise<{ error: any; success?: boolean; profile?: UserProfile | null }>;
   checkUserExists: (email: string) => Promise<{ exists: boolean; error?: any }>;
-  signUp: (email: string) => Promise<{ error: any }>;
+  signUp: (email: string, fullName?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -503,13 +503,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signUp = async (email: string) => {
+  const signUp = async (email: string, fullName?: string) => {
     try {
-      console.log('Creating account for:', email);
+      console.log('Creating account for:', email, 'with name:', fullName);
 
       // Use Edge Function to create user account
       const { data: response, error } = await supabase.functions.invoke('create-user', {
-        body: { email: email.toLowerCase().trim() }
+        body: {
+          email: email.toLowerCase().trim(),
+          full_name: fullName?.trim() || null
+        }
       });
 
       if (error) {
