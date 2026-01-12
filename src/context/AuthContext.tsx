@@ -537,15 +537,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('🔒 SIGN OUT: Current session before sign out:', !!session);
     console.log('🔒 SIGN OUT: Current user before sign out:', user?.email);
 
-    // Clear local state FIRST to prevent UI from showing logged-in state
-    setUser(null);
-    setUserProfile(null);
-    setSession(null);
-    setIsSuperAdmin(false);
-    userProfileRef.current = null;
-    console.log('🔒 SIGN OUT: Local state cleared');
-
-    // Call signOut to invalidate tokens on server
+    // Call signOut FIRST while we still have auth tokens
     console.log('🔒 SIGN OUT: Calling supabase.auth.signOut with scope: global...');
     try {
       const { error } = await supabase.auth.signOut({ scope: 'global' });
@@ -559,7 +551,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('🔒 SIGN OUT EXCEPTION:', err);
     }
 
-    // Force clear any Supabase session from localStorage
+    // Clear local state AFTER the API call
+    setUser(null);
+    setUserProfile(null);
+    setSession(null);
+    setIsSuperAdmin(false);
+    userProfileRef.current = null;
+    console.log('🔒 SIGN OUT: Local state cleared');
+
+    // Force clear any Supabase session from localStorage as backup
     const storageKey = `sb-${import.meta.env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0]}-auth-token`;
     console.log('🔒 SIGN OUT: Clearing localStorage key:', storageKey);
     localStorage.removeItem(storageKey);
