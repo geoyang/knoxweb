@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { adminApi } from '../services/adminApi';
+import { useAuth } from '../context/AuthContext';
 
 interface Circle {
   id: string;
@@ -43,7 +44,9 @@ interface UserProfile {
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [userCreatedAt, setUserCreatedAt] = useState<string | null>(null);
   const [circles, setCircles] = useState<Circle[]>([]);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +55,26 @@ export const Dashboard: React.FC = () => {
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<AlbumAsset | null>(null);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const [subscriptionInfo, setSubscriptionInfo] = useState<{
+    planName: string;
+    expiry: string;
+  } | null>(null);
+
+  // Get member duration
+  const getMemberDuration = (): string => {
+    if (!userCreatedAt) return '';
+    const created = new Date(userCreatedAt);
+    const now = new Date();
+    const diffMs = now.getTime() - created.getTime();
+    const diffDays = Math.floor(diffMs / 86400000);
+    const diffMonths = Math.floor(diffDays / 30);
+    const diffYears = Math.floor(diffDays / 365);
+
+    if (diffYears > 0) return `${diffYears} year${diffYears > 1 ? 's' : ''}`;
+    if (diffMonths > 0) return `${diffMonths} month${diffMonths > 1 ? 's' : ''}`;
+    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''}`;
+    return 'today';
+  };
 
   useEffect(() => {
     loadUserData();
@@ -68,6 +91,35 @@ export const Dashboard: React.FC = () => {
       }
 
       const userId = session.user.id;
+      setUserCreatedAt(session.user.created_at);
+
+      // Load subscription info
+      try {
+        const subResult = await adminApi.getSubscriptionStatus();
+        if (subResult.success && subResult.data) {
+          const { subscription, plan } = subResult.data;
+          let expiry = '';
+
+          if (subscription.status === 'trialing' && subscription.trial_end) {
+            const daysLeft = Math.ceil((new Date(subscription.trial_end).getTime() - Date.now()) / 86400000);
+            expiry = `${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining`;
+          } else if (subscription.status === 'active' && subscription.current_period_end) {
+            const endDate = new Date(subscription.current_period_end);
+            expiry = `Renews ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+          } else if (subscription.status === 'cancelled' && subscription.current_period_end) {
+            const daysLeft = Math.ceil((new Date(subscription.current_period_end).getTime() - Date.now()) / 86400000);
+            expiry = `Expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
+          }
+
+          setSubscriptionInfo({
+            planName: subscription.status === 'free' ? 'Guest' :
+                      subscription.status === 'trialing' ? `${plan.display_name} Trial` : plan.display_name,
+            expiry
+          });
+        }
+      } catch (subError) {
+        console.error('Error fetching subscription:', subError);
+      }
 
       // Load user profile
       const { data: profileData, error: profileError } = await supabase
@@ -192,7 +244,7 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOut();
     navigate('/login');
   };
 
@@ -351,10 +403,19 @@ export const Dashboard: React.FC = () => {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-800">
-            Welcome back, {user?.full_name?.split(' ')[0]}! 👋
+            Welcome back, {user?.full_name?.split(' ')[0]}!
           </h2>
           <p className="text-gray-600 mt-1">
-            Here are your circles and shared albums.
+            Member for {getMemberDuration()}
+            {subscriptionInfo && (
+              <>
+                {' · '}
+                <span className="font-medium">{subscriptionInfo.planName}</span>
+                {subscriptionInfo.expiry && (
+                  <span className="ml-1">({subscriptionInfo.expiry})</span>
+                )}
+              </>
+            )}
           </p>
         </div>
 

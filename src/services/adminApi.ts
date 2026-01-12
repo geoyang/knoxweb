@@ -315,6 +315,25 @@ class AdminApiService {
     });
   }
 
+  // Get current user's subscription status
+  async getSubscriptionStatus(): Promise<ApiResponse<{
+    subscription: {
+      id: string;
+      status: 'trialing' | 'active' | 'grace_period' | 'read_only' | 'cancelled' | 'expired' | 'free';
+      trial_end: string | null;
+      current_period_end: string | null;
+    };
+    plan: {
+      id: string;
+      name: string;
+      display_name: string;
+    };
+  }>> {
+    return this.makeApiCall('subscription-api?action=status', {
+      method: 'GET'
+    });
+  }
+
   // Export Jobs API
   async getExportJobs(): Promise<ApiResponse<{
     jobs: Array<{

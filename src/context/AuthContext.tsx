@@ -537,7 +537,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsSuperAdmin(false);
     userProfileRef.current = null;
 
-    const { error } = await supabase.auth.signOut();
+    // Use global scope to invalidate tokens on all devices
+    const { error } = await supabase.auth.signOut({ scope: 'global' });
     if (error) throw error;
   };
 

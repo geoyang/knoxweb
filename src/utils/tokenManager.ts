@@ -178,7 +178,7 @@ export class TokenManager {
       const tokenExpiresAt = user.user_metadata?.token_expires_at;
       if (tokenExpiresAt && new Date(tokenExpiresAt) < new Date()) {
         console.log('User token has expired, signing out');
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'global' });
       }
     } catch (error) {
       console.warn('Exception during session cleanup', error);

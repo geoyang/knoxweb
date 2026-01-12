@@ -32,6 +32,11 @@ export const AdminDashboard: React.FC = () => {
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [totalChatCount, setTotalChatCount] = useState(0);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [subscriptionInfo, setSubscriptionInfo] = useState<{
+    planName: string;
+    status: string;
+    expiry: string;
+  } | null>(null);
 
   // Tab counts
   const [countsLoading, setCountsLoading] = useState(true);
@@ -43,6 +48,58 @@ export const AdminDashboard: React.FC = () => {
     contacts: 0,
     invitations: 0,
   });
+
+  // Get member duration
+  const getMemberDuration = (): string => {
+    if (!user?.created_at) return '';
+    const created = new Date(user.created_at);
+    const now = new Date();
+    const diffMs = now.getTime() - created.getTime();
+    const diffDays = Math.floor(diffMs / 86400000);
+    const diffMonths = Math.floor(diffDays / 30);
+    const diffYears = Math.floor(diffDays / 365);
+
+    if (diffYears > 0) return `${diffYears} year${diffYears > 1 ? 's' : ''}`;
+    if (diffMonths > 0) return `${diffMonths} month${diffMonths > 1 ? 's' : ''}`;
+    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''}`;
+    return 'today';
+  };
+
+  // Fetch subscription status
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      if (!user) return;
+      try {
+        const result = await adminApi.getSubscriptionStatus();
+        if (result.success && result.data) {
+          const { subscription, plan } = result.data;
+          let expiry = '';
+
+          if (subscription.status === 'trialing' && subscription.trial_end) {
+            const daysLeft = Math.ceil((new Date(subscription.trial_end).getTime() - Date.now()) / 86400000);
+            expiry = `${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining`;
+          } else if (subscription.status === 'active' && subscription.current_period_end) {
+            const endDate = new Date(subscription.current_period_end);
+            expiry = `Renews ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+          } else if (subscription.status === 'cancelled' && subscription.current_period_end) {
+            const daysLeft = Math.ceil((new Date(subscription.current_period_end).getTime() - Date.now()) / 86400000);
+            expiry = `Expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
+          }
+
+          setSubscriptionInfo({
+            planName: subscription.status === 'free' ? 'Guest' :
+                      subscription.status === 'trialing' ? `${plan.display_name} Trial` : plan.display_name,
+            status: subscription.status,
+            expiry
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching subscription:', error);
+      }
+    };
+
+    fetchSubscription();
+  }, [user]);
 
   // Fetch all counts
   useEffect(() => {
@@ -167,14 +224,28 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-theme-secondary">
-                Welcome, {userProfile?.full_name || user.email}
-                {isSuperAdmin && (
-                  <span className="ml-2 px-2 py-1 badge-admin text-xs rounded-full font-medium">
-                    Super Admin
-                  </span>
-                )}
-              </span>
+              <div className="text-right">
+                <div className="text-sm text-theme-secondary">
+                  Welcome, {userProfile?.full_name || user.email}
+                  {isSuperAdmin && (
+                    <span className="ml-2 px-2 py-1 badge-admin text-xs rounded-full font-medium">
+                      Super Admin
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-theme-muted">
+                  Member for {getMemberDuration()}
+                  {subscriptionInfo && (
+                    <>
+                      {' · '}
+                      <span className="font-medium">{subscriptionInfo.planName}</span>
+                      {subscriptionInfo.expiry && (
+                        <span className="ml-1">({subscriptionInfo.expiry})</span>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
               <ThemeToggle size="sm" />
               <button
                 onClick={() => setShowAccountScreen(true)}
