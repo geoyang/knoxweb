@@ -10,6 +10,7 @@ import { AuthCallback } from './components/AuthCallback';
 import { VerifyRegistration } from './components/VerifyRegistration';
 import { Dashboard } from './components/Dashboard';
 import { FrameSetup } from './components/FrameSetup';
+import { ShareRequest } from './components/ShareRequest';
 
 function App() {
   return (
@@ -24,6 +25,9 @@ function App() {
 
         {/* Picture Frame Setup route */}
         <Route path="/frame-setup/:token" element={<FrameSetup />} />
+
+        {/* Share request route */}
+        <Route path="/share" element={<ShareRequest />} />
 
         {/* Registration verification route */}
         <Route path="/verify" element={<VerifyRegistration />} />
