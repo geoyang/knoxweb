@@ -20,6 +20,7 @@ class AIApiService {
 
   constructor() {
     this.baseUrl = import.meta.env.VITE_AI_API_URL || 'http://localhost:8000';
+    console.log('[AI Service] Using AI server:', this.baseUrl);
   }
 
   private async getAuthHeaders(): Promise<Record<string, string>> {
@@ -277,6 +278,19 @@ class AIApiService {
   // Get list of detected object classes
   async getDetectedObjects(): Promise<AIApiResponse<{ objects: { class: string; count: number }[] }>> {
     return this.request('/api/v1/search/objects');
+  }
+
+  // Reindex assets (batch process unprocessed assets)
+  async reindex(limit: number = 10, offset: number = 0): Promise<AIApiResponse<{
+    status: string;
+    processed: number;
+    errors: number;
+    next_offset: number;
+    message: string;
+  }>> {
+    return this.request(`/api/v1/process/reindex?limit=${limit}&offset=${offset}`, {
+      method: 'POST',
+    });
   }
 }
 

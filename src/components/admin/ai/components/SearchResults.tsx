@@ -65,9 +65,23 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
               🖼️
             </div>
           )}
-          <span className="search-result-card__score">
-            {Math.round(result.similarity * 100)}%
-          </span>
+          <div className="search-result-card__info">
+            <span className="search-result-card__score">
+              {Math.round(result.similarity * 100)}%
+            </span>
+            {result.matched_location && (
+              <span className="search-result-card__location" title={result.matched_location}>
+                📍 {result.matched_location.length > 20
+                  ? result.matched_location.substring(0, 20) + '...'
+                  : result.matched_location}
+              </span>
+            )}
+            {result.matched_objects && result.matched_objects.length > 0 && (
+              <span className="search-result-card__objects">
+                🏷️ {result.matched_objects.join(', ')}
+              </span>
+            )}
+          </div>
         </div>
       ))}
     </div>

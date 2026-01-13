@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { contactsApi, Contact, ContactInput, RELATIONSHIP_TYPES, RELATIONSHIP_COLORS } from '../../services/contactsApi';
 import { friendsApi } from '../../services/friendsApi';
+import { chatApi } from '../../services/chatApi';
 import { aiApi } from '../../services/aiApi';
+import { supabase } from '../../lib/supabase';
 import { NOTIFICATION_SOUNDS, getSoundById, SOUND_CATEGORIES } from '../../config/notificationSounds';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { library } from '@fortawesome/fontawesome-svg-core';
@@ -59,6 +61,8 @@ export const ContactsManager: React.FC = () => {
   } | null>(null);
   const [friendshipLoading, setFriendshipLoading] = useState(false);
   const [friendshipActionLoading, setFriendshipActionLoading] = useState(false);
+  const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
+  const [dmLoading, setDmLoading] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Sound playback functions
@@ -142,11 +146,63 @@ export const ContactsManager: React.FC = () => {
       setError(null);
       const result = await contactsApi.getContacts(searchQuery || undefined, 1, 1000);
       setContacts(result.contacts);
+
+      // Load friend IDs for contacts with linked profiles
+      loadFriendIds(result.contacts);
     } catch (err) {
       console.error('Error loading contacts:', err);
       setError(err instanceof Error ? err.message : 'Failed to load contacts');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Load friend IDs from the friendships table
+  const loadFriendIds = async (contactsList: Contact[]) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get all friendships for the current user
+      const { data: friendships, error } = await supabase
+        .from('friendships')
+        .select('friend_id')
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error loading friendships:', error);
+        return;
+      }
+
+      // Create a Set of friend IDs
+      const friendIdSet = new Set<string>(
+        (friendships || []).map((f: { friend_id: string }) => f.friend_id)
+      );
+      setFriendIds(friendIdSet);
+    } catch (err) {
+      console.error('Error loading friend IDs:', err);
+    }
+  };
+
+  // Handle DM button click
+  const handleStartDM = async (e: React.MouseEvent, contact: Contact) => {
+    e.stopPropagation(); // Prevent selecting the contact
+    if (!contact.linked_profile_id) return;
+
+    setDmLoading(contact.id);
+    try {
+      const result = await chatApi.createDM(contact.linked_profile_id);
+      if (result.success && result.data?.conversation) {
+        // Navigate to chat with this conversation
+        navigate(`/admin?tab=chat&conversation=${result.data.conversation.id}`);
+      } else {
+        alert(result.error || 'Failed to create conversation');
+      }
+    } catch (err) {
+      console.error('Error creating DM:', err);
+      alert('Failed to start conversation');
+    } finally {
+      setDmLoading(null);
     }
   };
 
@@ -540,18 +596,21 @@ export const ContactsManager: React.FC = () => {
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                        {contact.linked_profile && (
-                          <span className={`inline-flex items-center gap-1 ${
-                            selectedContact?.id === contact.id && friendshipStatus?.isFriend
-                              ? 'text-emerald-600'
-                              : 'text-green-600'
-                          }`}>
+                        {contact.linked_profile && contact.linked_profile_id && friendIds.has(contact.linked_profile_id) ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-600">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                            </svg>
+                            Friend
+                          </span>
+                        ) : contact.linked_profile ? (
+                          <span className="inline-flex items-center gap-1 text-green-600">
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
-                            {selectedContact?.id === contact.id && friendshipStatus?.isFriend ? 'Connected' : 'On Kizu'}
+                            On Kizu
                           </span>
-                        )}
+                        ) : null}
                         {contact.notification_sound && contact.notification_sound !== 'default' && (
                           <span className="text-gray-400 flex items-center gap-1">
                             <FontAwesomeIcon icon={getIcon(getSoundById(contact.notification_sound).icon)} className="w-3 h-3" />
@@ -560,6 +619,24 @@ export const ContactsManager: React.FC = () => {
                         )}
                       </div>
                     </div>
+
+                    {/* DM Button for friends */}
+                    {contact.linked_profile_id && friendIds.has(contact.linked_profile_id) && (
+                      <button
+                        onClick={(e) => handleStartDM(e, contact)}
+                        disabled={dmLoading === contact.id}
+                        className="flex-shrink-0 p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors disabled:opacity-50"
+                        title="Send message"
+                      >
+                        {dmLoading === contact.id ? (
+                          <div className="w-5 h-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                        ) : (
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))

@@ -322,8 +322,8 @@ export const SearchTab: React.FC = () => {
               list="object-suggestions"
             />
             <datalist id="object-suggestions">
-              {detectedObjects.map(obj => (
-                <option key={obj.class} value={obj.class}>
+              {detectedObjects.map((obj, index) => (
+                <option key={obj.class || `obj-${index}`} value={obj.class}>
                   {obj.class} ({obj.count} images)
                 </option>
               ))}
@@ -376,8 +376,8 @@ export const SearchTab: React.FC = () => {
               }}
             >
               <option value="">Select a contact...</option>
-              {contacts.map(contact => (
-                <option key={contact.id} value={contact.id}>
+              {contacts.map((contact, index) => (
+                <option key={contact.id || `contact-${index}`} value={contact.id}>
                   {contact.name}
                 </option>
               ))}
@@ -397,8 +397,8 @@ export const SearchTab: React.FC = () => {
               }}
             >
               <option value="">Select a cluster...</option>
-              {labeledClusters.map(cluster => (
-                <option key={cluster.id} value={cluster.id}>
+              {labeledClusters.map((cluster, index) => (
+                <option key={cluster.id || `cluster-${index}`} value={cluster.id}>
                   {cluster.name || `Cluster (${cluster.face_count} faces)`}
                 </option>
               ))}

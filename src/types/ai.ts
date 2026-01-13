@@ -93,6 +93,7 @@ export interface SearchResult {
   web_uri?: string;
   matched_objects?: string[];
   matched_faces?: string[];
+  matched_location?: string;  // Location name from asset metadata
   metadata?: Record<string, unknown>;
 }
 
