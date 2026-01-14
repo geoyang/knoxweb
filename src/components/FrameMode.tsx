@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface FrameAsset {
   id: string;
@@ -18,6 +20,12 @@ interface FrameInfo {
   curatedAlbums: string[];
 }
 
+interface Circle {
+  id: string;
+  name: string;
+  album_count?: number;
+}
+
 interface FrameSettings {
   slideshow_interval: number;
   transition: 'fade' | 'ken_burns' | 'none';
@@ -26,7 +34,7 @@ interface FrameSettings {
   show_location: boolean;
 }
 
-type Step = 'loading' | 'authenticating' | 'ready' | 'error';
+type Step = 'loading' | 'authenticating' | 'select_circle' | 'ready' | 'error';
 
 const DEFAULT_SETTINGS: FrameSettings = {
   slideshow_interval: 30,
@@ -58,6 +66,7 @@ const formatDuration = (seconds: number): string => {
 export const FrameMode: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { session, userProfile, loading: authLoading } = useAuth();
   const token = searchParams.get('token');
 
   const [step, setStep] = useState<Step>('loading');
@@ -71,6 +80,8 @@ export const FrameMode: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [deviceToken, setDeviceToken] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [circles, setCircles] = useState<Circle[]>([]);
+  const [useAuthSession, setUseAuthSession] = useState(false);
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -99,23 +110,171 @@ export const FrameMode: React.FC = () => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  // Exchange app login token for device token
+  // Initialize frame mode - check auth session or token
   useEffect(() => {
-    if (!token) {
-      // Check for stored device token
-      const storedToken = localStorage.getItem('kizu_frame_device_token');
-      if (storedToken) {
-        setDeviceToken(storedToken);
-        setStep('authenticating');
-      } else {
-        setError('No frame token provided. Please set up your frame first.');
-        setStep('error');
-      }
+    // Wait for auth to finish loading
+    if (authLoading) return;
+
+    // If we have a token in URL, use the device token flow
+    if (token) {
+      exchangeToken();
       return;
     }
 
-    exchangeToken();
-  }, [token]);
+    // Check for stored device token first
+    const storedToken = localStorage.getItem('kizu_frame_device_token');
+    if (storedToken) {
+      setDeviceToken(storedToken);
+      setStep('authenticating');
+      return;
+    }
+
+    // If user is logged in via web app, use their session directly
+    if (session?.access_token) {
+      setUseAuthSession(true);
+      setAccessToken(session.access_token);
+      loadUserCircles();
+      return;
+    }
+
+    // No auth method available
+    setError('Please log in or set up your frame first.');
+    setStep('error');
+  }, [token, authLoading, session]);
+
+  // Load user's circles when using auth session
+  const loadUserCircles = async () => {
+    try {
+      const { data: memberCircles, error } = await supabase
+        .from('circle_members')
+        .select(`
+          circle_id,
+          circles:circle_id (
+            id,
+            name
+          )
+        `)
+        .eq('user_id', session?.user?.id);
+
+      if (error) {
+        console.error('Error loading circles:', error);
+        setError('Failed to load your circles');
+        setStep('error');
+        return;
+      }
+
+      const circleList: Circle[] = (memberCircles || [])
+        .map((m: any) => m.circles)
+        .filter(Boolean);
+
+      if (circleList.length === 0) {
+        setError('You are not a member of any circles. Join a circle first.');
+        setStep('error');
+        return;
+      }
+
+      // If only one circle, use it directly
+      if (circleList.length === 1) {
+        await selectCircle(circleList[0]);
+        return;
+      }
+
+      setCircles(circleList);
+      setStep('select_circle');
+    } catch (err) {
+      console.error('Load circles error:', err);
+      setError('Failed to load circles');
+      setStep('error');
+    }
+  };
+
+  // Select a circle and load its albums
+  const selectCircle = async (circle: Circle) => {
+    try {
+      setStep('authenticating');
+
+      // Load albums for this circle
+      const { data: albums, error } = await supabase
+        .from('albums')
+        .select('id')
+        .eq('circle_id', circle.id);
+
+      if (error) {
+        console.error('Error loading albums:', error);
+        setError('Failed to load albums');
+        setStep('error');
+        return;
+      }
+
+      const albumIds = (albums || []).map((a: any) => a.id);
+
+      setFrameInfo({
+        deviceId: 'web-browser',
+        deviceName: 'Web Browser',
+        circleName: circle.name,
+        circleId: circle.id,
+        curatedAlbums: albumIds,
+      });
+
+      // Load assets using the session token
+      if (session?.access_token) {
+        await loadAssetsWithAuth(session.access_token, albumIds);
+      }
+    } catch (err) {
+      console.error('Select circle error:', err);
+      setError('Failed to select circle');
+      setStep('error');
+    }
+  };
+
+  // Load assets using auth session (not device token)
+  const loadAssetsWithAuth = async (token: string, albumIds: string[]) => {
+    try {
+      const allAssets: FrameAsset[] = [];
+
+      for (const albumId of albumIds) {
+        const { data: albumAssets, error } = await supabase
+          .from('album_assets')
+          .select(`
+            assets:asset_id (
+              id,
+              path,
+              web_uri,
+              thumbnail_uri,
+              media_type,
+              created_at,
+              location_name
+            )
+          `)
+          .eq('album_id', albumId);
+
+        if (!error && albumAssets) {
+          for (const aa of albumAssets) {
+            const asset = (aa as any).assets;
+            if (asset) {
+              allAssets.push({
+                id: asset.id,
+                web_uri: asset.web_uri || asset.path,
+                thumbnail_uri: asset.thumbnail_uri,
+                media_type: asset.media_type || 'photo',
+                created_at: asset.created_at,
+                location_name: asset.location_name,
+              });
+            }
+          }
+        }
+      }
+
+      // Shuffle for random display
+      const shuffled = [...allAssets].sort(() => Math.random() - 0.5);
+      setAssets(shuffled);
+      setStep('ready');
+    } catch (err) {
+      console.error('Load assets error:', err);
+      setError('Failed to load photos');
+      setStep('error');
+    }
+  };
 
   // Authenticate with device token
   useEffect(() => {
@@ -368,9 +527,12 @@ export const FrameMode: React.FC = () => {
   }, [handleKeyDown]);
 
   const handleExit = () => {
-    localStorage.removeItem('kizu_frame_device_token');
-    localStorage.removeItem('kizu_frame_info');
-    navigate('/');
+    // Only clear device tokens if not using auth session
+    if (!useAuthSession) {
+      localStorage.removeItem('kizu_frame_device_token');
+      localStorage.removeItem('kizu_frame_info');
+    }
+    navigate('/admin');
   };
 
   const currentAsset = assets[currentIndex];
@@ -387,6 +549,47 @@ export const FrameMode: React.FC = () => {
     );
   }
 
+  // Circle selection state
+  if (step === 'select_circle') {
+    return (
+      <div className="fixed inset-0 bg-black flex items-center justify-center">
+        <div className="bg-zinc-900 rounded-2xl max-w-md w-full mx-4 p-6">
+          <div className="text-center mb-6">
+            <span className="text-5xl mb-4 block">🖼️</span>
+            <h1 className="text-2xl font-bold text-white mb-2">Picture Frame Mode</h1>
+            <p className="text-zinc-400">Select a circle to display photos from</p>
+          </div>
+
+          <div className="space-y-3">
+            {circles.map((circle) => (
+              <button
+                key={circle.id}
+                onClick={() => selectCircle(circle)}
+                className="w-full flex items-center gap-4 p-4 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-colors text-left"
+              >
+                <span className="text-3xl">👨‍👩‍👧‍👦</span>
+                <div className="flex-1">
+                  <p className="text-white font-semibold">{circle.name}</p>
+                  <p className="text-zinc-400 text-sm">View all photos</p>
+                </div>
+                <svg className="w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => navigate(-1)}
+            className="w-full mt-6 py-3 text-zinc-400 hover:text-white transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Error state
   if (step === 'error') {
     return (
@@ -396,10 +599,10 @@ export const FrameMode: React.FC = () => {
           <h1 className="text-2xl font-bold mb-4">Frame Error</h1>
           <p className="text-white/70 mb-6">{error}</p>
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate(session ? '/admin' : '/')}
             className="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-lg transition-colors"
           >
-            Go Home
+            {session ? 'Go Back' : 'Go Home'}
           </button>
         </div>
       </div>
