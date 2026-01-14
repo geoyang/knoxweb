@@ -72,6 +72,23 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+export interface GlobalSearchResult {
+  conversation_id: string;
+  type: 'dm' | 'circle';
+  title: string;
+  hit_count: number;
+  preview: string;
+  last_match: string;
+}
+
+export interface ConversationSearchResult {
+  id: string;
+  content_text: string;
+  created_at: string;
+  sender: { id: string; full_name: string | null; avatar_url: string | null } | null;
+  match_index: number;
+}
+
 async function getAuthHeaders(): Promise<Record<string, string> | null> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) {
@@ -295,5 +312,52 @@ export const chatApi = {
       return 0;
     }
     return result.data.conversations.reduce((sum, conv) => sum + (conv.unread_count || 0), 0);
+  },
+
+  // Global search across all conversations
+  searchGlobal: async (
+    query: string
+  ): Promise<ApiResponse<{ results: GlobalSearchResult[]; total_hits: number }>> => {
+    try {
+      const headers = await getAuthHeaders();
+      if (!headers) return { success: false, error: 'Not authenticated' };
+
+      const params = new URLSearchParams({ action: 'global', query });
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/chat-search-api?${params}`,
+        { headers }
+      );
+      const data = await response.json();
+      if (!response.ok) return { success: false, error: data.error };
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: 'Search failed' };
+    }
+  },
+
+  // Search within a specific conversation
+  searchConversation: async (
+    conversationId: string,
+    query: string
+  ): Promise<ApiResponse<{ results: ConversationSearchResult[]; total: number }>> => {
+    try {
+      const headers = await getAuthHeaders();
+      if (!headers) return { success: false, error: 'Not authenticated' };
+
+      const params = new URLSearchParams({
+        action: 'conversation',
+        conversation_id: conversationId,
+        query,
+      });
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/chat-search-api?${params}`,
+        { headers }
+      );
+      const data = await response.json();
+      if (!response.ok) return { success: false, error: data.error };
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: 'Search failed' };
+    }
   },
 };

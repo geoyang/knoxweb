@@ -10,6 +10,8 @@ import {
   type Reaction,
   type EmojiCode,
 } from '../../services/reactionsApi';
+import { ChatSearchGlobal } from './chat/ChatSearchGlobal';
+import { ChatSearchInChat, highlightSearchText } from './chat/ChatSearchInChat';
 
 // Sticker data - matching mobile app
 const STICKER_CATEGORIES = [
@@ -88,6 +90,12 @@ export const ChatManager: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // Search state
+  const [showInChatSearch, setShowInChatSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
@@ -446,6 +454,34 @@ export const ChatManager: React.FC = () => {
     return null;
   };
 
+  // Handle global search result selection
+  const handleGlobalSearchSelect = (conversationId: string, query: string) => {
+    const conv = conversations.find(c => c.id === conversationId);
+    if (conv) {
+      setSelectedConversation(conv);
+      setSearchQuery(query);
+      setShowInChatSearch(true);
+    }
+  };
+
+  // Handle navigating to a specific message
+  const handleNavigateToMessage = (messageId: string) => {
+    setHighlightedMessageId(messageId);
+    const messageEl = messageRefs.current[messageId];
+    if (messageEl) {
+      messageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    // Clear highlight after animation
+    setTimeout(() => setHighlightedMessageId(null), 2000);
+  };
+
+  // Close in-chat search
+  const handleCloseInChatSearch = () => {
+    setShowInChatSearch(false);
+    setSearchQuery('');
+    setHighlightedMessageId(null);
+  };
+
   // Render avatar group for circle chats
   const renderAvatarGroup = (participants: Conversation['participants'], size: 'sm' | 'md' = 'md') => {
     if (!participants || participants.length === 0) {
@@ -538,6 +574,12 @@ export const ChatManager: React.FC = () => {
             <h3 className="font-semibold text-theme-primary">Conversations</h3>
           </div>
 
+          {/* Global Search */}
+          <ChatSearchGlobal
+            onSelectConversation={handleGlobalSearchSelect}
+            onClearSearch={() => {}}
+          />
+
           <div className="flex-1 overflow-y-auto">
             {conversations.length === 0 ? (
               <div className="p-4 text-center text-theme-muted">
@@ -546,13 +588,19 @@ export const ChatManager: React.FC = () => {
               </div>
             ) : (
               conversations.map(conversation => (
-                <button
+                <div
                   key={conversation.id}
-                  onClick={() => setSelectedConversation(conversation)}
-                  className={`w-full p-4 flex items-start gap-3 hover:bg-surface-hover transition-colors border-b border-light text-left ${
-                    selectedConversation?.id === conversation.id ? 'bg-primary-light' : ''
+                  className={`group relative flex items-start gap-3 p-4 border-b border-light transition-colors ${
+                    selectedConversation?.id === conversation.id ? 'bg-primary-light' : 'hover:bg-surface-hover'
                   }`}
                 >
+                  {/* Main clickable area */}
+                  <button
+                    onClick={() => setSelectedConversation(conversation)}
+                    className="absolute inset-0 w-full h-full"
+                    aria-label={`Open ${getConversationName(conversation)}`}
+                  />
+
                   {/* Avatar */}
                   {conversation.type === 'circle' ? (
                     renderAvatarGroup(conversation.participants, 'md')
@@ -578,9 +626,26 @@ export const ChatManager: React.FC = () => {
                       <span className="font-medium text-theme-primary truncate">
                         {getConversationName(conversation)}
                       </span>
-                      <span className="text-xs text-theme-muted">
-                        {formatTime(conversation.last_message_at)}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-theme-muted">
+                          {formatTime(conversation.last_message_at)}
+                        </span>
+                        {/* Search icon for this conversation */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedConversation(conversation);
+                            setShowInChatSearch(true);
+                            setSearchQuery('');
+                          }}
+                          className="relative z-10 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-all"
+                          title={`Search in ${getConversationName(conversation)}`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                     <p className="text-sm text-theme-muted truncate mt-0.5">
                       {conversation.last_message_preview || 'No messages yet'}
@@ -591,7 +656,7 @@ export const ChatManager: React.FC = () => {
                       </span>
                     )}
                   </div>
-                </button>
+                </div>
               ))
             )}
           </div>
@@ -620,7 +685,7 @@ export const ChatManager: React.FC = () => {
                     )}
                   </div>
                 )}
-                <div>
+                <div className="flex-1">
                   <h3 className="font-semibold text-theme-primary">
                     {getConversationName(selectedConversation)}
                   </h3>
@@ -628,7 +693,29 @@ export const ChatManager: React.FC = () => {
                     {selectedConversation.type === 'circle' ? 'Circle Chat' : 'Direct Message'}
                   </p>
                 </div>
+                {/* Search Button */}
+                <button
+                  onClick={() => setShowInChatSearch(!showInChatSearch)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    showInChatSearch ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-500'
+                  }`}
+                  title="Search in conversation (Ctrl+F)"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </button>
               </div>
+
+              {/* In-Chat Search Bar */}
+              {showInChatSearch && (
+                <ChatSearchInChat
+                  conversationId={selectedConversation.id}
+                  initialQuery={searchQuery}
+                  onNavigateToMessage={handleNavigateToMessage}
+                  onClose={handleCloseInChatSearch}
+                />
+              )}
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-app">
@@ -673,10 +760,14 @@ export const ChatManager: React.FC = () => {
                     {messages.map(message => {
                     const isOwn = message.sender_id === user?.id;
                     const reactions = messageReactions[message.id] || [];
+                    const isHighlighted = highlightedMessageId === message.id;
                     return (
                       <div
                         key={message.id}
-                        className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                        ref={(el) => { messageRefs.current[message.id] = el; }}
+                        className={`flex ${isOwn ? 'justify-end' : 'justify-start'} ${
+                          isHighlighted ? 'animate-pulse' : ''
+                        }`}
                       >
                         <div className={`flex items-end gap-2 max-w-[70%] ${isOwn ? 'flex-row-reverse' : ''}`}>
                           {/* Avatar for others */}
@@ -714,7 +805,11 @@ export const ChatManager: React.FC = () => {
 
                               {/* Content based on type */}
                               {message.content_type === 'text' && (
-                                <p className="whitespace-pre-wrap break-words">{message.content_text}</p>
+                                <p className="whitespace-pre-wrap break-words">
+                                  {showInChatSearch && searchQuery
+                                    ? highlightSearchText(message.content_text || '', searchQuery)
+                                    : message.content_text}
+                                </p>
                               )}
                               {message.content_type === 'image' && message.content_url && (
                                 <img

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 
@@ -8,6 +9,7 @@ interface AccountScreenProps {
 }
 
 export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose }) => {
+  const navigate = useNavigate();
   const { user, userProfile, signOut, isSuperAdmin } = useAuth();
   const [showAvatarOptions, setShowAvatarOptions] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(userProfile?.avatar_url || null);
@@ -363,6 +365,29 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
                   <div className="text-lg font-semibold text-orange-600">--</div>
                   <div className="text-xs text-gray-600">Shared</div>
                 </div>
+              </div>
+            </div>
+
+            {/* Features */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Features</h4>
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    onClose();
+                    navigate('/frame');
+                  }}
+                  className="w-full flex items-center gap-3 py-3 px-3 bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 rounded-md transition-colors text-left"
+                >
+                  <span className="text-2xl">🖼️</span>
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-gray-900 block">Picture Frame Mode</span>
+                    <span className="text-xs text-gray-500">Use this browser as a photo display</span>
+                  </div>
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
             </div>
 

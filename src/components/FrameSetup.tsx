@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
 
 interface InviteData {
   circleName: string;
@@ -37,72 +36,44 @@ export const FrameSetup: React.FC = () => {
     }
 
     try {
-      // Get the circle_user data including email
-      const { data, error: dbError } = await supabase
-        .from('circle_users')
-        .select(`
-          id,
-          status,
-          type,
-          email,
-          curated_albums,
-          invited_by,
-          circle_id
-        `)
-        .eq('qr_code_token', token)
-        .eq('type', 'picture_frame')
-        .single();
+      // Use edge function to get invitation data
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-      console.log('circle_users query result:', { data, error: dbError });
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/picture-frame-invite-api?token=${token}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+        }
+      );
 
-      if (dbError || !data) {
-        console.error('DB Error:', dbError);
-        setError('This invitation link is invalid or has expired.');
+      const result = await response.json();
+      console.log('Invitation API result:', result);
+
+      if (!response.ok || !result.success) {
+        setError(result.error || 'This invitation link is invalid or has expired.');
         setStep('error');
         return;
       }
 
-      // Fetch circle name separately
-      let circleName = 'Family Circle';
-      if (data.circle_id) {
-        const { data: circleData } = await supabase
-          .from('circles')
-          .select('name')
-          .eq('id', data.circle_id)
-          .single();
-        if (circleData?.name) {
-          circleName = circleData.name;
-        }
-      }
-
-      // Fetch inviter name separately
-      let inviterName = 'Someone';
-      if (data.invited_by) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('full_name, email')
-          .eq('id', data.invited_by)
-          .single();
-        if (profileData) {
-          inviterName = profileData.full_name || profileData.email?.split('@')[0] || 'Someone';
-        }
-      }
-
-      if (data.status === 'accepted') {
-        setError('This invitation has already been used.');
-        setStep('error');
-        return;
-      }
+      const invitation = result.invitation;
 
       setInvite({
-        circleName,
-        inviterName,
-        albumCount: data.curated_albums?.length || 0,
-        email: data.email || '',
+        circleName: invitation.circle_name || 'Family Circle',
+        inviterName: invitation.inviter_name || 'Someone',
+        albumCount: invitation.album_count || 0,
+        email: invitation.prefilled_email || '',
       });
+
       // Pre-populate email if available
-      if (data.email) {
-        setEmail(data.email);
+      if (invitation.prefilled_email) {
+        setEmail(invitation.prefilled_email);
+      }
+      // Pre-populate name if available
+      if (invitation.prefilled_name) {
+        setFullName(invitation.prefilled_name);
       }
       setStep('register');
     } catch (err) {
@@ -121,12 +92,16 @@ export const FrameSetup: React.FC = () => {
 
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       // Use activate action - no verification code needed for picture frames
       const response = await fetch(
         `${supabaseUrl}/functions/v1/picture-frame-verify-api?action=activate`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
           body: JSON.stringify({
             qr_token: token,
             full_name: fullName.trim(),
@@ -152,7 +127,7 @@ export const FrameSetup: React.FC = () => {
     }
   };
 
-  const deepLink = appLoginToken ? `knox://frame-login/${appLoginToken}` : null;
+  const deepLink = appLoginToken ? `kizu://frame-login/${appLoginToken}` : null;
 
   // Loading state
   if (step === 'loading') {
@@ -244,10 +219,22 @@ export const FrameSetup: React.FC = () => {
         <div className="text-6xl mb-4">🎉</div>
         <h1 className="text-2xl font-bold text-gray-800 mb-2">You're All Set!</h1>
         <p className="text-gray-600 mb-6">
-          Your picture frame is ready. Download the Kizu app to get started.
+          Your picture frame is ready. Choose how you'd like to view it.
         </p>
 
         <div className="space-y-4">
+          {/* Browser frame option */}
+          {appLoginToken && (
+            <a
+              href={`/frame?token=${appLoginToken}`}
+              className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+            >
+              🖥️ Use This Browser as Frame
+            </a>
+          )}
+
+          <div className="text-gray-400 text-sm">— or use a mobile device —</div>
+
           <a
             href="https://play.google.com/store/apps/details?id=com.knox.mediavault"
             target="_blank"
@@ -258,20 +245,17 @@ export const FrameSetup: React.FC = () => {
           </a>
 
           {deepLink && (
-            <>
-              <div className="text-gray-400 text-sm">— or if app is installed —</div>
-              <a
-                href={deepLink}
-                className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
-              >
-                Open Kizu App
-              </a>
-            </>
+            <a
+              href={deepLink}
+              className="block w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+            >
+              Open Kizu App
+            </a>
           )}
         </div>
 
         <p className="text-xs text-gray-400 mt-6">
-          After installing, tap "Open Kizu App" to complete setup
+          Use browser for computers/TVs, or the app for tablets/phones
         </p>
       </div>
     </div>

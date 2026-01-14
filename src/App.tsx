@@ -10,6 +10,7 @@ import { AuthCallback } from './components/AuthCallback';
 import { VerifyRegistration } from './components/VerifyRegistration';
 import { Dashboard } from './components/Dashboard';
 import { FrameSetup } from './components/FrameSetup';
+import { FrameMode } from './components/FrameMode';
 import { ShareRequest } from './components/ShareRequest';
 
 function App() {
@@ -25,6 +26,9 @@ function App() {
 
         {/* Picture Frame Setup route */}
         <Route path="/frame-setup/:token" element={<FrameSetup />} />
+
+        {/* Picture Frame Display Mode */}
+        <Route path="/frame" element={<FrameMode />} />
 
         {/* Share request route */}
         <Route path="/share" element={<ShareRequest />} />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { DebugSupabase } from './DebugSupabase';
 import { TokenManager } from '../utils/tokenManager';
 import { ThemeToggle } from './ui/ThemeToggle';
@@ -24,6 +24,15 @@ export const Login: React.FC = () => {
 
   const { user, loading: authLoading, signInWithMagicLink, signInWithCode, verifyCode, checkUserExists, signUp } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Check for signup mode from URL parameter
+  useEffect(() => {
+    const mode = searchParams.get('mode');
+    if (mode === 'signup') {
+      setIsSignUp(true);
+    }
+  }, [searchParams]);
 
   // Load saved email on mount
   useEffect(() => {
