@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
 
 interface FrameAsset {
   id: string;
@@ -142,30 +141,28 @@ export const FrameMode: React.FC = () => {
     setStep('error');
   }, [token, authLoading, session]);
 
-  // Load user's circles when using auth session
+  // Load user's circles when using auth session (via edge function)
   const loadUserCircles = async () => {
     try {
-      const { data: memberCircles, error } = await supabase
-        .from('circle_users')
-        .select(`
-          circle_id,
-          circles:circle_id (
-            id,
-            name
-          )
-        `)
-        .eq('user_id', session?.user?.id);
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/picture-frame-content-api?action=list_circles`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+        }
+      );
 
-      if (error) {
-        console.error('Error loading circles:', error);
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        console.error('Error loading circles:', data.error);
         setError('Failed to load your circles');
         setStep('error');
         return;
       }
 
-      const circleList: Circle[] = (memberCircles || [])
-        .map((m: any) => m.circles)
-        .filter(Boolean);
+      const circleList: Circle[] = data.circles || [];
 
       if (circleList.length === 0) {
         setError('You are not a member of any circles. Join a circle first.');
@@ -188,25 +185,31 @@ export const FrameMode: React.FC = () => {
     }
   };
 
-  // Select a circle and load its albums
+  // Select a circle and load its albums (via edge function)
   const selectCircle = async (circle: Circle) => {
     try {
       setStep('authenticating');
 
       // Load albums for this circle
-      const { data: albums, error } = await supabase
-        .from('albums')
-        .select('id')
-        .eq('circle_id', circle.id);
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/picture-frame-content-api?action=list_albums&circle_id=${circle.id}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+        }
+      );
 
-      if (error) {
-        console.error('Error loading albums:', error);
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        console.error('Error loading albums:', data.error);
         setError('Failed to load albums');
         setStep('error');
         return;
       }
 
-      const albumIds = (albums || []).map((a: any) => a.id);
+      const albumIds = (data.albums || []).map((a: any) => a.id);
 
       setFrameInfo({
         deviceId: 'web-browser',
@@ -216,9 +219,12 @@ export const FrameMode: React.FC = () => {
         curatedAlbums: albumIds,
       });
 
-      // Load assets using the session token
-      if (session?.access_token) {
+      // Load assets using the content API
+      if (session?.access_token && albumIds.length > 0) {
         await loadAssetsWithAuth(session.access_token, albumIds);
+      } else {
+        setAssets([]);
+        setStep('ready');
       }
     } catch (err) {
       console.error('Select circle error:', err);
@@ -227,43 +233,35 @@ export const FrameMode: React.FC = () => {
     }
   };
 
-  // Load assets using auth session (not device token)
+  // Load assets using edge function
   const loadAssetsWithAuth = async (token: string, albumIds: string[]) => {
     try {
-      const allAssets: FrameAsset[] = [];
-
-      for (const albumId of albumIds) {
-        const { data: albumAssets, error } = await supabase
-          .from('album_assets')
-          .select(`
-            assets:asset_id (
-              id,
-              path,
-              web_uri,
-              thumbnail_uri,
-              media_type,
-              created_at,
-              location_name
-            )
-          `)
-          .eq('album_id', albumId);
-
-        if (!error && albumAssets) {
-          for (const aa of albumAssets) {
-            const asset = (aa as any).assets;
-            if (asset) {
-              allAssets.push({
-                id: asset.id,
-                web_uri: asset.web_uri || asset.path,
-                thumbnail_uri: asset.thumbnail_uri,
-                media_type: asset.media_type || 'photo',
-                created_at: asset.created_at,
-                location_name: asset.location_name,
-              });
-            }
-          }
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/picture-frame-content-api?album_ids=${albumIds.join(',')}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
         }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        console.error('Error loading assets:', data.error);
+        setError('Failed to load photos');
+        setStep('error');
+        return;
       }
+
+      const allAssets: FrameAsset[] = (data.assets || []).map((asset: any) => ({
+        id: asset.id,
+        web_uri: asset.web_uri || asset.path,
+        thumbnail_uri: asset.thumbnail_uri,
+        media_type: asset.media_type || 'photo',
+        created_at: asset.created_at,
+        location_name: asset.location_name,
+      }));
 
       // Shuffle for random display
       const shuffled = [...allAssets].sort(() => Math.random() - 0.5);
