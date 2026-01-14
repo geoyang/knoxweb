@@ -69,7 +69,7 @@ export const SignupSuccess: React.FC = () => {
         <div className="text-6xl mb-6">✓</div>
         <h1 className="text-2xl font-bold text-gray-800 mb-2">Account Created!</h1>
         <p className="text-gray-600 mb-4">
-          Welcome to Knox{userName ? `, ${userName}` : ''}! Your account has been verified and you're all set.
+          Welcome to Kizu{userName ? `, ${userName}` : ''}! Your account has been verified and you're all set.
         </p>
         {circleName && (
           <p className="text-gray-600 mb-4">

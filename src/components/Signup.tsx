@@ -197,7 +197,7 @@ export const Signup: React.FC = () => {
       <div className="auth-card p-8 w-full max-w-md h-fit">
         <div className="text-center mb-6">
           <div className="text-4xl mb-4">📸</div>
-          <h1 className="text-3xl font-bold text-theme-primary">Join Knox</h1>
+          <h1 className="text-3xl font-bold text-theme-primary">Join Kizu</h1>
           {inviteDetails ? (
             <p className="text-theme-secondary mt-2">
               {inviteDetails.inviterName} invited you to join{' '}

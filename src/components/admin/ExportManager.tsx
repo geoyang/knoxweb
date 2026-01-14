@@ -176,7 +176,7 @@ export const ExportManager: React.FC = () => {
 
         {jobs.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
-            No export jobs found. Exports can be requested from the Knox mobile app.
+            No export jobs found. Exports can be requested from the Kizu mobile app.
           </div>
         ) : (
           <div className="divide-y">

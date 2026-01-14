@@ -343,9 +343,9 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
               </div>
             </div>
 
-            {/* Knox Statistics */}
+            {/* Kizu Statistics */}
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Knox Statistics</h4>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Kizu Statistics</h4>
               <div className="grid grid-cols-2 gap-3">
                 <div className="text-center py-3 px-2 bg-blue-50 rounded-md">
                   <div className="text-lg font-semibold text-blue-600">--</div>
@@ -372,7 +372,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
               <div className="space-y-2">
                 <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
                   <span className="text-sm text-gray-600">Version</span>
-                  <span className="text-sm text-gray-500">Knox Web v1.0.0</span>
+                  <span className="text-sm text-gray-500">Kizu Web v1.0.0</span>
                 </div>
                 <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
                   <span className="text-sm text-gray-600">Environment</span>

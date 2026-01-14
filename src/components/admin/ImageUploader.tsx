@@ -37,7 +37,7 @@ const reverseGeocode = async (latitude: number, longitude: number): Promise<stri
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14`,
       {
         headers: {
-          'User-Agent': 'Knox Photo App/1.0',
+          'User-Agent': 'Kizu Photo App/1.0',
         },
       }
     );

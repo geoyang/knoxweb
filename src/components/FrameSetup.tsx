@@ -244,7 +244,7 @@ export const FrameSetup: React.FC = () => {
         <div className="text-6xl mb-4">🎉</div>
         <h1 className="text-2xl font-bold text-gray-800 mb-2">You're All Set!</h1>
         <p className="text-gray-600 mb-6">
-          Your picture frame is ready. Download the Knox app to get started.
+          Your picture frame is ready. Download the Kizu app to get started.
         </p>
 
         <div className="space-y-4">
@@ -264,14 +264,14 @@ export const FrameSetup: React.FC = () => {
                 href={deepLink}
                 className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
               >
-                Open Knox App
+                Open Kizu App
               </a>
             </>
           )}
         </div>
 
         <p className="text-xs text-gray-400 mt-6">
-          After installing, tap "Open Knox App" to complete setup
+          After installing, tap "Open Kizu App" to complete setup
         </p>
       </div>
     </div>

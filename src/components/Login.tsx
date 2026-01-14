@@ -144,13 +144,10 @@ export const Login: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    console.log('🔑 CODE VERIFICATION: Starting verification');
-    console.log('🔑 CODE VERIFICATION: fullName state value:', fullName ? `"${fullName}"` : 'EMPTY');
-    console.log('🔑 CODE VERIFICATION: email:', email);
+    console.log('🔑 CODE VERIFICATION: Starting verification for:', email);
 
     try {
-      const { error, success } = await verifyCode(email, verificationCode, fullName || undefined);
-      console.log('🔑 CODE VERIFICATION: verifyCode called with fullName:', fullName || 'undefined');
+      const { error, success } = await verifyCode(email, verificationCode);
       if (error) {
         setError(error.message);
       } else if (success) {
@@ -215,7 +212,7 @@ export const Login: React.FC = () => {
       <div className="auth-card p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <div className="text-4xl mb-4">📸</div>
-          <h1 className="text-3xl font-bold text-theme-primary">Knox Admin</h1>
+          <h1 className="text-3xl font-bold text-theme-primary">Kizu Admin</h1>
           <p className="text-theme-secondary">
             {signUpSuccess
               ? 'Account created successfully!'
@@ -394,21 +391,6 @@ export const Login: React.FC = () => {
 
             <form onSubmit={handleCodeVerification} className="space-y-6">
               <div>
-                <label htmlFor="nameForCode" className="form-label">
-                  Your Name (for new accounts)
-                </label>
-                <input
-                  id="nameForCode"
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="input placeholder-muted"
-                  placeholder="Enter your name if this is your first login"
-                  autoComplete="name"
-                />
-              </div>
-
-              <div>
                 <label htmlFor="code" className="form-label">
                   4-Digit Code
                 </label>
@@ -421,14 +403,12 @@ export const Login: React.FC = () => {
                     setVerificationCode(code);
                     // Auto-submit when 4 characters are entered
                     if (code.length === 4) {
-                      console.log('🔑 AUTO-SUBMIT: Code complete, auto-submitting');
-                      console.log('🔑 AUTO-SUBMIT: fullName state value:', fullName ? `"${fullName}"` : 'EMPTY');
+                      console.log('🔑 AUTO-SUBMIT: Code complete, auto-submitting for:', email);
                       setTimeout(async () => {
                         setLoading(true);
                         setError(null);
                         try {
-                          console.log('🔑 AUTO-SUBMIT: Calling verifyCode with fullName:', fullName || 'undefined');
-                          const { error, success } = await verifyCode(email, code, fullName || undefined);
+                          const { error, success } = await verifyCode(email, code);
                           if (error) {
                             setError(error.message);
                           } else if (success) {

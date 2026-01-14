@@ -358,7 +358,7 @@ export function quickConfigCheck(): { configured: boolean; issues: string[] } {
  * Send a test notification (local, for testing UI)
  */
 export function sendTestNotification(): void {
-  showLocalNotification('Knox Photo Test', {
+  showLocalNotification('Kizu Photo Test', {
     body: 'Push notifications are working! 🎉',
     tag: 'test-notification',
   });

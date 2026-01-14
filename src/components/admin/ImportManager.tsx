@@ -371,7 +371,7 @@ export const ImportManager: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Import Photos</h2>
-          <p className="text-gray-600 mt-1">Import photos from other services into Knox</p>
+          <p className="text-gray-600 mt-1">Import photos from other services into Kizu</p>
         </div>
         <div className="flex gap-2">
           <button

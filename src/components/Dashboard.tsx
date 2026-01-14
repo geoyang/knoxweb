@@ -388,7 +388,7 @@ export const Dashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <span className="text-2xl">📸</span>
-            <h1 className="text-xl font-bold text-gray-800">Knox</h1>
+            <h1 className="text-xl font-bold text-gray-800">Kizu</h1>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-right">
@@ -557,7 +557,7 @@ export const Dashboard: React.FC = () => {
       {/* Footer */}
       <footer className="mt-auto py-8 text-center border-t bg-white">
         <p className="text-gray-600">
-          Powered by <span className="font-bold text-blue-600">Knox</span>
+          Powered by <span className="font-bold text-blue-600">Kizu</span>
         </p>
         <p className="text-gray-500 text-sm">Secure photo sharing for families and teams</p>
       </footer>

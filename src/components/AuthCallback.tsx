@@ -116,7 +116,7 @@ export const AuthCallback: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
       <div className="bg-white/10 backdrop-blur-lg rounded-lg p-8 text-center text-white max-w-md w-full mx-4">
         <div className="text-6xl mb-4">🔐</div>
-        <h2 className="text-2xl font-bold mb-4">Knox Authentication</h2>
+        <h2 className="text-2xl font-bold mb-4">Kizu Authentication</h2>
         <p className="text-lg mb-4">{status}</p>
         
         {error ? (

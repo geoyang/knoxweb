@@ -573,7 +573,7 @@ export const AlbumViewer: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
           <div className="text-center mb-6">
             <div className="text-5xl mb-3">👋</div>
-            <h1 className="text-2xl font-bold text-gray-800">Create Your Knox Account</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Create Your Kizu Account</h1>
             <p className="text-gray-600 mt-2">
               You've been invited to <strong>{invite.circle?.name || 'a circle'}</strong> as an <strong className="capitalize">{invite.role?.replace('_', ' ')}</strong>
             </p>
@@ -657,7 +657,7 @@ export const AlbumViewer: React.FC = () => {
           </form>
 
           <p className="text-center text-sm text-gray-500 mt-6">
-            By creating an account, you agree to Knox's Terms of Service and Privacy Policy
+            By creating an account, you agree to Kizu's Terms of Service and Privacy Policy
           </p>
         </div>
       </div>
@@ -821,14 +821,14 @@ export const AlbumViewer: React.FC = () => {
         {/* Footer */}
         <div className="text-center py-12 border-t mt-12">
           <p className="text-gray-600">
-            Powered by <span className="font-bold text-blue-600">Knox</span>
+            Powered by <span className="font-bold text-blue-600">Kizu</span>
           </p>
           <p className="text-gray-500 text-sm">Secure photo sharing for families and teams</p>
           <a
-            href="https://knox.eoyang.com"
+            href="https://kizu.app"
             className="inline-block mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
           >
-            Get Knox for Free
+            Get Kizu for Free
           </a>
         </div>
       </div>

@@ -220,7 +220,7 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <span className="text-2xl mr-3">📸</span>
-              <h1 className="text-xl font-bold text-theme-primary">Knox Admin</h1>
+              <h1 className="text-xl font-bold text-theme-primary">Kizu Admin</h1>
             </div>
 
             <div className="flex items-center space-x-4">

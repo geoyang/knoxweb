@@ -110,7 +110,7 @@ export const VerifyRegistration: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
           <div className="text-6xl mb-4">🎉</div>
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Welcome to Knox!</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Welcome to Kizu!</h1>
           <p className="text-gray-600 mb-4">
             Your account has been verified successfully.
           </p>
