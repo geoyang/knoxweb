@@ -435,19 +435,19 @@ export const FrameMode: React.FC = () => {
       <style>{`
         @keyframes kenburns-1 {
           0% { transform: scale(1.0) translate(0%, 0%); }
-          100% { transform: scale(1.15) translate(-2%, -1%); }
+          100% { transform: scale(1.35) translate(-5%, -3%); }
         }
         @keyframes kenburns-2 {
-          0% { transform: scale(1.15) translate(2%, 0%); }
-          100% { transform: scale(1.0) translate(-1%, 2%); }
+          0% { transform: scale(1.35) translate(5%, 0%); }
+          100% { transform: scale(1.0) translate(-3%, 5%); }
         }
         @keyframes kenburns-3 {
-          0% { transform: scale(1.0) translate(-1%, 2%); }
-          100% { transform: scale(1.12) translate(2%, -2%); }
+          0% { transform: scale(1.0) translate(-3%, 4%); }
+          100% { transform: scale(1.3) translate(5%, -5%); }
         }
         @keyframes kenburns-4 {
-          0% { transform: scale(1.1) translate(0%, -2%); }
-          100% { transform: scale(1.0) translate(-2%, 1%); }
+          0% { transform: scale(1.25) translate(0%, -4%); }
+          100% { transform: scale(1.0) translate(-5%, 3%); }
         }
         .ken-burns-effect {
           animation-timing-function: ease-in-out;
