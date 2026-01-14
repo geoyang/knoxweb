@@ -146,7 +146,7 @@ export const FrameMode: React.FC = () => {
   const loadUserCircles = async () => {
     try {
       const { data: memberCircles, error } = await supabase
-        .from('circle_members')
+        .from('circle_users')
         .select(`
           circle_id,
           circles:circle_id (
