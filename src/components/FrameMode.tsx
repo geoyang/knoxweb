@@ -20,7 +20,7 @@ interface FrameInfo {
 
 interface FrameSettings {
   slideshow_interval: number;
-  transition: 'fade' | 'slide' | 'none';
+  transition: 'fade' | 'ken_burns' | 'none';
   display_order: 'random' | 'by_album' | 'by_album_random' | 'date_newest' | 'date_oldest';
   show_date: boolean;
   show_location: boolean;
@@ -431,10 +431,36 @@ export const FrameMode: React.FC = () => {
       onClick={() => setShowControls(true)}
       onMouseMove={() => setShowControls(true)}
     >
+      {/* Ken Burns CSS Animation */}
+      <style>{`
+        @keyframes kenburns-1 {
+          0% { transform: scale(1.0) translate(0%, 0%); }
+          100% { transform: scale(1.15) translate(-2%, -1%); }
+        }
+        @keyframes kenburns-2 {
+          0% { transform: scale(1.15) translate(2%, 0%); }
+          100% { transform: scale(1.0) translate(-1%, 2%); }
+        }
+        @keyframes kenburns-3 {
+          0% { transform: scale(1.0) translate(-1%, 2%); }
+          100% { transform: scale(1.12) translate(2%, -2%); }
+        }
+        @keyframes kenburns-4 {
+          0% { transform: scale(1.1) translate(0%, -2%); }
+          100% { transform: scale(1.0) translate(-2%, 1%); }
+        }
+        .ken-burns-effect {
+          animation-timing-function: ease-in-out;
+          animation-fill-mode: forwards;
+        }
+      `}</style>
+
       {/* Current photo */}
       <div
-        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${
-          settings.transition === 'fade' ? 'transition-opacity' : ''
+        className={`absolute inset-0 flex items-center justify-center overflow-hidden ${
+          settings.transition === 'fade' || settings.transition === 'ken_burns'
+            ? 'transition-opacity duration-1000'
+            : ''
         }`}
       >
         {currentAsset?.media_type === 'video' ? (
@@ -451,7 +477,13 @@ export const FrameMode: React.FC = () => {
             key={currentAsset?.id}
             src={currentAsset?.web_uri}
             alt=""
-            className="max-w-full max-h-full object-contain"
+            className={`max-w-full max-h-full object-contain ${
+              settings.transition === 'ken_burns' ? 'ken-burns-effect' : ''
+            }`}
+            style={settings.transition === 'ken_burns' ? {
+              animationName: `kenburns-${(currentIndex % 4) + 1}`,
+              animationDuration: `${settings.slideshow_interval}s`,
+            } : undefined}
           />
         )}
       </div>
@@ -627,17 +659,21 @@ export const FrameMode: React.FC = () => {
                 <div className="mb-4">
                   <span className="text-white block mb-2">Transition</span>
                   <div className="flex gap-3">
-                    {(['fade', 'none'] as const).map((t) => (
+                    {([
+                      { value: 'fade', label: 'Fade' },
+                      { value: 'ken_burns', label: 'Ken Burns' },
+                      { value: 'none', label: 'None' },
+                    ] as const).map((t) => (
                       <button
-                        key={t}
-                        onClick={() => updateSettings({ transition: t })}
+                        key={t.value}
+                        onClick={() => updateSettings({ transition: t.value })}
                         className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors ${
-                          settings.transition === t
+                          settings.transition === t.value
                             ? 'bg-blue-500 text-white'
                             : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                         }`}
                       >
-                        {t.charAt(0).toUpperCase() + t.slice(1)}
+                        {t.label}
                       </button>
                     ))}
                   </div>
