@@ -442,29 +442,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         userProfileRef.current = profileFromServer.id;
       }
 
-      // Handle the response from Edge Function - temp password approach (same as mobile app)
-      if (authResponse.temp_auth?.temp_password) {
-        // Got temporary password - sign in client-side to create proper session
-        console.log('Received temporary credentials from Edge Function');
-
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: authResponse.temp_auth.email,
-          password: authResponse.temp_auth.temp_password
-        });
-
-        if (signInError) {
-          console.error('Error signing in with temporary password', signInError);
-          return { error: new Error('Failed to sign in: ' + signInError.message) };
-        }
-
-        if (signInData.session && signInData.user) {
-          console.log('Successfully authenticated');
-          return { error: null, success: true, profile: profileFromServer };
-        } else {
-          return { error: new Error('Sign in succeeded but no session established.') };
-        }
-
-      } else if (authResponse.session?.access_token && authResponse.session?.refresh_token) {
+      // Handle the response from Edge Function - session tokens
+      if (authResponse.session?.access_token && authResponse.session?.refresh_token) {
         // Got direct session tokens - use them immediately
         console.log('Received session tokens from Edge Function');
 

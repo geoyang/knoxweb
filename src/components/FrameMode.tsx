@@ -533,6 +533,25 @@ export const FrameMode: React.FC = () => {
     navigate('/admin');
   };
 
+  const handleLogout = async () => {
+    try {
+      // Clear device tokens
+      localStorage.removeItem('kizu_frame_device_token');
+      localStorage.removeItem('kizu_frame_info');
+      localStorage.removeItem('kizu_frame_settings');
+
+      // Sign out from Supabase
+      const { supabase } = await import('../lib/supabase');
+      await supabase.auth.signOut();
+
+      // Navigate to login
+      navigate('/login');
+    } catch (err) {
+      console.error('Logout error:', err);
+      navigate('/login');
+    }
+  };
+
   const currentAsset = assets[currentIndex];
 
   // Loading state
@@ -966,12 +985,23 @@ export const FrameMode: React.FC = () => {
               {/* Exit Frame Mode */}
               <button
                 onClick={handleExit}
+                className="w-full flex items-center justify-center gap-3 py-4 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-colors mb-3"
+              >
+                <svg className="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                </svg>
+                <span className="text-zinc-300 font-semibold">Exit Picture Frame Mode</span>
+              </button>
+
+              {/* Logout */}
+              <button
+                onClick={handleLogout}
                 className="w-full flex items-center justify-center gap-3 py-4 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 rounded-xl transition-colors"
               >
                 <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-                <span className="text-red-400 font-semibold">Exit Picture Frame Mode</span>
+                <span className="text-red-400 font-semibold">Sign Out</span>
               </button>
             </div>
           </div>

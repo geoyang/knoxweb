@@ -53,7 +53,7 @@ export const CirclesManager: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showNewCircleForm, setShowNewCircleForm] = useState(false);
   const [showInviteForm, setShowInviteForm] = useState(false);
-  const [pendingInvites, setPendingInvites] = useState<{email: string; role: string}[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<{email: string; role: string; name: string}[]>([]);
   const [sendingInvites, setSendingInvites] = useState(false);
   const [showEditCircleForm, setShowEditCircleForm] = useState(false);
   const [editingCircle, setEditingCircle] = useState<Circle | null>(null);
@@ -286,6 +286,7 @@ export const CirclesManager: React.FC = () => {
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
     const email = (formData.get('email') as string).trim().toLowerCase();
+    const name = (formData.get('name') as string).trim();
     const role = formData.get('role') as string;
 
     // Check if already in list
@@ -300,7 +301,7 @@ export const CirclesManager: React.FC = () => {
       return;
     }
 
-    setPendingInvites(prev => [...prev, { email, role }]);
+    setPendingInvites(prev => [...prev, { email, role, name }]);
     form.reset();
   };
 
@@ -320,6 +321,7 @@ export const CirclesManager: React.FC = () => {
           adminApi.inviteUserToCircle(selectedCircle.id, {
             email: invite.email,
             role: invite.role,
+            full_name: invite.name || undefined,
           })
         )
       );
@@ -696,6 +698,17 @@ export const CirclesManager: React.FC = () => {
             <form onSubmit={handleAddToInviteList} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Full Name
+                </label>
+                <input
+                  name="name"
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Their name (optional)"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Email Address
                 </label>
                 <input
@@ -739,7 +752,10 @@ export const CirclesManager: React.FC = () => {
                   {pendingInvites.map((invite, index) => (
                     <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                       <div>
-                        <span className="text-sm font-medium">{invite.email}</span>
+                        {invite.name && (
+                          <span className="text-sm font-medium block">{invite.name}</span>
+                        )}
+                        <span className={`text-sm ${invite.name ? 'text-gray-500' : 'font-medium'}`}>{invite.email}</span>
                         <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${getRoleColor(invite.role)}`}>
                           {invite.role.replace('_', ' ')}
                         </span>

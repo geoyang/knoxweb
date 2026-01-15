@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { adminApi } from '../services/adminApi';
 import { useAuth } from '../context/AuthContext';
+import { MediaGallery } from './MediaGallery';
+
+type TabType = 'home' | 'media';
 
 interface Circle {
   id: string;
@@ -59,6 +62,7 @@ export const Dashboard: React.FC = () => {
     planName: string;
     expiry: string;
   } | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>('home');
 
   // Get member duration
   const getMemberDuration = (): string => {
@@ -409,7 +413,7 @@ export const Dashboard: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Welcome Section */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h2 className="text-2xl font-bold text-gray-800">
             Welcome back, {user?.full_name?.split(' ')[0]}!
           </h2>
@@ -427,6 +431,47 @@ export const Dashboard: React.FC = () => {
           </p>
         </div>
 
+        {/* Tab Navigation */}
+        <div className="border-b border-gray-200 mb-6">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('home')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'home'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Home
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('media')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'media'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Media
+              </span>
+            </button>
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'media' ? (
+          <MediaGallery />
+        ) : (
+          <>
         {/* Circles Section */}
         <section className="mb-10">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Your Circles</h3>
@@ -552,6 +597,8 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
         </section>
+          </>
+        )}
       </main>
 
       {/* Footer */}

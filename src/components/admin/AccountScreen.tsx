@@ -2,6 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { adminApi } from '../../services/adminApi';
+
+interface UserStats {
+  albums: number;
+  photos: number;
+  circles: number;
+  shared: number;
+}
 
 interface AccountScreenProps {
   isOpen: boolean;
@@ -23,6 +31,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const [stats, setStats] = useState<UserStats>({ albums: 0, photos: 0, circles: 0, shared: 0 });
+  const [loadingStats, setLoadingStats] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -185,6 +195,52 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
       }
     };
   }, []);
+
+  // Fetch user statistics when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchStats = async () => {
+      setLoadingStats(true);
+      try {
+        const [albumsResult, imagesResult, circlesResult] = await Promise.all([
+          adminApi.getAlbums(),
+          adminApi.getImages(),
+          adminApi.getCircles(),
+        ]);
+
+        const newStats: UserStats = {
+          albums: 0,
+          photos: 0,
+          circles: 0,
+          shared: 0,
+        };
+
+        if (albumsResult.success && albumsResult.data) {
+          newStats.albums = albumsResult.data.count || albumsResult.data.albums?.length || 0;
+          if (albumsResult.data.stats) {
+            newStats.shared = albumsResult.data.stats.shared || 0;
+          }
+        }
+
+        if (imagesResult.success && imagesResult.data) {
+          newStats.photos = imagesResult.data.count || imagesResult.data.assets?.length || 0;
+        }
+
+        if (circlesResult.success && circlesResult.data) {
+          newStats.circles = circlesResult.data.count || circlesResult.data.circles?.length || 0;
+        }
+
+        setStats(newStats);
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+
+    fetchStats();
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -350,19 +406,43 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
               <h4 className="text-sm font-medium text-gray-700 mb-3">Kizu Statistics</h4>
               <div className="grid grid-cols-2 gap-3">
                 <div className="text-center py-3 px-2 bg-blue-50 rounded-md">
-                  <div className="text-lg font-semibold text-blue-600">--</div>
+                  <div className="text-lg font-semibold text-blue-600">
+                    {loadingStats ? (
+                      <span className="inline-block w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      stats.albums
+                    )}
+                  </div>
                   <div className="text-xs text-gray-600">Albums</div>
                 </div>
                 <div className="text-center py-3 px-2 bg-green-50 rounded-md">
-                  <div className="text-lg font-semibold text-green-600">--</div>
+                  <div className="text-lg font-semibold text-green-600">
+                    {loadingStats ? (
+                      <span className="inline-block w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      stats.photos
+                    )}
+                  </div>
                   <div className="text-xs text-gray-600">Photos</div>
                 </div>
                 <div className="text-center py-3 px-2 bg-purple-50 rounded-md">
-                  <div className="text-lg font-semibold text-purple-600">--</div>
+                  <div className="text-lg font-semibold text-purple-600">
+                    {loadingStats ? (
+                      <span className="inline-block w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      stats.circles
+                    )}
+                  </div>
                   <div className="text-xs text-gray-600">Circles</div>
                 </div>
                 <div className="text-center py-3 px-2 bg-orange-50 rounded-md">
-                  <div className="text-lg font-semibold text-orange-600">--</div>
+                  <div className="text-lg font-semibold text-orange-600">
+                    {loadingStats ? (
+                      <span className="inline-block w-4 h-4 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      stats.shared
+                    )}
+                  </div>
                   <div className="text-xs text-gray-600">Shared</div>
                 </div>
               </div>

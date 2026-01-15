@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import type { Memory } from '../services/memoriesApi';
 import { MemoryInputBar } from './MemoryInputBar';
 import { ReactionBar } from './ReactionBar';
+import { supabase } from '../lib/supabase';
 
 // Public memories API helper (no auth required, uses invite ID for access)
 const publicMemoriesApi = {
@@ -291,6 +292,21 @@ export const AlbumViewer: React.FC = () => {
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
 
+  // Auth state for logout
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  // Check if user is logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('[AlbumViewer] Session check:', !!session, session?.user?.email);
+      setIsLoggedIn(!!session);
+    };
+    checkAuth();
+  }, []);
+
   // Registration form state
   const [showRegistration, setShowRegistration] = useState(false);
   const [registering, setRegistering] = useState(false);
@@ -439,6 +455,20 @@ export const AlbumViewer: React.FC = () => {
 
   const handleRefresh = () => {
     loadAlbumData(true);
+  };
+
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true);
+  };
+
+  const handleLogoutConfirm = () => {
+    setLoggingOut(true);
+    supabase.auth.signOut().then(() => {
+      window.location.href = '/login';
+    }).catch((err) => {
+      console.error('[AlbumViewer] Logout error:', err);
+      window.location.href = '/login';
+    });
   };
 
   const handleRegistration = async (e: React.FormEvent) => {
@@ -670,27 +700,51 @@ export const AlbumViewer: React.FC = () => {
       {/* Header */}
       <div className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
         <div className="max-w-6xl mx-auto px-4 py-10 relative">
-          {/* Refresh Button */}
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 rounded-full p-3 transition-all disabled:opacity-50"
-            title="Refresh"
-          >
-            <svg
-              className={`w-5 h-5 text-white ${refreshing ? 'animate-spin' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {/* Header Actions */}
+          <div className="absolute top-4 right-4 flex items-center gap-2">
+            {/* Refresh Button */}
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="bg-white/20 hover:bg-white/30 rounded-full p-3 transition-all disabled:opacity-50"
+              title="Refresh"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-          </button>
+              <svg
+                className={`w-5 h-5 text-white ${refreshing ? 'animate-spin' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </button>
+
+            {/* Sign Out Button */}
+            <button
+              onClick={handleLogoutClick}
+              className="bg-white/20 hover:bg-white/30 rounded-full p-3 transition-all"
+              title="Sign Out"
+            >
+              <svg
+                className="w-5 h-5 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                />
+              </svg>
+            </button>
+          </div>
 
           <div className="text-center">
             <div className="text-5xl mb-3">👥</div>
@@ -832,6 +886,40 @@ export const AlbumViewer: React.FC = () => {
           </a>
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center">
+            {loggingOut ? (
+              <>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Signing out...</p>
+              </>
+            ) : (
+              <>
+                <div className="text-5xl mb-4">👋</div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Sign Out?</h3>
+                <p className="text-gray-600 mb-6">Are you sure you want to sign out?</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowLogoutModal(false)}
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleLogoutConfirm}
+                    className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -848,6 +936,16 @@ export const AlbumDetailView: React.FC = () => {
   // Account and invite state
   const [accountInfo, setAccountInfo] = useState<AccountStatus | null>(null);
   const [inviteInfo, setInviteInfo] = useState<CircleInvite | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // Check if user is logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsLoggedIn(!!session);
+    };
+    checkAuth();
+  }, []);
 
   // Memories state
   const [memoriesAssetId, setMemoriesAssetId] = useState<string | null>(null);
@@ -861,6 +959,15 @@ export const AlbumDetailView: React.FC = () => {
   // Determine if user can add memories
   const isReadOnly = inviteInfo?.role === 'read_only';
   const canAddMemory = !isReadOnly && accountInfo?.hasAccount;
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      window.location.reload();
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  };
 
   // Debug logging
   console.log('[AlbumDetailView] Debug:', {
@@ -1084,8 +1191,23 @@ export const AlbumDetailView: React.FC = () => {
                 <p className="text-sm text-gray-500">{album.description}</p>
               )}
             </div>
-            <div className="text-sm text-gray-500">
-              {accessibleAssets.length} photo{accessibleAssets.length !== 1 ? 's' : ''}
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-gray-500">
+                {accessibleAssets.length} photo{accessibleAssets.length !== 1 ? 's' : ''}
+              </div>
+              {/* Sign Out Button */}
+              {isLoggedIn && (
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  title="Sign Out"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Sign Out
+                </button>
+              )}
             </div>
           </div>
         </div>
