@@ -16,6 +16,13 @@ export const Signup: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [accountCreated, setAccountCreated] = useState(false);
   const [sessionTokens, setSessionTokens] = useState<{ accessToken: string; refreshToken: string } | null>(null);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+
+  const addLog = (msg: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugLogs(prev => [...prev.slice(-10), `[${timestamp}] ${msg}`]);
+    console.log(msg);
+  };
   const [inviteDetails, setInviteDetails] = useState<{
     circleName: string;
     role: string;
@@ -111,20 +118,20 @@ export const Signup: React.FC = () => {
     const redirectPath = inviteId ? `/view-circle/${inviteId}` : '/admin';
     sessionStorage.setItem('postLoginRedirect', redirectPath);
 
-    console.log('🔑 SIGNUP: Starting account creation...', { email, fullName, isMobile });
+    addLog(`Starting signup for ${email} (mobile: ${isMobile})`);
 
     try {
       // Use direct fetch with proper timeout support
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.log('🔑 SIGNUP: Request timed out, aborting...');
+        addLog('Request timed out after 30s, aborting...');
         controller.abort();
       }, 30000);
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-      console.log('🔑 SIGNUP: Calling edge function directly via fetch...');
+      addLog('Calling edge function...');
 
       const response = await fetch(`${supabaseUrl}/functions/v1/create-session-with-code`, {
         method: 'POST',
@@ -143,10 +150,10 @@ export const Signup: React.FC = () => {
 
       clearTimeout(timeoutId);
 
-      console.log('🔑 SIGNUP: Response received, status:', response.status);
+      addLog(`Response received: ${response.status}`);
 
       const authResponse = await response.json();
-      console.log('🔑 SIGNUP: API response parsed', authResponse);
+      addLog(`Parsed response: ${authResponse.success ? 'success' : 'failed'}`);
 
       if (!response.ok || !authResponse?.success) {
         console.error('Account creation failed', authResponse);
@@ -157,6 +164,7 @@ export const Signup: React.FC = () => {
 
       // Store tokens and show success screen
       if (authResponse.session?.access_token && authResponse.session?.refresh_token) {
+        addLog('Got session tokens, showing success screen');
         setSessionTokens({
           accessToken: authResponse.session.access_token,
           refreshToken: authResponse.session.refresh_token,
@@ -164,11 +172,13 @@ export const Signup: React.FC = () => {
         setAccountCreated(true);
         setLoading(false);
       } else {
+        addLog('No session tokens in response');
         setError('Account created but missing session. Please try logging in manually.');
         setLoading(false);
       }
     } catch (err: any) {
       console.error('Signup error', err);
+      addLog(`Error: ${err.name} - ${err.message}`);
       if (err.name === 'AbortError') {
         setError('Request timed out. Please check your connection and try again.');
       } else {
@@ -408,6 +418,16 @@ export const Signup: React.FC = () => {
               <p className="mt-1 break-all"><strong>UA:</strong> {userAgent.substring(0, 100)}...</p>
             </div>
           </>
+        )}
+
+        {/* Debug log panel */}
+        {debugLogs.length > 0 && (
+          <div className="mt-4 p-3 bg-black text-green-400 rounded text-xs font-mono max-h-40 overflow-y-auto">
+            <p className="text-white mb-1 font-bold">Debug Log:</p>
+            {debugLogs.map((log, i) => (
+              <p key={i} className="break-all">{log}</p>
+            ))}
+          </div>
         )}
       </div>
     </div>
