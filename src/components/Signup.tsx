@@ -94,8 +94,9 @@ export const Signup: React.FC = () => {
   // Don't wait for auth loading on signup page - new users won't have a session
   // Just check if user is already logged in (after auth loads)
 
-  // If user is already logged in, redirect to admin
-  if (user) {
+  // If user is already logged in AND we're not showing mobile app link, redirect to admin
+  // (Don't redirect if we're showing the mobile success screen)
+  if (user && !mobileAppLink) {
     window.location.href = '/admin';
     return null;
   }
