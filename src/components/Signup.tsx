@@ -114,24 +114,42 @@ export const Signup: React.FC = () => {
     console.log('🔑 SIGNUP: Starting account creation...', { email, fullName, isMobile });
 
     try {
-      // Create account with timeout - mobile networks can be slow
+      // Use direct fetch with proper timeout support
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      const timeoutId = setTimeout(() => {
+        console.log('🔑 SIGNUP: Request timed out, aborting...');
+        controller.abort();
+      }, 30000);
 
-      const { data: authResponse, error: authError } = await supabase.functions.invoke('create-session-with-code', {
-        body: {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      console.log('🔑 SIGNUP: Calling edge function directly via fetch...');
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-session-with-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({
           email: email.toLowerCase().trim(),
           code: 'SIGNUP',
           full_name: fullName.trim() || null,
-        }
+        }),
+        signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
 
-      console.log('🔑 SIGNUP: API response received', { authResponse, authError });
+      console.log('🔑 SIGNUP: Response received, status:', response.status);
 
-      if (authError || !authResponse?.success) {
-        console.error('Account creation failed', { authError, authResponse });
+      const authResponse = await response.json();
+      console.log('🔑 SIGNUP: API response parsed', authResponse);
+
+      if (!response.ok || !authResponse?.success) {
+        console.error('Account creation failed', authResponse);
         setError(authResponse?.error || 'Failed to create account. Please try again.');
         setLoading(false);
         return;
@@ -154,7 +172,7 @@ export const Signup: React.FC = () => {
       if (err.name === 'AbortError') {
         setError('Request timed out. Please check your connection and try again.');
       } else {
-        setError('An unexpected error occurred. Please try again.');
+        setError(`Error: ${err.message || 'An unexpected error occurred'}`);
       }
       setLoading(false);
     }
