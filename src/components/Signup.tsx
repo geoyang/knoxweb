@@ -14,7 +14,8 @@ export const Signup: React.FC = () => {
   const [fullName, setFullName] = useState(inviteName || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mobileAppLink, setMobileAppLink] = useState<string | null>(null);
+  const [accountCreated, setAccountCreated] = useState(false);
+  const [sessionTokens, setSessionTokens] = useState<{ accessToken: string; refreshToken: string } | null>(null);
   const [inviteDetails, setInviteDetails] = useState<{
     circleName: string;
     role: string;
@@ -94,9 +95,9 @@ export const Signup: React.FC = () => {
   // Don't wait for auth loading on signup page - new users won't have a session
   // Just check if user is already logged in (after auth loads)
 
-  // If user is already logged in AND we're not showing mobile app link, redirect to admin
-  // (Don't redirect if we're showing the mobile success screen)
-  if (user && !mobileAppLink) {
+  // If user is already logged in AND we haven't just created an account, redirect to admin
+  // (Don't redirect if we're showing the success screen)
+  if (user && !accountCreated) {
     window.location.href = '/admin';
     return null;
   }
@@ -113,14 +114,12 @@ export const Signup: React.FC = () => {
     console.log('🔑 SIGNUP: Starting account creation...', { email, fullName, isMobile });
 
     try {
-      // Create account and log in directly - no verification code needed
+      // Create account - no verification code needed
       // The user already received an invite email, so we trust the email address
-      console.log('🔑 SIGNUP: Calling create-session-with-code...');
-
       const { data: authResponse, error: authError } = await supabase.functions.invoke('create-session-with-code', {
         body: {
           email: email.toLowerCase().trim(),
-          code: 'SIGNUP', // Special code to indicate direct signup
+          code: 'SIGNUP',
           full_name: fullName.trim() || null,
         }
       });
@@ -134,82 +133,62 @@ export const Signup: React.FC = () => {
         return;
       }
 
-      console.log('Account created successfully', authResponse);
-      console.log('session:', authResponse.session);
-
-      // The function returns session tokens directly
+      // Store tokens and show success screen
       if (authResponse.session?.access_token && authResponse.session?.refresh_token) {
-        console.log('🔑 SIGNUP: Session tokens received!');
-        const accessToken = authResponse.session.access_token;
-        const refreshToken = authResponse.session.refresh_token;
-
-        // Check if on mobile - create token and show app link
-        const checkMobile = isMobileDevice();
-        console.log('🔑 SIGNUP: Device check - isMobile:', checkMobile, 'userAgent:', navigator.userAgent);
-
-        if (checkMobile) {
-          console.log('🔑 SIGNUP: Mobile device detected, creating deep link for app...');
-
-          try {
-            // Encode the tokens for the deep link (base64 encoded JSON)
-            const tokenData = JSON.stringify({ access_token: accessToken, refresh_token: refreshToken });
-            console.log('🔑 SIGNUP: Token data prepared');
-            const encodedTokens = btoa(tokenData);
-            console.log('🔑 SIGNUP: Tokens encoded');
-            const appLink = `kizu://auth-session/${encodedTokens}`;
-
-            console.log('🔑 SIGNUP: Mobile app link created:', appLink.substring(0, 50) + '...');
-            setMobileAppLink(appLink);
-            console.log('🔑 SIGNUP: State updated with mobileAppLink');
-            setLoading(false);
-            console.log('🔑 SIGNUP: Loading set to false');
-
-            // Try to auto-open the app
-            setTimeout(() => {
-              console.log('🔑 SIGNUP: Attempting to open app...');
-              window.location.href = appLink;
-            }, 500);
-          } catch (mobileErr) {
-            console.error('🔑 SIGNUP: Error creating mobile link:', mobileErr);
-            setError('Failed to create app link. Please try again.');
-            setLoading(false);
-          }
-          return;
-        }
-
-        // Web sign-in - set the session directly using the tokens
-        console.log('Setting session with tokens...');
-
-        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
+        setSessionTokens({
+          accessToken: authResponse.session.access_token,
+          refreshToken: authResponse.session.refresh_token,
         });
-
-        if (sessionError) {
-          console.error('Failed to set session', sessionError);
-          setError('Account created but sign-in failed. Please try logging in manually.');
-          setLoading(false);
-          return;
-        }
-
-        if (sessionData.session && sessionData.user) {
-          console.log('Successfully signed in, redirecting to admin...');
-
-          // Redirect to admin
-          window.location.href = '/admin';
-        } else {
-          console.log('No session or user after setSession', sessionData);
-          setError('Sign-in completed but no session created. Please try logging in manually.');
-          setLoading(false);
-        }
+        setAccountCreated(true);
+        setLoading(false);
       } else {
-        console.log('No session tokens in response', authResponse);
         setError('Account created but missing session. Please try logging in manually.');
         setLoading(false);
       }
     } catch (err) {
       console.error('Signup error', err);
       setError('An unexpected error occurred');
+      setLoading(false);
+    }
+  };
+
+  // Handle opening the mobile app
+  const handleOpenMobileApp = () => {
+    if (!sessionTokens) return;
+
+    const tokenData = JSON.stringify({
+      access_token: sessionTokens.accessToken,
+      refresh_token: sessionTokens.refreshToken
+    });
+    const encodedTokens = btoa(tokenData);
+    const appLink = `kizu://auth-session/${encodedTokens}`;
+
+    console.log('🔑 SIGNUP: Opening mobile app with deep link...');
+    window.location.href = appLink;
+  };
+
+  // Handle continuing to web dashboard
+  const handleContinueToWeb = async () => {
+    if (!sessionTokens) return;
+
+    setLoading(true);
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+      access_token: sessionTokens.accessToken,
+      refresh_token: sessionTokens.refreshToken,
+    });
+
+    if (sessionError) {
+      console.error('Failed to set session', sessionError);
+      setError('Sign-in failed. Please try logging in manually.');
+      setLoading(false);
+      return;
+    }
+
+    if (sessionData.session && sessionData.user) {
+      window.location.href = '/admin';
+    } else {
+      setError('Sign-in failed. Please try logging in manually.');
       setLoading(false);
     }
   };
@@ -263,25 +242,53 @@ export const Signup: React.FC = () => {
           )}
         </div>
 
-        {/* Mobile App Success - Show when account created on mobile */}
-        {mobileAppLink ? (
+        {/* Success Screen - Show after account is created */}
+        {accountCreated ? (
           <div className="text-center space-y-6">
-            <div className="text-6xl">✓</div>
+            <div className="text-6xl text-green-500">✓</div>
             <div>
               <h2 className="text-xl font-bold text-theme-primary mb-2">Account Created!</h2>
               <p className="text-theme-secondary">
-                Welcome to Kizu{fullName ? `, ${fullName}` : ''}! Tap the button below to open the app and sign in.
+                Welcome to Kizu{fullName ? `, ${fullName}` : ''}!
               </p>
             </div>
-            <a
-              href={mobileAppLink}
-              className="block w-full btn-primary py-4 text-center text-lg font-semibold"
-            >
-              Open Kizu App
-            </a>
-            <p className="text-sm text-theme-secondary">
-              If the app doesn't open automatically, make sure you have the Kizu app installed.
-            </p>
+
+            {isMobile ? (
+              <>
+                <button
+                  onClick={handleOpenMobileApp}
+                  className="w-full btn-primary py-4 text-lg font-semibold"
+                >
+                  Open Kizu Mobile App
+                </button>
+                <p className="text-sm text-theme-secondary">
+                  Make sure you have the Kizu app installed on your device.
+                </p>
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={handleContinueToWeb}
+                    disabled={loading}
+                    className="text-sm text-theme-secondary underline hover:text-theme-primary"
+                  >
+                    {loading ? 'Loading...' : 'Or continue in browser'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button
+                onClick={handleContinueToWeb}
+                disabled={loading}
+                className="w-full btn-primary py-4 text-lg font-semibold"
+              >
+                {loading ? 'Signing in...' : 'Continue to Dashboard'}
+              </button>
+            )}
+
+            {error && (
+              <div className="alert-error">
+                {error}
+              </div>
+            )}
           </div>
         ) : (
           <>
