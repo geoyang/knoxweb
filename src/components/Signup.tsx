@@ -114,8 +114,10 @@ export const Signup: React.FC = () => {
     console.log('🔑 SIGNUP: Starting account creation...', { email, fullName, isMobile });
 
     try {
-      // Create account - no verification code needed
-      // The user already received an invite email, so we trust the email address
+      // Create account with timeout - mobile networks can be slow
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
       const { data: authResponse, error: authError } = await supabase.functions.invoke('create-session-with-code', {
         body: {
           email: email.toLowerCase().trim(),
@@ -123,6 +125,8 @@ export const Signup: React.FC = () => {
           full_name: fullName.trim() || null,
         }
       });
+
+      clearTimeout(timeoutId);
 
       console.log('🔑 SIGNUP: API response received', { authResponse, authError });
 
@@ -145,9 +149,13 @@ export const Signup: React.FC = () => {
         setError('Account created but missing session. Please try logging in manually.');
         setLoading(false);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Signup error', err);
-      setError('An unexpected error occurred');
+      if (err.name === 'AbortError') {
+        setError('Request timed out. Please check your connection and try again.');
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
       setLoading(false);
     }
   };
@@ -348,9 +356,19 @@ export const Signup: React.FC = () => {
           <button
             type="submit"
             disabled={loading || !fullName || !email}
-            className="w-full btn-primary py-3"
+            className="w-full btn-primary py-3 flex items-center justify-center gap-2"
           >
-            {loading ? 'Creating account...' : 'Create Account & Sign In'}
+            {loading ? (
+              <>
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Creating account...
+              </>
+            ) : (
+              'Create Account'
+            )}
           </button>
             </form>
 
