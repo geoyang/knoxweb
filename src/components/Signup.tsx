@@ -196,10 +196,13 @@ export const Signup: React.FC = () => {
       access_token: sessionTokens.accessToken,
       refresh_token: sessionTokens.refreshToken
     });
-    const encodedTokens = btoa(tokenData);
-    const appLink = `kizu://auth-session/${encodedTokens}`;
+    // Use URL-safe base64 encoding (replace +/= with URL-safe chars)
+    const base64Tokens = btoa(tokenData);
+    const urlSafeTokens = base64Tokens.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    const appLink = `kizu://auth-session/${urlSafeTokens}`;
 
-    console.log('🔑 SIGNUP: Opening mobile app with deep link...');
+    addLog(`Opening app with deep link...`);
+    console.log('🔑 SIGNUP: Opening mobile app with deep link:', appLink.substring(0, 60) + '...');
     window.location.href = appLink;
   };
 
