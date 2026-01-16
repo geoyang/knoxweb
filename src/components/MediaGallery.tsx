@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { adminApi } from '../services/adminApi';
+import { VideoPlayer } from './VideoPlayer';
 
 type SortOption = 'date_added' | 'created_at' | 'type' | 'filename';
 type ViewMode = 'grid' | 'list';
@@ -561,7 +562,7 @@ const MediaViewerModal: React.FC<MediaViewerModalProps> = ({ asset, onClose, onD
 
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center" onClick={onClose}>
-      <div className="absolute top-4 right-4 flex items-center gap-2">
+      <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -587,12 +588,14 @@ const MediaViewerModal: React.FC<MediaViewerModalProps> = ({ asset, onClose, onD
 
       <div className="max-w-5xl max-h-[90vh] w-full mx-4" onClick={(e) => e.stopPropagation()}>
         {isVideo && isWebAccessible ? (
-          <video
-            src={mediaUrl}
-            controls
-            autoPlay
-            className="max-w-full max-h-[80vh] mx-auto rounded-lg"
-          />
+          <div className="max-h-[80vh] mx-auto rounded-lg overflow-hidden">
+            <VideoPlayer
+              src={mediaUrl!}
+              className="max-w-full max-h-[80vh] mx-auto object-contain"
+              autoPlay={true}
+              controls={true}
+            />
+          </div>
         ) : isWebAccessible ? (
           <img
             src={mediaUrl}
