@@ -12,6 +12,7 @@ import { Dashboard } from './components/Dashboard';
 import { FrameSetup } from './components/FrameSetup';
 import { FrameMode } from './components/FrameMode';
 import { ShareRequest } from './components/ShareRequest';
+import { SubscriptionPage } from './components/SubscriptionPage';
 
 function App() {
   return (
@@ -32,6 +33,9 @@ function App() {
 
         {/* Share request route */}
         <Route path="/share" element={<ShareRequest />} />
+
+        {/* Subscription management route */}
+        <Route path="/subscription" element={<SubscriptionPage />} />
 
         {/* Registration verification route */}
         <Route path="/verify" element={<VerifyRegistration />} />
