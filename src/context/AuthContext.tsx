@@ -87,6 +87,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const fetchSuperAdminStatus = async (userId: string): Promise<boolean> => {
+    // Skip super admin check on subscription page - not needed there
+    if (window.location.pathname === '/subscription') {
+      console.log('Skipping super admin check on subscription page');
+      return false;
+    }
+
     try {
       console.log('Fetching super admin status for user:', userId);
       // Call the RPC function with timeout to prevent hanging
