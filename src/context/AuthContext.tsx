@@ -119,6 +119,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
+    // Skip auth initialization on /subscription page - it handles its own auth from URL tokens
+    // This prevents the slow getSession() from blocking/interfering with SubscriptionPage
+    if (window.location.pathname === '/subscription') {
+      console.log('Skipping AuthContext initialization on subscription page');
+      setLoading(false);
+      return;
+    }
+
     // Track if we've received a valid session to prevent timeout from clearing it
     let hasReceivedSession = false;
 
