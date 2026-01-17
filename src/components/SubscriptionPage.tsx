@@ -748,10 +748,10 @@ export const SubscriptionPage: React.FC = () => {
           </div>
         )}
 
-        <div className="mt-8 mb-8">
+        <div className="mt-8 mb-8 flex justify-center">
           <button
             onClick={() => window.location.href = 'kizu://subscription-complete'}
-            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition"
+            className="px-8 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg font-medium transition"
           >
             Done
           </button>
