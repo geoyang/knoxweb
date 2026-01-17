@@ -646,14 +646,13 @@ export const SubscriptionPage: React.FC = () => {
 
             const getButtonText = () => {
               if (isCheckingOut) return 'Loading...';
-              if (isCurrent && isTrialing) return 'Subscribe Now';
               if (isCurrent) return 'Current Plan';
               if (isDowngrade) return 'Downgrade';
               return 'Upgrade';
             };
 
             const getButtonClass = () => {
-              if (isCurrent && !isTrialing) return 'bg-gray-400 cursor-not-allowed';
+              if (isCurrent) return 'bg-gray-400 cursor-not-allowed';
               if (isDowngrade) return 'bg-orange-500 hover:bg-orange-600';
               return 'bg-indigo-600 hover:bg-indigo-700';
             };
@@ -661,8 +660,8 @@ export const SubscriptionPage: React.FC = () => {
             return (
               <div
                 key={plan.id}
-                className={`bg-white dark:bg-gray-800 rounded-xl p-6 border-2 transition ${
-                  isCurrent ? 'border-indigo-500' : 'border-gray-200 dark:border-gray-700'
+                className={`bg-white dark:bg-gray-800 rounded-xl p-6 transition ${
+                  isCurrent ? 'border-8 border-indigo-500' : 'border-2 border-gray-200 dark:border-gray-700'
                 }`}
               >
                 <div className="flex justify-between items-start mb-4">
@@ -673,7 +672,7 @@ export const SubscriptionPage: React.FC = () => {
                     <span className={`text-xs font-bold px-2 py-1 rounded ${
                       isPerpetual ? 'bg-green-500' : isTrialing ? 'bg-orange-500' : 'bg-indigo-500'
                     } text-white`}>
-                      {isPerpetual ? '∞' : isTrialing ? 'TRIAL' : 'CURRENT'}
+                      {isPerpetual ? '∞' : isTrialing ? 'TRIAL' : (subscription?.current_period_end ? `Renews ${new Date(subscription.current_period_end).toLocaleDateString()}` : 'ACTIVE')}
                     </span>
                   )}
                 </div>
@@ -707,7 +706,7 @@ export const SubscriptionPage: React.FC = () => {
 
                 <button
                   onClick={() => handleSelectPlan(plan)}
-                  disabled={isCheckingOut || plan.name === 'free' || (isCurrent && !isTrialing)}
+                  disabled={isCheckingOut || plan.name === 'free' || isCurrent}
                   className={`w-full py-3 text-white rounded-lg font-medium disabled:opacity-50 transition ${getButtonClass()}`}
                 >
                   {getButtonText()}
@@ -733,6 +732,15 @@ export const SubscriptionPage: React.FC = () => {
             </button>
           </div>
         )}
+
+        <div className="mt-8 mb-8">
+          <button
+            onClick={() => window.location.href = 'kizu://subscription-complete'}
+            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition"
+          >
+            Done
+          </button>
+        </div>
       </main>
     </div>
   );
