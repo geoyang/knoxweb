@@ -152,31 +152,21 @@ export const SubscriptionPage: React.FC = () => {
         apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
       };
 
-      const [plansRes, statusRes, limitsRes, discountRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/functions/v1/subscription-api?action=plans`, { headers }),
-        fetch(`${SUPABASE_URL}/functions/v1/subscription-api?action=status`, { headers }),
-        fetch(`${SUPABASE_URL}/functions/v1/subscription-api?action=limits`, { headers }),
-        fetch(`${SUPABASE_URL}/functions/v1/stripe-checkout-api?action=get_discount`, { headers }),
-      ]);
+      // Single API call for all page data
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/subscription-api?action=page_data`, { headers });
+      const data = await response.json();
 
-      const [plansData, statusData, limitsData, discountData] = await Promise.all([
-        plansRes.json(),
-        statusRes.json(),
-        limitsRes.json(),
-        discountRes.json(),
-      ]);
-
-      if (plansData.success) setPlans(plansData.plans || []);
-      if (statusData.success) {
-        setSubscription(statusData.subscription);
-        setCurrentPlan(statusData.plan);
-      }
-      if (limitsData.success) {
-        setUsage(limitsData.usage);
-        setLimits(limitsData.limits);
-      }
-      if (discountData.success && discountData.discount) {
-        setSystemDiscount(discountData.discount);
+      if (data.success) {
+        setPlans(data.plans || []);
+        setSubscription(data.subscription);
+        setCurrentPlan(data.plan);
+        setUsage(data.usage);
+        setLimits(data.limits);
+        if (data.discount) {
+          setSystemDiscount(data.discount);
+        }
+      } else {
+        setError(data.error || 'Failed to load subscription data');
       }
     } catch (err) {
       console.error('Error loading subscription data:', err);
