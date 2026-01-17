@@ -139,8 +139,13 @@ export const SubscriptionPage: React.FC = () => {
   };
 
   const loadSubscriptionData = async () => {
+    const loadStart = performance.now();
+    console.log('[SubscriptionPage] Starting data load');
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      console.log('[SubscriptionPage] Got session in', (performance.now() - loadStart).toFixed(0), 'ms');
+
       if (!session?.access_token) {
         navigate('/login');
         return;
@@ -153,8 +158,12 @@ export const SubscriptionPage: React.FC = () => {
       };
 
       // Single API call for all page data
+      const fetchStart = performance.now();
       const response = await fetch(`${SUPABASE_URL}/functions/v1/subscription-api?action=page_data`, { headers });
+      console.log('[SubscriptionPage] API response in', (performance.now() - fetchStart).toFixed(0), 'ms');
+
       const data = await response.json();
+      console.log('[SubscriptionPage] Total load time:', (performance.now() - loadStart).toFixed(0), 'ms');
 
       if (data.success) {
         setPlans(data.plans || []);
