@@ -715,7 +715,7 @@ export const SubscriptionPage: React.FC = () => {
 
                 {isDowngrade && !isCurrent && (
                   <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 text-center">
-                    You'll keep your current features until your billing period ends
+                    You'll keep your current features until {subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString() : 'your billing period ends'}
                   </p>
                 )}
               </div>
