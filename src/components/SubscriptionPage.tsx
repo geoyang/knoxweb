@@ -54,7 +54,10 @@ interface PromoResult {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
-const handleReturnToApp = () => {
+const handleReturnToApp = (e: React.MouseEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+
   // Try the deep link
   window.location.href = 'kizu://subscription-complete';
 
