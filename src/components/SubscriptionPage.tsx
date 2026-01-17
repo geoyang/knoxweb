@@ -59,6 +59,7 @@ export const SubscriptionPage: React.FC = () => {
   const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
+  const [loadingPhase, setLoadingPhase] = useState<'authenticating' | 'loading_account'>('authenticating');
   const [userName, setUserName] = useState<string | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -94,6 +95,17 @@ export const SubscriptionPage: React.FC = () => {
     const accessToken = searchParams.get('access_token');
     const refreshToken = searchParams.get('refresh_token');
 
+    // Extract user name from token early if possible
+    if (accessToken) {
+      try {
+        const payload = JSON.parse(atob(accessToken.split('.')[1]));
+        const earlyName = payload.user_metadata?.full_name || payload.user_metadata?.name || payload.email?.split('@')[0] || null;
+        if (earlyName) setUserName(earlyName);
+      } catch {}
+    }
+
+    setLoadingPhase('authenticating');
+
     if (accessToken && refreshToken) {
       try {
         await supabase.auth.setSession({
@@ -119,6 +131,9 @@ export const SubscriptionPage: React.FC = () => {
     const userMeta = session.user?.user_metadata;
     const displayName = userMeta?.full_name || userMeta?.name || userEmail?.split('@')[0] || null;
     setUserName(displayName);
+
+    // Switch to loading account phase
+    setLoadingPhase('loading_account');
 
     loadSubscriptionData();
   };
@@ -333,12 +348,19 @@ export const SubscriptionPage: React.FC = () => {
   const hasPromoApplied = subscription?.has_promo || false;
 
   if (loading) {
+    const getLoadingMessage = () => {
+      if (loadingPhase === 'authenticating') {
+        return userName ? `Authenticating ${userName}...` : 'Authenticating...';
+      }
+      return userName ? `Looking up account information for ${userName}...` : 'Looking up account information...';
+    };
+
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
           <p className="text-gray-600 dark:text-gray-400">
-            {userName ? `Loading account for ${userName}...` : 'Loading account...'}
+            {getLoadingMessage()}
           </p>
         </div>
       </div>
@@ -550,32 +572,35 @@ export const SubscriptionPage: React.FC = () => {
           </div>
         )}
 
-        <div className="flex justify-center gap-4 mb-6">
-          <button
-            onClick={() => setBillingCycle('monthly')}
-            className={`px-6 py-2 rounded-lg font-medium transition ${
-              billingCycle === 'monthly'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
-            }`}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setBillingCycle('yearly')}
-            className={`px-6 py-2 rounded-lg font-medium transition flex items-center gap-2 ${
-              billingCycle === 'yearly'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
-            }`}
-          >
-            Yearly
-            <span className="bg-green-500 text-white text-xs px-2 py-0.5 rounded">SAVE</span>
-          </button>
+        {/* Sticky Billing Cycle Toggle */}
+        <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 py-4 -mx-4 px-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex justify-center gap-4">
+            <button
+              onClick={() => setBillingCycle('monthly')}
+              className={`px-6 py-2 rounded-lg font-medium transition ${
+                billingCycle === 'monthly'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBillingCycle('yearly')}
+              className={`px-6 py-2 rounded-lg font-medium transition flex items-center gap-2 ${
+                billingCycle === 'yearly'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
+              }`}
+            >
+              Yearly
+              <span className="bg-green-500 text-white text-xs px-2 py-0.5 rounded">SAVE</span>
+            </button>
+          </div>
         </div>
 
         {!isSubscribed && (
-          <div className="mb-6">
+          <div className="mb-6 mt-6">
             <button
               onClick={() => setShowPromoInput(!showPromoInput)}
               className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-2"
@@ -630,7 +655,7 @@ export const SubscriptionPage: React.FC = () => {
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
           {plans.map((plan) => {
             const isCurrent = currentPlan?.id === plan.id;
             const price = billingCycle === 'yearly' ? plan.price_yearly_cents : plan.price_monthly_cents;

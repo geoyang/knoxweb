@@ -34,6 +34,12 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
   const [stats, setStats] = useState<UserStats>({ albums: 0, photos: 0, circles: 0, shared: 0 });
   const [loadingStats, setLoadingStats] = useState(false);
 
+  // Collapsible section states - default to collapsed
+  const [showAccountInfo, setShowAccountInfo] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [showFeatures, setShowFeatures] = useState(false);
+  const [showAppInfo, setShowAppInfo] = useState(false);
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -364,128 +370,188 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
           {/* Account Information */}
           <div className="space-y-6">
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Account Information</h4>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
-                  <span className="text-sm text-gray-600">Name</span>
-                  <input
-                    type="text"
-                    value={editedName}
-                    onChange={(e) => setEditedName(e.target.value)}
-                    className="px-2 py-1 border border-gray-300 rounded text-sm w-40 text-right text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Your name"
-                  />
-                </div>
-                <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
-                  <span className="text-sm text-gray-600">Email</span>
-                  <span className="text-sm font-medium text-gray-900">{user?.email}</span>
-                </div>
-                {createdAt && (
+              <button
+                onClick={() => setShowAccountInfo(!showAccountInfo)}
+                className="w-full flex items-center justify-between text-sm font-medium text-gray-700 mb-3 hover:text-gray-900"
+              >
+                <span>Account Information</span>
+                <svg
+                  className={`w-4 h-4 transition-transform ${showAccountInfo ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showAccountInfo && (
+                <div className="space-y-3">
                   <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
-                    <span className="text-sm text-gray-600">Account Created</span>
-                    <span className="text-sm text-gray-500">
-                      {createdAt.toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
+                    <span className="text-sm text-gray-600">Name</span>
+                    <input
+                      type="text"
+                      value={editedName}
+                      onChange={(e) => setEditedName(e.target.value)}
+                      className="px-2 py-1 border border-gray-300 rounded text-sm w-40 text-right text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Your name"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
+                    <span className="text-sm text-gray-600">Email</span>
+                    <span className="text-sm font-medium text-gray-900">{user?.email}</span>
+                  </div>
+                  {createdAt && (
+                    <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
+                      <span className="text-sm text-gray-600">Account Created</span>
+                      <span className="text-sm text-gray-500">
+                        {createdAt.toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
+                    <span className="text-sm text-gray-600">Account Type</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {isSuperAdmin ? 'Super Admin' : 'User'}
                     </span>
                   </div>
-                )}
-                <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
-                  <span className="text-sm text-gray-600">Account Type</span>
-                  <span className="text-sm font-medium text-gray-900">
-                    {isSuperAdmin ? 'Super Admin' : 'User'}
-                  </span>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Kizu Statistics */}
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Kizu Statistics</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-center py-3 px-2 bg-blue-50 rounded-md">
-                  <div className="text-lg font-semibold text-blue-600">
-                    {loadingStats ? (
-                      <span className="inline-block w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      stats.albums
-                    )}
+              <button
+                onClick={() => setShowStats(!showStats)}
+                className="w-full flex items-center justify-between text-sm font-medium text-gray-700 mb-3 hover:text-gray-900"
+              >
+                <span>Kizu Statistics</span>
+                <svg
+                  className={`w-4 h-4 transition-transform ${showStats ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showStats && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="text-center py-3 px-2 bg-blue-50 rounded-md">
+                    <div className="text-lg font-semibold text-blue-600">
+                      {loadingStats ? (
+                        <span className="inline-block w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        stats.albums
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-600">Albums</div>
                   </div>
-                  <div className="text-xs text-gray-600">Albums</div>
-                </div>
-                <div className="text-center py-3 px-2 bg-green-50 rounded-md">
-                  <div className="text-lg font-semibold text-green-600">
-                    {loadingStats ? (
-                      <span className="inline-block w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      stats.photos
-                    )}
+                  <div className="text-center py-3 px-2 bg-green-50 rounded-md">
+                    <div className="text-lg font-semibold text-green-600">
+                      {loadingStats ? (
+                        <span className="inline-block w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        stats.photos
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-600">Photos</div>
                   </div>
-                  <div className="text-xs text-gray-600">Photos</div>
-                </div>
-                <div className="text-center py-3 px-2 bg-purple-50 rounded-md">
-                  <div className="text-lg font-semibold text-purple-600">
-                    {loadingStats ? (
-                      <span className="inline-block w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      stats.circles
-                    )}
+                  <div className="text-center py-3 px-2 bg-purple-50 rounded-md">
+                    <div className="text-lg font-semibold text-purple-600">
+                      {loadingStats ? (
+                        <span className="inline-block w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        stats.circles
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-600">Circles</div>
                   </div>
-                  <div className="text-xs text-gray-600">Circles</div>
-                </div>
-                <div className="text-center py-3 px-2 bg-orange-50 rounded-md">
-                  <div className="text-lg font-semibold text-orange-600">
-                    {loadingStats ? (
-                      <span className="inline-block w-4 h-4 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      stats.shared
-                    )}
+                  <div className="text-center py-3 px-2 bg-orange-50 rounded-md">
+                    <div className="text-lg font-semibold text-orange-600">
+                      {loadingStats ? (
+                        <span className="inline-block w-4 h-4 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        stats.shared
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-600">Shared</div>
                   </div>
-                  <div className="text-xs text-gray-600">Shared</div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Features */}
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Features</h4>
-              <div className="space-y-2">
-                <button
-                  onClick={() => {
-                    onClose();
-                    navigate('/frame');
-                  }}
-                  className="w-full flex items-center gap-3 py-3 px-3 bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 rounded-md transition-colors text-left"
+              <button
+                onClick={() => setShowFeatures(!showFeatures)}
+                className="w-full flex items-center justify-between text-sm font-medium text-gray-700 mb-3 hover:text-gray-900"
+              >
+                <span>Features</span>
+                <svg
+                  className={`w-4 h-4 transition-transform ${showFeatures ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  <span className="text-2xl">🖼️</span>
-                  <div className="flex-1">
-                    <span className="text-sm font-medium text-gray-900 block">Picture Frame Mode</span>
-                    <span className="text-xs text-gray-500">Use this browser as a photo display</span>
-                  </div>
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showFeatures && (
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      onClose();
+                      navigate('/frame');
+                    }}
+                    className="w-full flex items-center gap-3 py-3 px-3 bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 rounded-md transition-colors text-left"
+                  >
+                    <span className="text-2xl">🖼️</span>
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-gray-900 block">Picture Frame Mode</span>
+                      <span className="text-xs text-gray-500">Use this browser as a photo display</span>
+                    </div>
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* App Information */}
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Application</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
-                  <span className="text-sm text-gray-600">Version</span>
-                  <span className="text-sm text-gray-500">Kizu Web v1.0.0</span>
+              <button
+                onClick={() => setShowAppInfo(!showAppInfo)}
+                className="w-full flex items-center justify-between text-sm font-medium text-gray-700 mb-3 hover:text-gray-900"
+              >
+                <span>Application</span>
+                <svg
+                  className={`w-4 h-4 transition-transform ${showAppInfo ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showAppInfo && (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
+                    <span className="text-sm text-gray-600">Version</span>
+                    <span className="text-sm text-gray-500">Kizu Web v1.0.0</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
+                    <span className="text-sm text-gray-600">Environment</span>
+                    <span className="text-sm text-gray-500">
+                      {import.meta.env.MODE === 'development' ? 'Development' : 'Production'}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
-                  <span className="text-sm text-gray-600">Environment</span>
-                  <span className="text-sm text-gray-500">
-                    {import.meta.env.MODE === 'development' ? 'Development' : 'Production'}
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
