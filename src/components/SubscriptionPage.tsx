@@ -54,6 +54,22 @@ interface PromoResult {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
+const handleReturnToApp = () => {
+  // Try the deep link
+  window.location.href = 'kizu://subscription-complete';
+
+  // If still here after a short delay, try closing the window (for in-app browsers)
+  setTimeout(() => {
+    window.close();
+    // If window.close() didn't work (not opened by script), show message
+    setTimeout(() => {
+      if (!document.hidden) {
+        alert('Please return to the Kizu app manually.');
+      }
+    }, 300);
+  }, 500);
+};
+
 export const SubscriptionPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -390,7 +406,7 @@ export const SubscriptionPage: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-xl font-bold text-gray-800 dark:text-white">Manage Subscription</h1>
           <button
-            onClick={() => window.location.href = 'kizu://subscription-complete'}
+            onClick={handleReturnToApp}
             className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400"
           >
             Done
@@ -759,7 +775,7 @@ export const SubscriptionPage: React.FC = () => {
 
         <div className="mt-8 mb-8 flex justify-center">
           <button
-            onClick={() => window.location.href = 'kizu://subscription-complete'}
+            onClick={handleReturnToApp}
             className="px-8 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg font-medium transition"
           >
             Done
