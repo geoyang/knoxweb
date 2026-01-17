@@ -634,10 +634,29 @@ export const SubscriptionPage: React.FC = () => {
           {plans.map((plan) => {
             const isCurrent = currentPlan?.id === plan.id;
             const price = billingCycle === 'yearly' ? plan.price_yearly_cents : plan.price_monthly_cents;
+            const currentPrice = currentPlan
+              ? (billingCycle === 'yearly' ? currentPlan.price_yearly_cents : currentPlan.price_monthly_cents)
+              : 0;
+            const isDowngrade = currentPlan && price < currentPrice;
+            const isUpgrade = currentPlan && price > currentPrice;
             const discountedPrice = systemDiscount && price > 0
               ? Math.round(price * (1 - systemDiscount.percent / 100))
               : price;
             const isCheckingOut = checkoutLoading === plan.id;
+
+            const getButtonText = () => {
+              if (isCheckingOut) return 'Loading...';
+              if (isCurrent && isTrialing) return 'Subscribe Now';
+              if (isCurrent) return 'Current Plan';
+              if (isDowngrade) return 'Downgrade';
+              return 'Upgrade';
+            };
+
+            const getButtonClass = () => {
+              if (isCurrent && !isTrialing) return 'bg-gray-400 cursor-not-allowed';
+              if (isDowngrade) return 'bg-orange-500 hover:bg-orange-600';
+              return 'bg-indigo-600 hover:bg-indigo-700';
+            };
 
             return (
               <div
@@ -686,18 +705,18 @@ export const SubscriptionPage: React.FC = () => {
                   </div>
                 </div>
 
-                {isCurrent && (isSubscribed || hasPromoApplied) ? (
-                  <div className="w-full py-3 bg-gray-100 dark:bg-gray-700 rounded-lg text-center text-gray-500 dark:text-gray-400">
-                    ✓ Subscribed
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => handleSelectPlan(plan)}
-                    disabled={isCheckingOut || plan.name === 'free'}
-                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium disabled:opacity-50 transition"
-                  >
-                    {isCheckingOut ? 'Loading...' : isCurrent && isTrialing ? 'Subscribe Now' : 'Select Plan'}
-                  </button>
+                <button
+                  onClick={() => handleSelectPlan(plan)}
+                  disabled={isCheckingOut || plan.name === 'free' || (isCurrent && !isTrialing)}
+                  className={`w-full py-3 text-white rounded-lg font-medium disabled:opacity-50 transition ${getButtonClass()}`}
+                >
+                  {getButtonText()}
+                </button>
+
+                {isDowngrade && !isCurrent && (
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 text-center">
+                    You'll keep your current features until your billing period ends
+                  </p>
                 )}
               </div>
             );
