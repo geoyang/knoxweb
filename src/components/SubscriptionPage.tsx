@@ -85,7 +85,7 @@ export const SubscriptionPage: React.FC = () => {
 
   useEffect(() => {
     if (searchParams.get('success') === 'true') {
-      setSuccessMessage('Payment successful! Your subscription has been updated.');
+      setSuccessMessage('Your subscription has been updated. Return to Kizu to continue.');
       loadSubscriptionData();
     }
   }, [searchParams]);
