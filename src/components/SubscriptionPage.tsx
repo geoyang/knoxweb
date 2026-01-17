@@ -372,7 +372,7 @@ export const SubscriptionPage: React.FC = () => {
             onClick={() => window.location.href = 'kizu://subscription-complete'}
             className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400"
           >
-            Return to App
+            Done
           </button>
         </div>
       </header>
