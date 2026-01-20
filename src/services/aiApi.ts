@@ -292,6 +292,111 @@ class AIApiService {
       method: 'POST',
     });
   }
+
+  // Search by AI-generated description
+  async searchByDescription(params: {
+    query: string;
+    limit?: number;
+  }): Promise<AIApiResponse<{ results: SearchResult[]; total: number }>> {
+    return this.request('/api/v1/search/by-description', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  // Search by OCR-extracted text
+  async searchByOcrText(params: {
+    query: string;
+    limit?: number;
+  }): Promise<AIApiResponse<{ results: SearchResult[]; total: number }>> {
+    return this.request('/api/v1/search/by-text', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  // Combined multi-filter search
+  async searchCombined(params: {
+    query?: string;
+    filters?: {
+      date_start?: string;
+      date_end?: string;
+      locations?: string[];
+      people?: string[];
+      media_type?: string;
+      has_faces?: boolean;
+      has_text?: boolean;
+      description_query?: string;
+      text_query?: string;
+      object_classes?: string[];
+    };
+    limit?: number;
+    threshold?: number;
+  }): Promise<AIApiResponse<{ results: SearchResult[]; total: number; query_parsed?: Record<string, unknown> }>> {
+    return this.request('/api/v1/search/combined', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  // Queue stats for activity dashboard
+  async getQueueStats(): Promise<AIApiResponse<{
+    pending: number;
+    processing: number;
+    completed: number;
+    failed: number;
+    total: number;
+  }>> {
+    return this.request('/api/v1/jobs/queue/stats');
+  }
+
+  // Get active/processing jobs
+  async getActiveJobs(limit: number = 10): Promise<AIApiResponse<{
+    jobs: Array<{
+      id: string;
+      asset_id: string;
+      status: string;
+      worker_id?: string;
+      started_at?: string;
+      created_at: string;
+    }>;
+    count: number;
+  }>> {
+    return this.request(`/api/v1/jobs/queue/active?limit=${limit}`);
+  }
+
+  // Get recent jobs
+  async getRecentJobs(limit: number = 50, status?: string): Promise<AIApiResponse<{
+    jobs: Array<{
+      id: string;
+      asset_id: string;
+      status: string;
+      worker_id?: string;
+      priority?: number;
+      created_at: string;
+      started_at?: string;
+      completed_at?: string;
+      result?: Record<string, unknown>;
+    }>;
+    count: number;
+  }>> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (status) params.set('status', status);
+    return this.request(`/api/v1/jobs/queue/recent?${params}`);
+  }
+
+  // Get worker status
+  async getWorkerStatus(): Promise<AIApiResponse<{
+    workers: Array<{
+      worker_id: string;
+      current_asset?: string;
+      started_at?: string;
+      status: string;
+    }>;
+    count: number;
+  }>> {
+    return this.request('/api/v1/jobs/queue/workers');
+  }
 }
 
 export const aiApi = new AIApiService();

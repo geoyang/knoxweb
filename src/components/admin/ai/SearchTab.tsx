@@ -1,12 +1,17 @@
 /**
  * SearchTab Component
- * Test semantic, object-based, and face-based search
+ * Test semantic, object-based, and face-based search with advanced filters
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { aiApi } from '../../../services/aiApi';
 import { contactsApi } from '../../../services/contactsApi';
 import { SearchResults } from './components';
+import {
+  AdvancedSearchFilters,
+  SearchFilterState,
+  getDefaultFilters,
+} from './components/AdvancedSearchFilters';
 import type { SearchResult, FaceCluster } from '../../../types/ai';
 
 interface Contact {
@@ -78,7 +83,7 @@ const ImageViewerModal: React.FC<{
           />
         ) : (
           <div className="w-96 h-96 bg-gray-800 rounded-lg flex items-center justify-center text-6xl">
-            🖼️
+            Image
           </div>
         )}
         {/* Info bar */}
@@ -113,19 +118,19 @@ const ImageViewerModal: React.FC<{
 };
 
 export const SearchTab: React.FC = () => {
-  const [mode, setMode] = useState<'text' | 'object' | 'face'>('text');
   const [textQuery, setTextQuery] = useState('');
-  const [objectQuery, setObjectQuery] = useState('');
-  const [detectedObjects, setDetectedObjects] = useState<DetectedObjectClass[]>([]);
-  const [selectedContactId, setSelectedContactId] = useState('');
-  const [selectedClusterId, setSelectedClusterId] = useState('');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [clusters, setClusters] = useState<FaceCluster[]>([]);
+  const [detectedObjects, setDetectedObjects] = useState<DetectedObjectClass[]>([]);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTime, setSearchTime] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
+
+  // Advanced filters
+  const [filters, setFilters] = useState<SearchFilterState>(getDefaultFilters());
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   // Load contacts, clusters, and detected objects
   useEffect(() => {
@@ -158,8 +163,21 @@ export const SearchTab: React.FC = () => {
     loadData();
   }, []);
 
-  const handleTextSearch = async () => {
-    if (!textQuery.trim()) return;
+  const hasActiveFilters = () => {
+    return (
+      filters.dateStart ||
+      filters.dateEnd ||
+      filters.people.length > 0 ||
+      filters.objectClasses.length > 0 ||
+      filters.mediaType !== 'all' ||
+      filters.descriptionQuery ||
+      filters.textQuery
+    );
+  };
+
+  const handleSearch = async () => {
+    // Need either a query or active filters
+    if (!textQuery.trim() && !hasActiveFilters()) return;
 
     setLoading(true);
     setError(null);
@@ -169,10 +187,49 @@ export const SearchTab: React.FC = () => {
     const startTime = Date.now();
 
     try {
-      const result = await aiApi.searchByText({
-        query: textQuery,
-        limit: 20,
-      });
+      // Build combined search request
+      const searchFilters: Record<string, unknown> = {};
+
+      if (filters.dateStart) {
+        searchFilters.date_start = filters.dateStart;
+      }
+      if (filters.dateEnd) {
+        searchFilters.date_end = filters.dateEnd;
+      }
+      if (filters.people.length > 0) {
+        searchFilters.people = filters.people;
+      }
+      if (filters.objectClasses.length > 0) {
+        searchFilters.object_classes = filters.objectClasses;
+      }
+      if (filters.mediaType !== 'all') {
+        searchFilters.media_type = filters.mediaType;
+      }
+      if (filters.searchInDescriptions && filters.descriptionQuery) {
+        searchFilters.description_query = filters.descriptionQuery;
+      }
+      if (filters.searchInOcr && filters.textQuery) {
+        searchFilters.text_query = filters.textQuery;
+      }
+
+      // Use combined search if we have filters, otherwise simple semantic search
+      const hasFilters = Object.keys(searchFilters).length > 0;
+
+      let result;
+      if (hasFilters || !filters.searchInSemantic) {
+        // Combined search
+        result = await aiApi.searchCombined({
+          query: filters.searchInSemantic && textQuery.trim() ? textQuery : undefined,
+          filters: hasFilters ? searchFilters as Parameters<typeof aiApi.searchCombined>[0]['filters'] : undefined,
+          limit: 50,
+        });
+      } else {
+        // Simple semantic search
+        result = await aiApi.searchByText({
+          query: textQuery,
+          limit: 50,
+        });
+      }
 
       if (result.success && result.data) {
         setResults(result.data.results || []);
@@ -187,77 +244,9 @@ export const SearchTab: React.FC = () => {
     }
   };
 
-  const handleFaceSearch = async () => {
-    if (!selectedContactId && !selectedClusterId) return;
-
-    setLoading(true);
-    setError(null);
-    setResults([]);
-    setSearchTime(null);
-
-    const startTime = Date.now();
-
-    try {
-      const result = await aiApi.searchByFace({
-        contact_id: selectedContactId || undefined,
-        cluster_id: selectedClusterId || undefined,
-        limit: 20,
-      });
-
-      if (result.success && result.data) {
-        setResults(result.data.results || []);
-        setSearchTime(Date.now() - startTime);
-      } else {
-        setError(result.error || 'Search failed');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed');
-    } finally {
-      setLoading(false);
-    }
+  const handleClearFilters = () => {
+    setFilters(getDefaultFilters());
   };
-
-  const handleObjectSearch = async () => {
-    if (!objectQuery.trim()) return;
-
-    setLoading(true);
-    setError(null);
-    setResults([]);
-    setSearchTime(null);
-
-    const startTime = Date.now();
-
-    try {
-      const result = await aiApi.searchByObject({
-        object_class: objectQuery,
-        min_confidence: 0.5,
-        limit: 50,
-      });
-
-      if (result.success && result.data) {
-        setResults(result.data.results || []);
-        setSearchTime(Date.now() - startTime);
-      } else {
-        setError(result.error || 'Search failed');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSearch = () => {
-    if (mode === 'text') {
-      handleTextSearch();
-    } else if (mode === 'object') {
-      handleObjectSearch();
-    } else {
-      handleFaceSearch();
-    }
-  };
-
-  const labeledClusters = clusters.filter(c => c.name || c.knox_contact_id);
 
   return (
     <div>
@@ -265,154 +254,75 @@ export const SearchTab: React.FC = () => {
         Search Test
       </h3>
       <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1.5rem' }}>
-        Search by semantic text, detected objects, or find photos of a specific person.
+        Search by semantic text, detected objects, people, dates, and more.
       </p>
 
-      {/* Mode Toggle */}
-      <div className="mode-toggle" style={{ marginBottom: '1.5rem' }}>
+      {/* Main Search Form */}
+      <div className="search-form">
+        <input
+          type="text"
+          className="ai-input search-form__input"
+          value={textQuery}
+          onChange={e => setTextQuery(e.target.value)}
+          placeholder="e.g., photos of people at the beach, sunset, dogs playing..."
+          onKeyDown={e => e.key === 'Enter' && handleSearch()}
+        />
         <button
-          className={`mode-toggle__option ${mode === 'text' ? 'mode-toggle__option--active' : ''}`}
-          onClick={() => setMode('text')}
+          className="ai-button ai-button--primary"
+          onClick={handleSearch}
+          disabled={loading || (!textQuery.trim() && !hasActiveFilters())}
         >
-          Semantic
-        </button>
-        <button
-          className={`mode-toggle__option ${mode === 'object' ? 'mode-toggle__option--active' : ''}`}
-          onClick={() => setMode('object')}
-        >
-          Objects
-        </button>
-        <button
-          className={`mode-toggle__option ${mode === 'face' ? 'mode-toggle__option--active' : ''}`}
-          onClick={() => setMode('face')}
-        >
-          Faces
+          {loading ? 'Searching...' : 'Search'}
         </button>
       </div>
 
-      {/* Search Form */}
-      {mode === 'text' ? (
-        <div className="search-form">
-          <input
-            type="text"
-            className="ai-input search-form__input"
-            value={textQuery}
-            onChange={e => setTextQuery(e.target.value)}
-            placeholder="e.g., photos of people at the beach, sunset, dogs playing..."
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
-          />
-          <button
-            className="ai-button ai-button--primary"
-            onClick={handleSearch}
-            disabled={loading || !textQuery.trim()}
-          >
-            {loading ? 'Searching...' : 'Search'}
-          </button>
-        </div>
-      ) : mode === 'object' ? (
-        <div>
-          <div className="search-form">
-            <input
-              type="text"
-              className="ai-input search-form__input"
-              value={objectQuery}
-              onChange={e => setObjectQuery(e.target.value)}
-              placeholder="e.g., wine glass, person, car, dog..."
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              list="object-suggestions"
-            />
-            <datalist id="object-suggestions">
-              {detectedObjects.map((obj, index) => (
-                <option key={obj.class || `obj-${index}`} value={obj.class}>
-                  {obj.class} ({obj.count} images)
-                </option>
-              ))}
-            </datalist>
-            <button
-              className="ai-button ai-button--primary"
-              onClick={handleSearch}
-              disabled={loading || !objectQuery.trim()}
-            >
-              {loading ? 'Searching...' : 'Search'}
-            </button>
-          </div>
-          {detectedObjects.length > 0 && (
-            <div style={{ marginTop: '0.75rem' }}>
-              <p style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.5rem' }}>
-                Detected objects in your photos:
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
-                {detectedObjects.slice(0, 20).map(obj => (
-                  <button
-                    key={obj.class}
-                    onClick={() => setObjectQuery(obj.class)}
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      fontSize: '0.75rem',
-                      background: objectQuery === obj.class ? '#3b82f6' : '#f3f4f6',
-                      color: objectQuery === obj.class ? '#fff' : '#374151',
-                      border: 'none',
-                      borderRadius: '0.25rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {obj.class} ({obj.count})
-                  </button>
-                ))}
-              </div>
-            </div>
+      {/* Advanced Filters */}
+      <AdvancedSearchFilters
+        filters={filters}
+        onChange={setFilters}
+        contacts={contacts}
+        clusters={clusters}
+        detectedObjects={detectedObjects}
+        isExpanded={filtersExpanded}
+        onToggleExpand={() => setFiltersExpanded(!filtersExpanded)}
+      />
+
+      {/* Active Filters Summary */}
+      {hasActiveFilters() && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          marginBottom: '1rem',
+          fontSize: '0.875rem',
+          color: '#6b7280',
+        }}>
+          <span>Active filters:</span>
+          {filters.dateStart && <span className="advanced-filters__tag active">From: {filters.dateStart}</span>}
+          {filters.dateEnd && <span className="advanced-filters__tag active">To: {filters.dateEnd}</span>}
+          {filters.people.length > 0 && (
+            <span className="advanced-filters__tag active">{filters.people.length} people</span>
           )}
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
-          <div style={{ flex: 1 }}>
-            <label className="form-group__label">Find photos of</label>
-            <select
-              className="ai-select"
-              value={selectedContactId}
-              onChange={e => {
-                setSelectedContactId(e.target.value);
-                setSelectedClusterId('');
-              }}
-            >
-              <option value="">Select a contact...</option>
-              {contacts.map((contact, index) => (
-                <option key={contact.id || `contact-${index}`} value={contact.id}>
-                  {contact.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', padding: '1.5rem 0.5rem 0' }}>
-            or
-          </div>
-          <div style={{ flex: 1 }}>
-            <label className="form-group__label">Face cluster</label>
-            <select
-              className="ai-select"
-              value={selectedClusterId}
-              onChange={e => {
-                setSelectedClusterId(e.target.value);
-                setSelectedContactId('');
-              }}
-            >
-              <option value="">Select a cluster...</option>
-              {labeledClusters.map((cluster, index) => (
-                <option key={cluster.id || `cluster-${index}`} value={cluster.id}>
-                  {cluster.name || `Cluster (${cluster.face_count} faces)`}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ paddingTop: '1.5rem' }}>
-            <button
-              className="ai-button ai-button--primary"
-              onClick={handleSearch}
-              disabled={loading || (!selectedContactId && !selectedClusterId)}
-            >
-              {loading ? 'Searching...' : 'Search'}
-            </button>
-          </div>
+          {filters.objectClasses.length > 0 && (
+            <span className="advanced-filters__tag active">{filters.objectClasses.length} objects</span>
+          )}
+          {filters.mediaType !== 'all' && (
+            <span className="advanced-filters__tag active">{filters.mediaType}</span>
+          )}
+          <button
+            onClick={handleClearFilters}
+            style={{
+              marginLeft: '0.5rem',
+              padding: '0.25rem 0.5rem',
+              background: 'none',
+              border: 'none',
+              color: '#3b82f6',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+            }}
+          >
+            Clear all
+          </button>
         </div>
       )}
 

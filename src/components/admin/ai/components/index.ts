@@ -7,3 +7,5 @@ export { ClusterDetail } from './ClusterDetail';
 export { ContactAssignModal } from './ContactAssignModal';
 export { SearchResults } from './SearchResults';
 export { ImagePicker } from './ImagePicker';
+export { AdvancedSearchFilters, getDefaultFilters } from './AdvancedSearchFilters';
+export type { SearchFilterState } from './AdvancedSearchFilters';

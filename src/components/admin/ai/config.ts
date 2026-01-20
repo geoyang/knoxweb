@@ -49,6 +49,7 @@ export const AI_CONFIG = {
     { id: 'album', label: 'Album Processing', icon: '📁' },
     { id: 'faces', label: 'Face Clusters', icon: '👥' },
     { id: 'search', label: 'Search Test', icon: '🔍' },
+    { id: 'activity', label: 'Activity', icon: '📊' },
     { id: 'reindex', label: 'Reindex', icon: '🔄' },
   ],
 

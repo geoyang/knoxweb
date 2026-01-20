@@ -11,9 +11,11 @@ interface AssetData {
 
 interface Memory {
   id: string;
-  content: string;
-  content_type: 'text' | 'voice';
-  audio_url?: string;
+  content_text: string | null;
+  memory_type: 'text' | 'video' | 'image';
+  content_url?: string;
+  thumbnail_url?: string;
+  duration?: number;
   user_id: string;
   created_at: string;
   parent_id: string | null;
@@ -386,10 +388,12 @@ export const SharedAssetViewer: React.FC = () => {
                             <span className="text-white font-medium text-sm">{memory.user.full_name}</span>
                             <span className="text-white/40 text-xs">{formatTime(memory.created_at)}</span>
                           </div>
-                          {memory.content_type === 'voice' && memory.audio_url ? (
-                            <audio src={memory.audio_url} controls className="mt-1 w-full max-w-xs h-8" />
+                          {memory.memory_type === 'video' && memory.content_url ? (
+                            <video src={memory.content_url} controls className="mt-1 w-full max-w-xs rounded" poster={memory.thumbnail_url} />
+                          ) : memory.memory_type === 'image' && memory.content_url ? (
+                            <img src={memory.content_url} alt="Memory" className="mt-1 max-w-xs rounded" />
                           ) : (
-                            <p className="text-white/80 text-sm mt-0.5">{memory.content}</p>
+                            <p className="text-white/80 text-sm mt-0.5">{memory.content_text}</p>
                           )}
                         </div>
                       </div>
@@ -406,10 +410,12 @@ export const SharedAssetViewer: React.FC = () => {
                                   <span className="text-white font-medium text-xs">{reply.user.full_name}</span>
                                   <span className="text-white/40 text-xs">{formatTime(reply.created_at)}</span>
                                 </div>
-                                {reply.content_type === 'voice' && reply.audio_url ? (
-                                  <audio src={reply.audio_url} controls className="mt-1 w-full max-w-xs h-8" />
+                                {reply.memory_type === 'video' && reply.content_url ? (
+                                  <video src={reply.content_url} controls className="mt-1 w-full max-w-xs rounded" poster={reply.thumbnail_url} />
+                                ) : reply.memory_type === 'image' && reply.content_url ? (
+                                  <img src={reply.content_url} alt="Reply" className="mt-1 max-w-xs rounded" />
                                 ) : (
-                                  <p className="text-white/70 text-sm">{reply.content}</p>
+                                  <p className="text-white/70 text-sm">{reply.content_text}</p>
                                 )}
                               </div>
                             </div>

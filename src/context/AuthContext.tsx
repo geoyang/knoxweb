@@ -515,14 +515,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('🔒 SIGN OUT: Current user before sign out:', user?.email);
 
     // Call signOut FIRST while we still have auth tokens
-    console.log('🔒 SIGN OUT: Calling supabase.auth.signOut with scope: global...');
+    // Use 'local' scope to only invalidate this device's session, not all devices
+    console.log('🔒 SIGN OUT: Calling supabase.auth.signOut with scope: local...');
     try {
-      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
 
       if (error) {
         console.error('🔒 SIGN OUT ERROR:', error);
       } else {
-        console.log('🔒 SIGN OUT: Server signOut successful - tokens invalidated on all devices');
+        console.log('🔒 SIGN OUT: Server signOut successful - this device only');
       }
     } catch (err) {
       console.error('🔒 SIGN OUT EXCEPTION:', err);

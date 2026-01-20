@@ -91,6 +91,8 @@ export interface SearchResult {
   similarity: number;
   thumbnail_url?: string;
   web_uri?: string;
+  description?: string;  // AI-generated description
+  extracted_text?: string;  // OCR-extracted text
   matched_objects?: string[];
   matched_faces?: string[];
   matched_location?: string;  // Location name from asset metadata

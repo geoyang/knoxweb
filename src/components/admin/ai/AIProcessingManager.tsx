@@ -10,6 +10,7 @@ import { SingleImageTab } from './SingleImageTab';
 import { AlbumProcessingTab } from './AlbumProcessingTab';
 import { FaceClustersTab } from './FaceClustersTab';
 import { SearchTab } from './SearchTab';
+import { ActivityDashboardTab } from './ActivityDashboardTab';
 import { ReindexTab } from './ReindexTab';
 import './ai-processing.css';
 
@@ -18,6 +19,7 @@ const TAB_COMPONENTS: Record<TabId, React.FC> = {
   album: AlbumProcessingTab,
   faces: FaceClustersTab,
   search: SearchTab,
+  activity: ActivityDashboardTab,
   reindex: ReindexTab,
 };
 
