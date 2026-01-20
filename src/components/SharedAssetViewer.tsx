@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 interface AssetData {
@@ -9,15 +9,34 @@ interface AssetData {
   created_at: string;
 }
 
+interface Memory {
+  id: string;
+  content: string;
+  content_type: 'text' | 'voice';
+  audio_url?: string;
+  user_id: string;
+  created_at: string;
+  parent_id: string | null;
+  user: {
+    full_name: string;
+    avatar_url?: string;
+  };
+}
+
+interface Reaction {
+  emoji: string;
+  count: number;
+}
+
 interface ViewResponse {
   valid: boolean;
   expired: boolean;
   in_album: boolean;
   asset: AssetData;
-  owner: {
-    name: string;
-  };
+  owner: { name: string };
   token_id: string;
+  memories?: Memory[];
+  reactions?: Reaction[];
   error?: string;
 }
 
@@ -90,7 +109,6 @@ export const SharedAssetViewer: React.FC = () => {
 
   const handleRequestAccess = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!token || !requesterEmail) return;
 
     try {
@@ -114,11 +132,9 @@ export const SharedAssetViewer: React.FC = () => {
       );
 
       const result = await response.json();
-
       if (!response.ok) {
         throw new Error(result.error || 'Failed to submit access request');
       }
-
       setRequestSubmitted(true);
     } catch (err) {
       console.error('Error requesting access:', err);
@@ -126,6 +142,144 @@ export const SharedAssetViewer: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  };
+
+  // Zoomable image component
+  const ZoomableImage: React.FC<{ src: string; alt: string }> = ({ src, alt }) => {
+    const [scale, setScale] = useState(1);
+    const [position, setPosition] = useState({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+    const [lastTap, setLastTap] = useState(0);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const initialDistance = useRef<number>(0);
+    const initialScale = useRef<number>(1);
+
+    const handleDoubleClick = useCallback(() => {
+      if (scale > 1) {
+        setScale(1);
+        setPosition({ x: 0, y: 0 });
+      } else {
+        setScale(2.5);
+      }
+    }, [scale]);
+
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
+      if (e.touches.length === 2) {
+        const distance = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        initialDistance.current = distance;
+        initialScale.current = scale;
+      } else if (e.touches.length === 1) {
+        const now = Date.now();
+        if (now - lastTap < 300) {
+          handleDoubleClick();
+        }
+        setLastTap(now);
+        if (scale > 1) {
+          setIsDragging(true);
+          setDragStart({ x: e.touches[0].clientX - position.x, y: e.touches[0].clientY - position.y });
+        }
+      }
+    }, [scale, lastTap, position, handleDoubleClick]);
+
+    const handleTouchMove = useCallback((e: React.TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const distance = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const newScale = Math.min(Math.max(initialScale.current * (distance / initialDistance.current), 1), 5);
+        setScale(newScale);
+        if (newScale === 1) setPosition({ x: 0, y: 0 });
+      } else if (e.touches.length === 1 && isDragging && scale > 1) {
+        const newX = e.touches[0].clientX - dragStart.x;
+        const newY = e.touches[0].clientY - dragStart.y;
+        setPosition({ x: newX, y: newY });
+      }
+    }, [isDragging, scale, dragStart]);
+
+    const handleTouchEnd = useCallback(() => {
+      setIsDragging(false);
+    }, []);
+
+    const handleWheel = useCallback((e: React.WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      const newScale = Math.min(Math.max(scale * delta, 1), 5);
+      setScale(newScale);
+      if (newScale === 1) setPosition({ x: 0, y: 0 });
+    }, [scale]);
+
+    const toggleFullscreen = useCallback(() => {
+      setIsFullscreen(!isFullscreen);
+      if (!isFullscreen) {
+        setScale(1);
+        setPosition({ x: 0, y: 0 });
+      }
+    }, [isFullscreen]);
+
+    return (
+      <>
+        <div
+          ref={containerRef}
+          className={`relative overflow-hidden rounded-lg shadow-2xl cursor-zoom-in ${isFullscreen ? 'fixed inset-0 z-50 bg-black rounded-none' : ''}`}
+          onDoubleClick={handleDoubleClick}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onWheel={handleWheel}
+          style={{ touchAction: scale > 1 ? 'none' : 'auto' }}
+        >
+          <img
+            src={src}
+            alt={alt}
+            className="w-full select-none"
+            style={{
+              maxHeight: isFullscreen ? '100vh' : '70vh',
+              objectFit: 'contain',
+              transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
+              transition: isDragging ? 'none' : 'transform 0.2s ease-out',
+            }}
+            draggable={false}
+          />
+          {isFullscreen && (
+            <button
+              onClick={toggleFullscreen}
+              className="absolute top-4 right-4 bg-black/50 text-white p-2 rounded-full hover:bg-black/70"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {!isFullscreen && (
+          <button
+            onClick={toggleFullscreen}
+            className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            </svg>
+          </button>
+        )}
+      </>
+    );
   };
 
   if (state === 'loading') {
@@ -143,17 +297,12 @@ export const SharedAssetViewer: React.FC = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
-          <div className="text-6xl mb-4">
-            <svg className="w-16 h-16 mx-auto text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
+          <svg className="w-16 h-16 mx-auto text-red-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
           <h1 className="text-2xl font-bold text-gray-800 mb-4">Unable to Load</h1>
           <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            onClick={() => navigate('/')}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-          >
+          <button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
             Go Home
           </button>
         </div>
@@ -163,10 +312,14 @@ export const SharedAssetViewer: React.FC = () => {
 
   if (state === 'valid' && data) {
     const isVideo = data.asset.media_type?.startsWith('video');
+    const memories = data.memories || [];
+    const reactions = data.reactions || [];
+    const topLevelMemories = memories.filter(m => !m.parent_id);
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex flex-col">
-        <header className="bg-black/30 backdrop-blur-sm p-4">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+        {/* Header */}
+        <header className="bg-black/30 backdrop-blur-sm p-4 sticky top-0 z-10">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
@@ -174,9 +327,7 @@ export const SharedAssetViewer: React.FC = () => {
               </div>
               <div>
                 <p className="text-white font-medium">{data.owner.name}</p>
-                <p className="text-white/60 text-sm">
-                  {new Date(data.asset.created_at).toLocaleDateString()}
-                </p>
+                <p className="text-white/60 text-sm">{formatDate(data.asset.created_at)}</p>
               </div>
             </div>
             <div className="text-white/60 text-sm flex items-center gap-2">
@@ -188,30 +339,94 @@ export const SharedAssetViewer: React.FC = () => {
           </div>
         </header>
 
-        <main className="flex-1 flex items-center justify-center p-4">
-          <div className="max-w-4xl w-full">
+        {/* Main Content */}
+        <main className="max-w-4xl mx-auto p-4">
+          {/* Media */}
+          <div className="mb-6 relative group">
             {isVideo ? (
-              <video
-                src={`${imageUrl}&type=original`}
-                controls
-                className="w-full rounded-lg shadow-2xl"
-                poster={imageUrl || undefined}
-              />
+              <video src={`${imageUrl}&type=original`} controls className="w-full rounded-lg shadow-2xl" poster={imageUrl || undefined} />
             ) : (
-              <img
-                src={`${imageUrl}&type=original`}
-                alt="Shared photo"
-                className="w-full rounded-lg shadow-2xl"
-                style={{ maxHeight: '80vh', objectFit: 'contain' }}
-              />
+              <ZoomableImage src={`${imageUrl}&type=original`} alt="Shared photo" />
             )}
           </div>
+
+          {/* Reactions */}
+          {reactions.length > 0 && (
+            <div className="flex gap-2 mb-6 flex-wrap">
+              {reactions.map((r, i) => (
+                <div key={i} className="bg-white/10 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center gap-1.5">
+                  <span className="text-xl">{r.emoji}</span>
+                  <span className="text-white/80 text-sm font-medium">{r.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Memories Section */}
+          {topLevelMemories.length > 0 && (
+            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4">
+              <h3 className="text-white/80 font-semibold mb-4 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                Memories ({topLevelMemories.length})
+              </h3>
+              <div className="space-y-4">
+                {topLevelMemories.map((memory) => {
+                  const replies = memories.filter(m => m.parent_id === memory.id);
+                  return (
+                    <div key={memory.id} className="space-y-2">
+                      {/* Main memory */}
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                          {memory.user.full_name?.charAt(0)?.toUpperCase() || '?'}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-white font-medium text-sm">{memory.user.full_name}</span>
+                            <span className="text-white/40 text-xs">{formatTime(memory.created_at)}</span>
+                          </div>
+                          {memory.content_type === 'voice' && memory.audio_url ? (
+                            <audio src={memory.audio_url} controls className="mt-1 w-full max-w-xs h-8" />
+                          ) : (
+                            <p className="text-white/80 text-sm mt-0.5">{memory.content}</p>
+                          )}
+                        </div>
+                      </div>
+                      {/* Replies */}
+                      {replies.length > 0 && (
+                        <div className="ml-11 space-y-2 border-l-2 border-white/10 pl-3">
+                          {replies.map((reply) => (
+                            <div key={reply.id} className="flex gap-2">
+                              <div className="w-6 h-6 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                {reply.user.full_name?.charAt(0)?.toUpperCase() || '?'}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-baseline gap-2">
+                                  <span className="text-white font-medium text-xs">{reply.user.full_name}</span>
+                                  <span className="text-white/40 text-xs">{formatTime(reply.created_at)}</span>
+                                </div>
+                                {reply.content_type === 'voice' && reply.audio_url ? (
+                                  <audio src={reply.audio_url} controls className="mt-1 w-full max-w-xs h-8" />
+                                ) : (
+                                  <p className="text-white/70 text-sm">{reply.content}</p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </main>
 
-        <footer className="bg-black/30 backdrop-blur-sm p-4 text-center">
-          <p className="text-white/60 text-sm">
-            Shared with Kizu - Private by design
-          </p>
+        {/* Footer */}
+        <footer className="bg-black/30 backdrop-blur-sm p-4 text-center mt-8">
+          <p className="text-white/60 text-sm">Shared with Kizu - Private by design</p>
         </footer>
       </div>
     );
@@ -222,19 +437,12 @@ export const SharedAssetViewer: React.FC = () => {
       return (
         <div className="min-h-screen bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
-            <div className="text-6xl mb-4">
-              <svg className="w-16 h-16 mx-auto text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
+            <svg className="w-16 h-16 mx-auto text-green-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             <h1 className="text-2xl font-bold text-gray-800 mb-4">Request Submitted!</h1>
-            <p className="text-gray-600 mb-6">
-              {data.owner.name} has been notified of your request. You'll receive an email if they grant you access.
-            </p>
-            <button
-              onClick={() => navigate('/')}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-            >
+            <p className="text-gray-600 mb-6">{data.owner.name} has been notified. You'll receive an email if they grant you access.</p>
+            <button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
               Go Home
             </button>
           </div>
@@ -251,68 +459,24 @@ export const SharedAssetViewer: React.FC = () => {
             </svg>
             <h1 className="text-2xl font-bold text-gray-800 mb-2">This link has expired</h1>
           </div>
-
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <p className="text-gray-700 text-center">
-              Request access from <strong>{data.owner.name}</strong>
-            </p>
-            <p className="text-gray-500 text-sm text-center mt-2">
-              You'll need a Kizu account to get permanent access to this photo.
-            </p>
+            <p className="text-gray-700 text-center">Request access from <strong>{data.owner.name}</strong></p>
+            <p className="text-gray-500 text-sm text-center mt-2">You'll need a Kizu account to get permanent access.</p>
           </div>
-
-          {error && (
-            <div className="bg-red-50 text-red-700 rounded-lg p-3 mb-4 text-sm">
-              {error}
-            </div>
-          )}
-
+          {error && <div className="bg-red-50 text-red-700 rounded-lg p-3 mb-4 text-sm">{error}</div>}
           <form onSubmit={handleRequestAccess} className="space-y-4">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                Your Name
-              </label>
-              <input
-                type="text"
-                id="name"
-                value={requesterName}
-                onChange={(e) => setRequesterName(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="John Smith"
-              />
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
+              <input type="text" id="name" value={requesterName} onChange={(e) => setRequesterName(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="John Smith" />
             </div>
-
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Your Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                id="email"
-                required
-                value={requesterEmail}
-                onChange={(e) => setRequesterEmail(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="john@example.com"
-              />
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Your Email <span className="text-red-500">*</span></label>
+              <input type="email" id="email" required value={requesterEmail} onChange={(e) => setRequesterEmail(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="john@example.com" />
             </div>
-
-            <button
-              type="submit"
-              disabled={submitting || !requesterEmail}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
+            <button type="submit" disabled={submitting || !requesterEmail} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
               {submitting ? (
-                <>
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Submitting...
-                </>
-              ) : (
-                'Request Access'
-              )}
+                <><svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>Submitting...</>
+              ) : 'Request Access'}
             </button>
           </form>
         </div>
@@ -330,24 +494,15 @@ export const SharedAssetViewer: React.FC = () => {
             </svg>
             <h1 className="text-2xl font-bold text-gray-800 mb-2">This link has expired</h1>
           </div>
-
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <p className="text-gray-700 mb-4">
-              To get access to this photo, contact <strong>{data.owner.name}</strong> and ask them to:
-            </p>
+            <p className="text-gray-700 mb-4">To get access, contact <strong>{data.owner.name}</strong> and ask them to:</p>
             <ol className="list-decimal list-inside text-gray-600 space-y-2">
               <li>Add this photo to an album</li>
               <li>Share the album with a circle that includes you</li>
             </ol>
-            <p className="text-gray-500 text-sm mt-4">
-              You'll also need a Kizu account.
-            </p>
+            <p className="text-gray-500 text-sm mt-4">You'll also need a Kizu account.</p>
           </div>
-
-          <a
-            href="https://kizu.online"
-            className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors text-center"
-          >
+          <a href="https://kizu.online" className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors text-center">
             Create Kizu Account
           </a>
         </div>
