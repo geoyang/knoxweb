@@ -319,9 +319,9 @@ export const SharedAssetViewer: React.FC = () => {
     const topLevelMemories = memories.filter(m => !m.parent_id);
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
-        {/* Header */}
-        <header className="bg-black/30 backdrop-blur-sm p-4 sticky top-0 z-10">
+      <div className="h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex flex-col overflow-hidden">
+        {/* Header - Fixed */}
+        <header className="bg-black/30 backdrop-blur-sm p-4 flex-shrink-0">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
@@ -341,20 +341,21 @@ export const SharedAssetViewer: React.FC = () => {
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="max-w-4xl mx-auto p-4">
-          {/* Media */}
-          <div className="mb-6 relative group">
+        {/* Media Section - Fixed height */}
+        <div className="flex-shrink-0 max-w-4xl mx-auto w-full px-4 pt-4">
+          <div className="relative group">
             {isVideo ? (
-              <video src={`${imageUrl}&type=original`} controls className="w-full rounded-lg shadow-2xl" poster={imageUrl || undefined} />
+              <video src={`${imageUrl}&type=original`} controls className="w-full rounded-lg shadow-2xl max-h-[50vh] object-contain bg-black" poster={imageUrl || undefined} />
             ) : (
-              <ZoomableImage src={`${imageUrl}&type=original`} alt="Shared photo" />
+              <div className="max-h-[50vh] overflow-hidden rounded-lg shadow-2xl">
+                <ZoomableImage src={`${imageUrl}&type=original`} alt="Shared photo" />
+              </div>
             )}
           </div>
 
-          {/* Reactions */}
+          {/* Reactions - Below media, fixed */}
           {reactions.length > 0 && (
-            <div className="flex gap-2 mb-6 flex-wrap">
+            <div className="flex gap-2 mt-4 flex-wrap">
               {reactions.map((r, i) => (
                 <div key={i} className="bg-white/10 backdrop-blur-sm rounded-full px-3 py-1.5 flex items-center gap-1.5">
                   <span className="text-xl">{r.emoji}</span>
@@ -363,17 +364,19 @@ export const SharedAssetViewer: React.FC = () => {
               ))}
             </div>
           )}
+        </div>
 
-          {/* Memories Section */}
-          {topLevelMemories.length > 0 && (
-            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4">
-              <h3 className="text-white/80 font-semibold mb-4 flex items-center gap-2">
+        {/* Memories Section - Scrollable */}
+        {topLevelMemories.length > 0 ? (
+          <div className="flex-1 min-h-0 max-w-4xl mx-auto w-full px-4 py-4">
+            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 h-full flex flex-col">
+              <h3 className="text-white/80 font-semibold mb-4 flex items-center gap-2 flex-shrink-0">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
                 Memories ({topLevelMemories.length})
               </h3>
-              <div className="space-y-4">
+              <div className="flex-1 overflow-y-auto space-y-4 pr-2">
                 {topLevelMemories.map((memory) => {
                   const replies = memories.filter(m => m.parent_id === memory.id);
                   return (
@@ -427,11 +430,13 @@ export const SharedAssetViewer: React.FC = () => {
                 })}
               </div>
             </div>
-          )}
-        </main>
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
 
-        {/* Footer */}
-        <footer className="bg-black/30 backdrop-blur-sm p-4 text-center mt-8">
+        {/* Footer - Fixed */}
+        <footer className="bg-black/30 backdrop-blur-sm p-4 text-center flex-shrink-0">
           <p className="text-white/60 text-sm">Shared with Kizu - Private by design</p>
         </footer>
       </div>
