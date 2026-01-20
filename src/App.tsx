@@ -12,6 +12,7 @@ import { Dashboard } from './components/Dashboard';
 import { FrameSetup } from './components/FrameSetup';
 import { FrameMode } from './components/FrameMode';
 import { ShareRequest } from './components/ShareRequest';
+import { SharedAssetViewer } from './components/SharedAssetViewer';
 import { SubscriptionPage } from './components/SubscriptionPage';
 import { AccountPage } from './components/AccountPage';
 
@@ -34,6 +35,9 @@ function App() {
 
         {/* Share request route */}
         <Route path="/share" element={<ShareRequest />} />
+
+        {/* Shared asset viewer route */}
+        <Route path="/asset/:token" element={<SharedAssetViewer />} />
 
         {/* Subscription management route */}
         <Route path="/subscription" element={<SubscriptionPage />} />
