@@ -4,10 +4,10 @@
     {
       "source": "/functions/:path*",
       "destination": "https://quqlovduekdasldqadge.supabase.co/functions/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
-  ],
-  "routes": [
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }

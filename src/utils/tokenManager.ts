@@ -122,34 +122,12 @@ export class TokenManager {
   }
 
   /**
-   * Generate a secure 4-digit alphanumeric code
-   */
-  static generateVerificationCode(): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    
-    // Use crypto.getRandomValues for better randomness if available
-    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-      const array = new Uint8Array(4);
-      crypto.getRandomValues(array);
-      for (let i = 0; i < 4; i++) {
-        result += chars[array[i] % chars.length];
-      }
-    } else {
-      // Fallback to Math.random
-      for (let i = 0; i < 4; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-    }
-    
-    return result;
-  }
-
-  /**
    * Validate verification code format
+   * Only allows characters used in server-side generation (excludes 0, O, 1, I, L)
+   * Note: Code generation is now done server-side in send-verification-code edge function
    */
   static isValidVerificationCode(code: string): boolean {
-    return /^[A-Z0-9]{4}$/.test(code);
+    return /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$/.test(code);
   }
 
   /**

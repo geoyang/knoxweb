@@ -336,28 +336,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signInWithCode = async (email: string) => {
     try {
-      console.log('Sending verification code to email:', email);
-      
-      // Generate 4-digit code
-      const code = TokenManager.generateVerificationCode();
-      console.log('Generated verification code:', code);
+      console.log('Requesting verification code for email:', email);
 
-      // Store the code temporarily (in production, this would be server-side)
-      const codeData = {
-        email: email.toLowerCase().trim(),
-        code: code,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000).getTime(), // 10 minutes
-        attempts: 0,
-      };
-      
-      // Store in sessionStorage for web
-      sessionStorage.setItem('pendingVerification', JSON.stringify(codeData));
-      
-      // Send custom email with 4-digit code using Supabase Edge Function
+      // Request verification code from server (code is generated server-side)
       const { data, error } = await supabase.functions.invoke('send-verification-code', {
         body: {
           email: email.toLowerCase().trim(),
-          code: code,
           type: '4-digit'
         }
       });
@@ -366,14 +350,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.error('Edge function failed', error);
         throw new Error('Failed to send verification code via Edge Function');
       }
-      
-      console.log('Verification code sent successfully');
-      
-      // In development, return the code for testing
-      if (import.meta.env.DEV) {
-        return { error: null, code };
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to send verification code');
       }
-      
+
+      console.log('Verification code sent successfully');
+
+      // In development, return the code if provided for testing
+      if (import.meta.env.DEV && data?.dev_code) {
+        return { error: null, code: data.dev_code };
+      }
+
       return { error: null };
     } catch (err) {
       console.error('Verification code error', err);
@@ -383,72 +371,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const verifyCode = async (email: string, code: string, fullName?: string) => {
     try {
-      console.log('🔐 VERIFY CODE: Starting verification');
-      console.log('🔐 VERIFY CODE: Received fullName parameter:', fullName ? `"${fullName}"` : 'undefined');
+      console.log('🔐 VERIFY CODE: Starting server-side verification');
       console.log('Verifying code:', { email, code });
-      
-      // Verify against local storage
-      const pendingData = sessionStorage.getItem('pendingVerification');
-      
-      if (!pendingData) {
-        return { error: new Error('No verification code found. Please request a new code.') };
-      }
 
-      const localCode = JSON.parse(pendingData);
-      
-      // Check if code has expired
-      if (Date.now() > localCode.expiresAt) {
-        sessionStorage.removeItem('pendingVerification');
-        return { error: new Error('Verification code has expired. Please request a new one.') };
-      }
-
-      // Check if email matches
-      if (localCode.email !== email.toLowerCase().trim()) {
-        return { error: new Error('Email mismatch. Please try again.') };
-      }
-
-      // Check if code matches
-      if (localCode.code !== code.toUpperCase()) {
-        localCode.attempts = (localCode.attempts || 0) + 1;
-        
-        if (localCode.attempts >= 3) {
-          sessionStorage.removeItem('pendingVerification');
-          return { error: new Error('Too many failed attempts. Please request a new code.') };
-        }
-        
-        sessionStorage.setItem('pendingVerification', JSON.stringify(localCode));
-        return { error: new Error(`Incorrect code. ${3 - localCode.attempts} attempts remaining.`) };
-      }
-
-      // Code is valid! Create session using Edge Function
-      console.log('Code verification successful, creating session via Edge Function');
-      
-      // Clear the verification data
-      sessionStorage.removeItem('pendingVerification');
-      
-      // Get fullName from localCode if available, otherwise use parameter
-      const nameToSave = fullName?.trim() || localCode.fullName || null;
-      console.log('🔐 VERIFY CODE: fullName parameter:', fullName ? `"${fullName}"` : 'undefined');
-      console.log('🔐 VERIFY CODE: localCode.fullName:', localCode.fullName ? `"${localCode.fullName}"` : 'undefined');
-      console.log('🔐 VERIFY CODE: nameToSave (final):', nameToSave ? `"${nameToSave}"` : 'null');
-      console.log('🔐 VERIFY CODE: Calling create-session-with-code Edge Function...');
-
-      const { data: authResponse, error: authError } = await supabase.functions.invoke('create-session-with-code', {
+      // Verify code with server (server checks against stored code in user_metadata)
+      const { data: authResponse, error: authError } = await supabase.functions.invoke('verify-code-auth', {
         body: {
           email: email.toLowerCase().trim(),
-          code: code.toUpperCase(),
-          full_name: nameToSave
+          code: code.toUpperCase()
         }
       });
 
-      if (authError || !authResponse?.success) {
-        console.error('Auth via Edge Function failed', { authError, authResponse });
-        return { error: new Error('Failed to create session. Please try again.') };
+      if (authError) {
+        console.error('Server verification failed', authError);
+        return { error: new Error('Verification failed. Please try again.') };
       }
 
-      console.log('Auth Edge Function succeeded', authResponse);
+      // Handle specific error responses
+      if (!authResponse?.success) {
+        const errorMsg = authResponse?.error || 'Verification failed';
+        console.log('Server returned error:', { error: errorMsg, attemptsRemaining: authResponse?.attemptsRemaining });
 
-      // Extract profile from edge function response
+        if (errorMsg.includes('expired')) {
+          return { error: new Error('Verification code has expired. Please request a new one.') };
+        } else if (errorMsg.includes('Too many')) {
+          return { error: new Error('Too many failed attempts. Please request a new code.') };
+        } else if (authResponse?.attemptsRemaining !== undefined) {
+          return { error: new Error(`Incorrect code. ${authResponse.attemptsRemaining} attempts remaining.`) };
+        } else {
+          return { error: new Error(errorMsg) };
+        }
+      }
+
+      console.log('Server verification succeeded', authResponse);
+
+      // Extract profile from response if available
       const profileFromServer = authResponse.profile || null;
       if (profileFromServer) {
         console.log('Profile received from server:', profileFromServer);
@@ -456,10 +413,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         userProfileRef.current = profileFromServer.id;
       }
 
-      // Handle the response from Edge Function - session tokens
+      // Handle the response - get session from magic link verification
+      if (authResponse.session?.properties?.hashed_token) {
+        const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: authResponse.session.properties.hashed_token,
+          type: 'magiclink',
+        });
+
+        if (verifyError) {
+          console.error('Magic link verification failed', verifyError);
+          return { error: new Error('Failed to complete authentication.') };
+        }
+
+        if (verifyData.session && verifyData.user) {
+          console.log('Successfully authenticated via magic link verification');
+          return { error: null, success: true, profile: profileFromServer };
+        }
+      }
+
+      // Alternative: server may return direct session tokens
       if (authResponse.session?.access_token && authResponse.session?.refresh_token) {
-        // Got direct session tokens - use them immediately
-        console.log('Received session tokens from Edge Function');
+        console.log('Received session tokens from server');
 
         const { data: sessionData, error: setSessionError } = await supabase.auth.setSession({
           access_token: authResponse.session.access_token,
@@ -467,12 +441,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         });
 
         if (setSessionError) {
-          console.error('Error setting session from Edge Function tokens', setSessionError);
-          return { error: new Error('Failed to establish session with provided tokens.') };
+          console.error('Error setting session from tokens', setSessionError);
+          return { error: new Error('Failed to establish session.') };
         }
 
         if (sessionData.session && sessionData.user) {
-          console.log('Successfully authenticated with direct session tokens');
+          console.log('Successfully authenticated with session tokens');
           return { error: null, success: true, profile: profileFromServer };
         } else {
           return { error: new Error('Token setting succeeded but no session established.') };
@@ -480,7 +454,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       return { error: new Error('Server error: No authentication credentials received.'), profile: profileFromServer };
-      
+
     } catch (error) {
       console.error('Code verification exception', error);
       return { error: new Error('Verification failed. Please try again.') };

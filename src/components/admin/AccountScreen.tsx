@@ -39,6 +39,9 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
   const [showStats, setShowStats] = useState(false);
   const [showFeatures, setShowFeatures] = useState(false);
   const [showAppInfo, setShowAppInfo] = useState(false);
+  const [showDangerZone, setShowDangerZone] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -46,6 +49,44 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
       onClose();
     } catch (error) {
       console.error('Error signing out:', error);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-account`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to delete account');
+      }
+
+      alert('Your account and all data have been permanently deleted.');
+      await signOut();
+      onClose();
+      navigate('/');
+    } catch (error) {
+      console.error('Delete account error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete account. Please try again.');
+    } finally {
+      setDeletingAccount(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -553,6 +594,41 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
                 </div>
               )}
             </div>
+
+            {/* Danger Zone */}
+            <div>
+              <button
+                onClick={() => setShowDangerZone(!showDangerZone)}
+                className="w-full flex items-center justify-between text-sm font-medium text-red-600 mb-3 hover:text-red-700"
+              >
+                <span>Danger Zone</span>
+                <svg
+                  className={`w-4 h-4 transition-transform ${showDangerZone ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showDangerZone && (
+                <div className="space-y-3">
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <h4 className="text-sm font-semibold text-red-800 mb-2">Delete Account</h4>
+                    <p className="text-xs text-red-600 mb-3">
+                      Permanently delete your account and all associated data. This action cannot be undone.
+                    </p>
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      disabled={deletingAccount}
+                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-md transition-colors text-sm font-medium"
+                    >
+                      {deletingAccount ? 'Deleting...' : 'Delete My Account'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -634,6 +710,69 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
               >
                 <span>📸</span> Capture
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70]">
+          <div className="bg-white rounded-lg max-w-md w-full mx-4 overflow-hidden">
+            <div className="p-6">
+              <div className="text-center mb-4">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Account</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  This action <span className="font-semibold text-red-600">CANNOT be undone</span>. All your data will be permanently deleted, including:
+                </p>
+              </div>
+
+              <ul className="text-sm text-gray-700 space-y-2 mb-6 bg-red-50 p-4 rounded-lg">
+                <li className="flex items-center gap-2">
+                  <span className="text-red-500">•</span> All photos and videos
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-red-500">•</span> All albums and folders
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-red-500">•</span> All circles and shared content
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-red-500">•</span> Your profile and settings
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-red-500">•</span> Connected import sources
+                </li>
+              </ul>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={deletingAccount}
+                  className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deletingAccount}
+                  className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  {deletingAccount ? (
+                    <>
+                      <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    'Yes, Delete Everything'
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

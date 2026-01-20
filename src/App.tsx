@@ -13,6 +13,7 @@ import { FrameSetup } from './components/FrameSetup';
 import { FrameMode } from './components/FrameMode';
 import { ShareRequest } from './components/ShareRequest';
 import { SubscriptionPage } from './components/SubscriptionPage';
+import { AccountPage } from './components/AccountPage';
 
 function App() {
   return (
@@ -36,6 +37,9 @@ function App() {
 
         {/* Subscription management route */}
         <Route path="/subscription" element={<SubscriptionPage />} />
+
+        {/* Account settings and deletion route */}
+        <Route path="/account" element={<AccountPage />} />
 
         {/* Registration verification route */}
         <Route path="/verify" element={<VerifyRegistration />} />
