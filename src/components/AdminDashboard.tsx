@@ -14,6 +14,7 @@ import { AccountScreen } from './admin/AccountScreen';
 import { FoldersManager } from './admin/FoldersManager';
 import PushNotificationTest from './admin/PushNotificationTest';
 import { PromoCodesManager } from './admin/PromoCodesManager';
+import { DiscountManager } from './admin/DiscountManager';
 import { ExportManager } from './admin/ExportManager';
 import { ImportManager } from './admin/ImportManager';
 import { NotificationsManager } from './admin/NotificationsManager';
@@ -468,6 +469,19 @@ export const AdminDashboard: React.FC = () => {
                   </li>
                   <li>
                     <Link
+                      to="/admin/discount"
+                      className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                        location.pathname.includes('/admin/discount')
+                          ? 'bg-primary-light text-theme-accent font-medium'
+                          : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
+                      }`}
+                    >
+                      <i className="fi fi-sr-badge-percent mr-3 text-lg"></i>
+                      Sitewide Discount
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
                       to="/admin/exports"
                       className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                         location.pathname.includes('/admin/exports')
@@ -526,6 +540,16 @@ export const AdminDashboard: React.FC = () => {
               element={
                 isSuperAdmin ? (
                   <PromoCodesManager />
+                ) : (
+                  <Navigate to="/admin/albums" replace />
+                )
+              }
+            />
+            <Route
+              path="discount"
+              element={
+                isSuperAdmin ? (
+                  <DiscountManager />
                 ) : (
                   <Navigate to="/admin/albums" replace />
                 )

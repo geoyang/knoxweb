@@ -366,6 +366,38 @@ class AdminApiService {
     });
   }
 
+  // Sitewide Discount API
+  async getDiscount(): Promise<ApiResponse<{
+    discount: {
+      enabled: boolean;
+      percent: number;
+      code: string | null;
+      applies_to: 'all' | 'new_users' | 'upgrades';
+      starts_at: string | null;
+      expires_at: string | null;
+      banner_message: string | null;
+    };
+  }>> {
+    return this.makeApiCall('admin-config-api?action=discount', {
+      method: 'GET'
+    });
+  }
+
+  async setDiscount(discountData: {
+    enabled: boolean;
+    percent: number;
+    code?: string | null;
+    applies_to?: 'all' | 'new_users' | 'upgrades';
+    starts_at?: string | null;
+    expires_at?: string | null;
+    banner_message?: string | null;
+  }): Promise<ApiResponse<{ message: string; discount: any }>> {
+    return this.makeApiCall('admin-config-api?action=set_discount', {
+      method: 'POST',
+      body: JSON.stringify(discountData)
+    });
+  }
+
   // Utility methods
   async healthCheck(): Promise<boolean> {
     try {
