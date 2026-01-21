@@ -8,6 +8,7 @@ import { Signup } from './components/Signup';
 import { SignupSuccess } from './components/SignupSuccess';
 import { AuthCallback } from './components/AuthCallback';
 import { VerifyRegistration } from './components/VerifyRegistration';
+import { RootRedirect } from './components/RootRedirect';
 import { Dashboard } from './components/Dashboard';
 import { FrameSetup } from './components/FrameSetup';
 import { FrameMode } from './components/FrameMode';
@@ -60,8 +61,8 @@ function App() {
         {/* Admin routes (require authentication) */}
         <Route path="/admin/*" element={<AdminDashboard />} />
 
-        {/* Default route */}
-        <Route path="/" element={<Navigate to="/admin" replace />} />
+        {/* Default route - handles email confirmation hash params */}
+        <Route path="/" element={<RootRedirect />} />
       </Routes>
     </div>
   );
