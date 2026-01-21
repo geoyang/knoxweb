@@ -673,7 +673,7 @@ export const SubscriptionPage: React.FC = () => {
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+        <div className="grid md:grid-cols-2 gap-8 mt-6">
           {plans.map((plan) => {
             const isCurrent = currentPlan?.id === plan.id;
             const price = billingCycle === 'yearly' ? plan.price_yearly_cents : plan.price_monthly_cents;
@@ -701,12 +701,12 @@ export const SubscriptionPage: React.FC = () => {
             };
 
             return (
-              <div
-                key={plan.id}
-                className={`bg-white dark:bg-gray-800 rounded-xl p-6 transition ${
-                  isCurrent ? 'border-8 border-indigo-500' : 'border-2 border-gray-200 dark:border-gray-700'
-                }`}
-              >
+              <div key={plan.id} className="relative w-full pb-[100%]">
+                <div
+                  className={`absolute inset-0 bg-white dark:bg-gray-800 p-4 transition flex flex-col justify-between ${
+                    isCurrent ? 'border-8 border-indigo-500' : 'border-2 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
                 <div className="flex justify-between items-start mb-4">
                   <h3 className={`text-lg font-bold ${isCurrent ? 'text-indigo-600' : 'text-gray-800 dark:text-white'}`}>
                     {plan.display_name}
@@ -729,41 +729,29 @@ export const SubscriptionPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-sm mb-4">
-                  <div className="relative w-full pt-[100%]">
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded">
-                      <p className="font-semibold text-gray-800 dark:text-white">{formatStorage(plan.storage_bytes)}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Storage</p>
-                    </div>
+                  <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
+                    <p className="font-semibold text-gray-800 dark:text-white">{formatStorage(plan.storage_bytes)}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Storage</p>
                   </div>
-                  <div className="relative w-full pt-[100%]">
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded">
-                      <p className="font-semibold text-gray-800 dark:text-white">{plan.max_photos.toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Photos</p>
-                    </div>
+                  <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
+                    <p className="font-semibold text-gray-800 dark:text-white">{plan.max_photos.toLocaleString()}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Photos</p>
                   </div>
-                  <div className="relative w-full pt-[100%]">
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded">
-                      <p className="font-semibold text-gray-800 dark:text-white">{plan.max_video_minutes || 0}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Video mins</p>
-                    </div>
+                  <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
+                    <p className="font-semibold text-gray-800 dark:text-white">{plan.max_video_minutes || 0}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Video mins</p>
                   </div>
-                  <div className="relative w-full pt-[100%]">
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded">
-                      <p className="font-semibold text-gray-800 dark:text-white">{plan.max_editors}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Editors</p>
-                    </div>
+                  <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
+                    <p className="font-semibold text-gray-800 dark:text-white">{plan.max_editors}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Editors</p>
                   </div>
-                  <div className="relative w-full pt-[100%]">
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded">
-                      <p className="font-semibold text-gray-800 dark:text-white">{plan.max_contributors}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Contributors</p>
-                    </div>
+                  <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
+                    <p className="font-semibold text-gray-800 dark:text-white">{plan.max_contributors}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Contributors</p>
                   </div>
-                  <div className="relative w-full pt-[100%]">
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded">
-                      <p className="font-semibold text-gray-800 dark:text-white">{plan.max_read_only_users === -1 ? '∞' : plan.max_read_only_users}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Read-only</p>
-                    </div>
+                  <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
+                    <p className="font-semibold text-gray-800 dark:text-white">{plan.max_read_only_users === -1 ? '∞' : plan.max_read_only_users}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Read-only</p>
                   </div>
                 </div>
 
@@ -780,6 +768,7 @@ export const SubscriptionPage: React.FC = () => {
                     You'll keep your current features until {subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString() : 'your billing period ends'}
                   </p>
                 )}
+                </div>
               </div>
             );
           })}
