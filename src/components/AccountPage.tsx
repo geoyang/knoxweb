@@ -1,13 +1,54 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+
+interface SubscriptionInfo {
+  plan_name: string;
+  status: string;
+}
 
 export const AccountPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, userProfile, signOut } = useAuth();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [loadingSubscription, setLoadingSubscription] = useState(true);
+
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      if (!user) return;
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/subscription-api?action=get_subscription`,
+          {
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+        if (data.subscription) {
+          setSubscription({
+            plan_name: data.subscription.plan?.name || 'Unknown',
+            status: data.subscription.status || 'unknown',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch subscription:', error);
+      } finally {
+        setLoadingSubscription(false);
+      }
+    };
+
+    fetchSubscription();
+  }, [user]);
 
   const handleDeleteAccount = async () => {
     setDeletingAccount(true);
@@ -94,6 +135,49 @@ export const AccountPage: React.FC = () => {
                 <p className="text-sm text-gray-500">{user.email}</p>
               </div>
             </div>
+          </div>
+
+          {/* Subscription Status */}
+          <div className="p-6 border-b">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              Subscription
+            </h3>
+            {loadingSubscription ? (
+              <div className="flex items-center gap-2 text-gray-500">
+                <span className="inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                Loading...
+              </div>
+            ) : subscription ? (
+              <Link
+                to="/subscription"
+                className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors group"
+              >
+                <div>
+                  <p className="font-semibold text-gray-900 capitalize">
+                    {subscription.plan_name} Plan
+                  </p>
+                  <p className="text-sm text-gray-500 capitalize">
+                    Status: {subscription.status}
+                  </p>
+                </div>
+                <span className="text-blue-600 group-hover:translate-x-1 transition-transform">
+                  →
+                </span>
+              </Link>
+            ) : (
+              <Link
+                to="/subscription"
+                className="flex items-center justify-between p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors group"
+              >
+                <div>
+                  <p className="font-semibold text-blue-900">Choose a Plan</p>
+                  <p className="text-sm text-blue-600">View available plans</p>
+                </div>
+                <span className="text-blue-600 group-hover:translate-x-1 transition-transform">
+                  →
+                </span>
+              </Link>
+            )}
           </div>
 
           {/* Actions */}
