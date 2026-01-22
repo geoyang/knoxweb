@@ -314,7 +314,9 @@ export const SubscriptionPage: React.FC = () => {
       if (result.success && result.checkout_url) {
         window.location.href = result.checkout_url;
       } else {
-        setError(result.error || 'Failed to start checkout');
+        console.error('[Checkout] Failed:', result);
+        const debugInfo = result.debug ? ` (monthly: ${result.debug.stripe_price_id_monthly || 'null'}, yearly: ${result.debug.stripe_price_id_yearly || 'null'})` : '';
+        setError((result.error || 'Failed to start checkout') + debugInfo);
       }
     } catch (err) {
       setError('Failed to start checkout');
@@ -617,7 +619,8 @@ export const SubscriptionPage: React.FC = () => {
           </div>
         </div>
 
-        {!isSubscribed && (
+        {/* Show promo code for non-active users or users without existing promo */}
+        {(!isSubscribed || !hasPromoApplied) && (
           <div className="mb-6 mt-6">
             <button
               onClick={() => setShowPromoInput(!showPromoInput)}
@@ -701,12 +704,12 @@ export const SubscriptionPage: React.FC = () => {
             };
 
             return (
-              <div key={plan.id} className="relative w-full pb-[100%]">
-                <div
-                  className={`absolute inset-0 bg-white dark:bg-gray-800 p-4 transition flex flex-col justify-between ${
-                    isCurrent ? 'border-8 border-indigo-500' : 'border-2 border-gray-200 dark:border-gray-700'
-                  }`}
-                >
+              <div
+                key={plan.id}
+                className={`bg-white dark:bg-gray-800 p-4 flex flex-col rounded-lg overflow-hidden ${
+                  isCurrent ? 'border-4 border-indigo-500' : 'border-2 border-gray-200 dark:border-gray-700'
+                }`}
+              >
                 <div className="flex justify-between items-start mb-4">
                   <h3 className={`text-lg font-bold ${isCurrent ? 'text-indigo-600' : 'text-gray-800 dark:text-white'}`}>
                     {plan.display_name}
@@ -756,9 +759,12 @@ export const SubscriptionPage: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => handleSelectPlan(plan)}
+                  onClick={() => {
+                    console.log('Plan clicked:', plan.name, plan.id);
+                    handleSelectPlan(plan);
+                  }}
                   disabled={isCheckingOut || plan.name === 'free' || isCurrent}
-                  className={`w-full py-3 text-white rounded-lg font-medium disabled:opacity-50 transition ${getButtonClass()}`}
+                  className={`w-full py-3 text-white rounded-lg font-medium disabled:opacity-50 transition relative z-10 ${getButtonClass()}`}
                 >
                   {getButtonText()}
                 </button>
@@ -768,7 +774,6 @@ export const SubscriptionPage: React.FC = () => {
                     You'll keep your current features until {subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString() : 'your billing period ends'}
                   </p>
                 )}
-                </div>
               </div>
             );
           })}
