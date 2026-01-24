@@ -23,6 +23,8 @@ interface Subscription {
   current_period_end: string | null;
   stripe_customer_id: string | null;
   has_promo?: boolean;
+  payment_provider?: 'apple' | 'stripe' | 'free' | 'promo';
+  billing_cycle?: 'monthly' | 'yearly';
 }
 
 interface Usage {
@@ -57,6 +59,16 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const handleReturnToApp = (e: React.MouseEvent) => {
   e.preventDefault();
   e.stopPropagation();
+
+  // Check if we're in a mobile WebView (indicated by mobile=true query param)
+  const urlParams = new URLSearchParams(window.location.search);
+  const isMobileWebView = urlParams.get('mobile') === 'true';
+
+  // If in mobile WebView, post message to close
+  if (isMobileWebView && (window as any).ReactNativeWebView) {
+    (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'KIZU_CLOSE' }));
+    return;
+  }
 
   // Try the deep link
   window.location.href = 'kizu://subscription-complete';
@@ -361,11 +373,58 @@ export const SubscriptionPage: React.FC = () => {
     return `${bytes / (1024 * 1024)} MB`;
   };
 
+  // Render usage bar with limit marker when exceeded
+  const renderUsageBar = (current: number, max: number, normalColor: string) => {
+    const isExceeded = current > max && max > 0;
+    const percentage = max > 0 ? (current / max) * 100 : 0;
+
+    if (!isExceeded) {
+      // Normal case
+      return (
+        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full ${current >= max ? 'bg-red-500' : normalColor}`}
+            style={{ width: `${Math.min(100, percentage)}%` }}
+          />
+        </div>
+      );
+    }
+
+    // Exceeded case: show full bar with limit marker
+    // Cap visual at 150% so bar doesn't look too extreme
+    const cappedPercentage = Math.min(percentage, 150);
+    const limitPosition = (100 / cappedPercentage) * 100;
+
+    return (
+      <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-visible relative">
+        {/* Fill up to limit in normal color */}
+        <div
+          className={`h-full rounded-l-full ${normalColor}`}
+          style={{ width: `${limitPosition}%`, position: 'absolute', left: 0 }}
+        />
+        {/* Exceeded portion in red */}
+        <div
+          className="h-full rounded-r-full bg-red-500"
+          style={{ width: `${100 - limitPosition}%`, position: 'absolute', left: `${limitPosition}%` }}
+        />
+        {/* Limit marker line */}
+        <div
+          className="absolute top-[-2px] w-0.5 h-3 bg-white dark:bg-gray-300 rounded shadow"
+          style={{ left: `${limitPosition}%`, transform: 'translateX(-50%)' }}
+        />
+      </div>
+    );
+  };
+
   const isTrialing = subscription?.status === 'trialing';
   const isSubscribed = subscription?.status === 'active';
   const isExpired = subscription?.status === 'expired';
   const isPerpetual = isTrialing && !subscription?.trial_end;
   const hasPromoApplied = subscription?.has_promo || false;
+
+  // Check if user has active Apple subscription (managed via iOS app)
+  const hasAppleSubscription = subscription?.payment_provider === 'apple' &&
+    ['active', 'trialing'].includes(subscription?.status || '');
 
   if (loading) {
     const getLoadingMessage = () => {
@@ -451,21 +510,76 @@ export const SubscriptionPage: React.FC = () => {
           </div>
         )}
 
+        {/* Apple subscription warning */}
+        {hasAppleSubscription && (
+          <div className="bg-amber-100 dark:bg-amber-900/30 border border-amber-400 p-4 rounded-lg mb-6">
+            <div className="flex items-start gap-4">
+              <span className="text-2xl">📱</span>
+              <div className="flex-1">
+                <h3 className="font-bold text-amber-800 dark:text-amber-200">
+                  Subscription Active via App Store
+                </h3>
+                <p className="text-amber-700 dark:text-amber-300 text-sm mt-1">
+                  Your {currentPlan?.display_name || 'subscription'} is managed through Apple.
+                  To make changes, open the Kizu app on your iPhone or go to your Apple ID subscription settings.
+                </p>
+                <a
+                  href="https://support.apple.com/en-us/HT202039"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium transition"
+                >
+                  How to manage Apple subscriptions
+                  <span>↗</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Current Plan Banner */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Your Plan</p>
-              <h2 className="text-3xl font-bold text-indigo-600">{currentPlan?.display_name || 'Free'}</h2>
+              <h2 className="text-3xl font-bold text-indigo-600">
+                {currentPlan?.display_name || 'Free'}
+                {subscription?.billing_cycle && (isSubscribed || isTrialing) && (
+                  <span className="text-lg font-medium text-gray-500 dark:text-gray-400 ml-2">
+                    ({subscription.billing_cycle === 'yearly' ? 'Yearly' : 'Monthly'})
+                  </span>
+                )}
+              </h2>
             </div>
-            <div className={`px-4 py-2 rounded-full text-white font-semibold ${
-              isSubscribed ? 'bg-green-500' :
-              isTrialing ? (isPerpetual ? 'bg-green-500' : 'bg-orange-500') :
-              isExpired ? 'bg-red-500' : 'bg-gray-500'
-            }`}>
-              {isSubscribed ? 'Active' :
-               isTrialing ? (isPerpetual ? '∞ Unlimited' : `${subscription?.trial_end ? Math.ceil((new Date(subscription.trial_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0}d left`) :
-               isExpired ? 'Expired' : 'Free'}
+            <div className="flex flex-col items-end gap-2">
+              <div className={`px-4 py-2 rounded-full text-white font-semibold ${
+                isSubscribed ? 'bg-green-500' :
+                isTrialing ? (isPerpetual ? 'bg-green-500' : 'bg-orange-500') :
+                isExpired ? 'bg-red-500' : 'bg-gray-500'
+              }`}>
+                {isSubscribed ? 'Active' :
+                 isTrialing ? (isPerpetual ? '∞ Unlimited' : `${subscription?.trial_end ? Math.ceil((new Date(subscription.trial_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0}d left`) :
+                 isExpired ? 'Expired' : 'Free'}
+              </div>
+              {subscription?.payment_provider && ['apple', 'stripe'].includes(subscription.payment_provider) && (isSubscribed || isTrialing) && (
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${
+                  subscription.payment_provider === 'apple'
+                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                    : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                }`}>
+                  {subscription.payment_provider === 'apple' ? (
+                    <>
+                      <span className="text-sm">🍎</span>
+                      <span>App Store</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-sm">💳</span>
+                      <span>Web</span>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           {isTrialing && !isPerpetual && subscription?.trial_end && (
@@ -489,48 +603,42 @@ export const SubscriptionPage: React.FC = () => {
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-gray-600 dark:text-gray-400">Photos</span>
-                  <span className={usage.photos >= limits.max_photos ? 'text-red-500 font-semibold' : 'text-gray-800 dark:text-white'}>
+                  <span className={usage.photos > limits.max_photos ? 'text-red-500 font-semibold' : 'text-gray-800 dark:text-white'}>
                     {usage.photos.toLocaleString()} / {limits.max_photos.toLocaleString()}
+                    {usage.photos > limits.max_photos && (
+                      <span className="text-red-500 ml-1">(+{(usage.photos - limits.max_photos).toLocaleString()})</span>
+                    )}
                   </span>
                 </div>
-                <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${usage.photos >= limits.max_photos ? 'bg-red-500' : 'bg-indigo-500'}`}
-                    style={{ width: `${Math.min(100, (usage.photos / limits.max_photos) * 100)}%` }}
-                  />
-                </div>
+                {renderUsageBar(usage.photos, limits.max_photos, 'bg-indigo-500')}
               </div>
 
               {/* Storage */}
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-gray-600 dark:text-gray-400">Storage</span>
-                  <span className={usage.storage_bytes >= limits.max_storage_bytes ? 'text-red-500 font-semibold' : 'text-gray-800 dark:text-white'}>
+                  <span className={usage.storage_bytes > limits.max_storage_bytes ? 'text-red-500 font-semibold' : 'text-gray-800 dark:text-white'}>
                     {formatStorage(usage.storage_bytes)} / {formatStorage(limits.max_storage_bytes)}
+                    {usage.storage_bytes > limits.max_storage_bytes && (
+                      <span className="text-red-500 ml-1">(+{formatStorage(usage.storage_bytes - limits.max_storage_bytes)})</span>
+                    )}
                   </span>
                 </div>
-                <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${usage.storage_bytes >= limits.max_storage_bytes ? 'bg-red-500' : 'bg-emerald-500'}`}
-                    style={{ width: `${Math.min(100, (usage.storage_bytes / limits.max_storage_bytes) * 100)}%` }}
-                  />
-                </div>
+                {renderUsageBar(usage.storage_bytes, limits.max_storage_bytes, 'bg-emerald-500')}
               </div>
 
               {/* Video */}
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-gray-600 dark:text-gray-400">Video Minutes</span>
-                  <span className={usage.video_minutes >= limits.max_video_minutes ? 'text-red-500 font-semibold' : 'text-gray-800 dark:text-white'}>
+                  <span className={usage.video_minutes > limits.max_video_minutes ? 'text-red-500 font-semibold' : 'text-gray-800 dark:text-white'}>
                     {usage.video_minutes} / {limits.max_video_minutes}
+                    {usage.video_minutes > limits.max_video_minutes && (
+                      <span className="text-red-500 ml-1">(+{usage.video_minutes - limits.max_video_minutes})</span>
+                    )}
                   </span>
                 </div>
-                <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${usage.video_minutes >= limits.max_video_minutes ? 'bg-red-500' : 'bg-purple-500'}`}
-                    style={{ width: `${limits.max_video_minutes > 0 ? Math.min(100, (usage.video_minutes / limits.max_video_minutes) * 100) : 0}%` }}
-                  />
-                </div>
+                {renderUsageBar(usage.video_minutes, limits.max_video_minutes, 'bg-purple-500')}
               </div>
 
               {/* Editors */}
@@ -538,16 +646,14 @@ export const SubscriptionPage: React.FC = () => {
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-600 dark:text-gray-400">Editors</span>
-                    <span className={(usage.editors || 0) >= limits.max_editors ? 'text-red-500 font-semibold' : 'text-gray-800 dark:text-white'}>
+                    <span className={(usage.editors || 0) > limits.max_editors ? 'text-red-500 font-semibold' : 'text-gray-800 dark:text-white'}>
                       {usage.editors || 0} / {limits.max_editors}
+                      {(usage.editors || 0) > limits.max_editors && (
+                        <span className="text-red-500 ml-1">(+{(usage.editors || 0) - limits.max_editors})</span>
+                      )}
                     </span>
                   </div>
-                  <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${(usage.editors || 0) >= limits.max_editors ? 'bg-red-500' : 'bg-blue-500'}`}
-                      style={{ width: `${Math.min(100, ((usage.editors || 0) / limits.max_editors) * 100)}%` }}
-                    />
-                  </div>
+                  {renderUsageBar(usage.editors || 0, limits.max_editors, 'bg-blue-500')}
                 </div>
               )}
 
@@ -556,16 +662,14 @@ export const SubscriptionPage: React.FC = () => {
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-600 dark:text-gray-400">Contributors</span>
-                    <span className={(usage.contributors || 0) >= limits.max_contributors ? 'text-red-500 font-semibold' : 'text-gray-800 dark:text-white'}>
+                    <span className={(usage.contributors || 0) > limits.max_contributors ? 'text-red-500 font-semibold' : 'text-gray-800 dark:text-white'}>
                       {usage.contributors || 0} / {limits.max_contributors}
+                      {(usage.contributors || 0) > limits.max_contributors && (
+                        <span className="text-red-500 ml-1">(+{(usage.contributors || 0) - limits.max_contributors})</span>
+                      )}
                     </span>
                   </div>
-                  <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${(usage.contributors || 0) >= limits.max_contributors ? 'bg-red-500' : 'bg-teal-500'}`}
-                      style={{ width: `${Math.min(100, ((usage.contributors || 0) / limits.max_contributors) * 100)}%` }}
-                    />
-                  </div>
+                  {renderUsageBar(usage.contributors || 0, limits.max_contributors, 'bg-teal-500')}
                 </div>
               )}
 
@@ -574,53 +678,51 @@ export const SubscriptionPage: React.FC = () => {
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-600 dark:text-gray-400">Read-Only Users</span>
-                    <span className={(usage.read_only_users || 0) >= limits.max_read_only ? 'text-red-500 font-semibold' : 'text-gray-800 dark:text-white'}>
+                    <span className={(usage.read_only_users || 0) > limits.max_read_only && limits.max_read_only !== -1 ? 'text-red-500 font-semibold' : 'text-gray-800 dark:text-white'}>
                       {usage.read_only_users || 0} / {limits.max_read_only === -1 ? '∞' : limits.max_read_only}
+                      {(usage.read_only_users || 0) > limits.max_read_only && limits.max_read_only !== -1 && (
+                        <span className="text-red-500 ml-1">(+{(usage.read_only_users || 0) - limits.max_read_only})</span>
+                      )}
                     </span>
                   </div>
-                  {limits.max_read_only !== -1 && (
-                    <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${(usage.read_only_users || 0) >= limits.max_read_only ? 'bg-red-500' : 'bg-cyan-500'}`}
-                        style={{ width: `${Math.min(100, ((usage.read_only_users || 0) / limits.max_read_only) * 100)}%` }}
-                      />
-                    </div>
-                  )}
+                  {limits.max_read_only !== -1 && renderUsageBar(usage.read_only_users || 0, limits.max_read_only, 'bg-cyan-500')}
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* Sticky Billing Cycle Toggle */}
-        <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 py-4 -mx-4 px-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex justify-center gap-4">
-            <button
-              onClick={() => setBillingCycle('monthly')}
-              className={`px-6 py-2 rounded-lg font-medium transition ${
-                billingCycle === 'monthly'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setBillingCycle('yearly')}
-              className={`px-6 py-2 rounded-lg font-medium transition flex items-center gap-2 ${
-                billingCycle === 'yearly'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
-              }`}
-            >
-              Yearly
-              <span className="bg-green-500 text-white text-xs px-2 py-0.5 rounded">SAVE</span>
-            </button>
+        {/* Sticky Billing Cycle Toggle - only show for non-Apple subscribers */}
+        {!hasAppleSubscription && (
+          <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 py-4 -mx-4 px-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={() => setBillingCycle('monthly')}
+                className={`px-6 py-2 rounded-lg font-medium transition ${
+                  billingCycle === 'monthly'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
+                }`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBillingCycle('yearly')}
+                className={`px-6 py-2 rounded-lg font-medium transition flex items-center gap-2 ${
+                  billingCycle === 'yearly'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
+                }`}
+              >
+                Yearly
+                <span className="bg-green-500 text-white text-xs px-2 py-0.5 rounded">SAVE</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Show promo code for non-active users or users without existing promo */}
-        {(!isSubscribed || !hasPromoApplied) && (
+        {/* Show promo code for non-active users or users without existing promo - not for Apple subscribers */}
+        {(!isSubscribed || !hasPromoApplied) && !hasAppleSubscription && (
           <div className="mb-6 mt-6">
             <button
               onClick={() => setShowPromoInput(!showPromoInput)}
@@ -676,108 +778,111 @@ export const SubscriptionPage: React.FC = () => {
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 gap-8 mt-6">
-          {plans.map((plan) => {
-            const isCurrent = currentPlan?.id === plan.id;
-            const price = billingCycle === 'yearly' ? plan.price_yearly_cents : plan.price_monthly_cents;
-            const currentPrice = currentPlan
-              ? (billingCycle === 'yearly' ? currentPlan.price_yearly_cents : currentPlan.price_monthly_cents)
-              : 0;
-            const isDowngrade = currentPlan && price < currentPrice;
-            const isUpgrade = currentPlan && price > currentPrice;
-            const discountedPrice = systemDiscount && price > 0
-              ? Math.round(price * (1 - systemDiscount.percent / 100))
-              : price;
-            const isCheckingOut = checkoutLoading === plan.id;
+        {/* Plan cards - only show for non-Apple subscribers */}
+        {!hasAppleSubscription && (
+          <div className="grid md:grid-cols-2 gap-8 mt-6">
+            {plans.map((plan) => {
+              const isCurrent = currentPlan?.id === plan.id;
+              const price = billingCycle === 'yearly' ? plan.price_yearly_cents : plan.price_monthly_cents;
+              const currentPrice = currentPlan
+                ? (billingCycle === 'yearly' ? currentPlan.price_yearly_cents : currentPlan.price_monthly_cents)
+                : 0;
+              const isDowngrade = currentPlan && price < currentPrice;
+              const isUpgrade = currentPlan && price > currentPrice;
+              const discountedPrice = systemDiscount && price > 0
+                ? Math.round(price * (1 - systemDiscount.percent / 100))
+                : price;
+              const isCheckingOut = checkoutLoading === plan.id;
 
-            const getButtonText = () => {
-              if (isCheckingOut) return 'Loading...';
-              if (isCurrent) return 'Current Plan';
-              if (isDowngrade) return 'Downgrade';
-              return 'Upgrade';
-            };
+              const getButtonText = () => {
+                if (isCheckingOut) return 'Loading...';
+                if (isCurrent) return 'Current Plan';
+                if (isDowngrade) return 'Downgrade';
+                return 'Upgrade';
+              };
 
-            const getButtonClass = () => {
-              if (isCurrent) return 'bg-gray-400 cursor-not-allowed';
-              if (isDowngrade) return 'bg-orange-500 hover:bg-orange-600';
-              return 'bg-indigo-600 hover:bg-indigo-700';
-            };
+              const getButtonClass = () => {
+                if (isCurrent) return 'bg-gray-400 cursor-not-allowed';
+                if (isDowngrade) return 'bg-orange-500 hover:bg-orange-600';
+                return 'bg-indigo-600 hover:bg-indigo-700';
+              };
 
-            return (
-              <div
-                key={plan.id}
-                className={`bg-white dark:bg-gray-800 p-4 flex flex-col rounded-lg overflow-hidden ${
-                  isCurrent ? 'border-4 border-indigo-500' : 'border-2 border-gray-200 dark:border-gray-700'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className={`text-lg font-bold ${isCurrent ? 'text-indigo-600' : 'text-gray-800 dark:text-white'}`}>
-                    {plan.display_name}
-                  </h3>
-                  {isCurrent && (
-                    <span className={`text-xs font-bold px-2 py-1 rounded ${
-                      isPerpetual ? 'bg-green-500' : isTrialing ? 'bg-orange-500' : 'bg-indigo-500'
-                    } text-white`}>
-                      {isPerpetual ? '∞' : isTrialing ? 'TRIAL' : (subscription?.current_period_end ? `Renews ${new Date(subscription.current_period_end).toLocaleDateString()}` : 'ACTIVE')}
-                    </span>
-                  )}
-                </div>
-
-                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 mb-4">
-                  {systemDiscount && price > 0 && (
-                    <span className="text-sm text-gray-400 line-through mr-2">{formatPrice(price)}</span>
-                  )}
-                  <span className="text-xl font-bold text-indigo-600">{formatPrice(discountedPrice)}</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 text-sm mb-4">
-                  <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
-                    <p className="font-semibold text-gray-800 dark:text-white">{formatStorage(plan.storage_bytes)}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Storage</p>
-                  </div>
-                  <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
-                    <p className="font-semibold text-gray-800 dark:text-white">{plan.max_photos.toLocaleString()}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Photos</p>
-                  </div>
-                  <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
-                    <p className="font-semibold text-gray-800 dark:text-white">{plan.max_video_minutes || 0}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Video mins</p>
-                  </div>
-                  <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
-                    <p className="font-semibold text-gray-800 dark:text-white">{plan.max_editors}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Editors</p>
-                  </div>
-                  <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
-                    <p className="font-semibold text-gray-800 dark:text-white">{plan.max_contributors}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Contributors</p>
-                  </div>
-                  <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
-                    <p className="font-semibold text-gray-800 dark:text-white">{plan.max_read_only_users === -1 ? '∞' : plan.max_read_only_users}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Read-only</p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    console.log('Plan clicked:', plan.name, plan.id);
-                    handleSelectPlan(plan);
-                  }}
-                  disabled={isCheckingOut || plan.name === 'free' || isCurrent}
-                  className={`w-full py-3 text-white rounded-lg font-medium disabled:opacity-50 transition relative z-10 ${getButtonClass()}`}
+              return (
+                <div
+                  key={plan.id}
+                  className={`bg-white dark:bg-gray-800 p-4 flex flex-col rounded-lg overflow-hidden ${
+                    isCurrent ? 'border-4 border-indigo-500' : 'border-2 border-gray-200 dark:border-gray-700'
+                  }`}
                 >
-                  {getButtonText()}
-                </button>
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className={`text-lg font-bold ${isCurrent ? 'text-indigo-600' : 'text-gray-800 dark:text-white'}`}>
+                      {plan.display_name}
+                    </h3>
+                    {isCurrent && (
+                      <span className={`text-xs font-bold px-2 py-1 rounded ${
+                        isPerpetual ? 'bg-green-500' : isTrialing ? 'bg-orange-500' : 'bg-indigo-500'
+                      } text-white`}>
+                        {isPerpetual ? '∞' : isTrialing ? 'TRIAL' : (subscription?.current_period_end ? `Renews ${new Date(subscription.current_period_end).toLocaleDateString()}` : 'ACTIVE')}
+                      </span>
+                    )}
+                  </div>
 
-                {isDowngrade && !isCurrent && (
-                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 text-center">
-                    You'll keep your current features until {subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString() : 'your billing period ends'}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 mb-4">
+                    {systemDiscount && price > 0 && (
+                      <span className="text-sm text-gray-400 line-through mr-2">{formatPrice(price)}</span>
+                    )}
+                    <span className="text-xl font-bold text-indigo-600">{formatPrice(discountedPrice)}</span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-sm mb-4">
+                    <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
+                      <p className="font-semibold text-gray-800 dark:text-white">{formatStorage(plan.storage_bytes)}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Storage</p>
+                    </div>
+                    <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
+                      <p className="font-semibold text-gray-800 dark:text-white">{plan.max_photos.toLocaleString()}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Photos</p>
+                    </div>
+                    <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
+                      <p className="font-semibold text-gray-800 dark:text-white">{plan.max_video_minutes || 0}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Video mins</p>
+                    </div>
+                    <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
+                      <p className="font-semibold text-gray-800 dark:text-white">{plan.max_editors}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Editors</p>
+                    </div>
+                    <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
+                      <p className="font-semibold text-gray-800 dark:text-white">{plan.max_contributors}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Contributors</p>
+                    </div>
+                    <div className="flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700 rounded p-2">
+                      <p className="font-semibold text-gray-800 dark:text-white">{plan.max_read_only_users === -1 ? '∞' : plan.max_read_only_users}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Read-only</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      console.log('Plan clicked:', plan.name, plan.id);
+                      handleSelectPlan(plan);
+                    }}
+                    disabled={isCheckingOut || plan.name === 'free' || isCurrent}
+                    className={`w-full py-3 text-white rounded-lg font-medium disabled:opacity-50 transition relative z-10 ${getButtonClass()}`}
+                  >
+                    {getButtonText()}
+                  </button>
+
+                  {isDowngrade && !isCurrent && (
+                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 text-center">
+                      You'll keep your current features until {subscription?.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString() : 'your billing period ends'}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {isSubscribed && subscription?.stripe_customer_id && (
           <div className="mt-8">

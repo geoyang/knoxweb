@@ -239,7 +239,7 @@ export const SharedAssetViewer: React.FC = () => {
       <>
         <div
           ref={containerRef}
-          className={`relative overflow-hidden rounded-lg shadow-2xl cursor-zoom-in ${isFullscreen ? 'fixed inset-0 z-50 bg-black rounded-none' : ''}`}
+          className={`relative rounded-lg shadow-2xl cursor-zoom-in ${isFullscreen ? 'fixed inset-0 z-50 bg-black rounded-none flex items-center justify-center' : ''}`}
           onDoubleClick={handleDoubleClick}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
@@ -250,10 +250,9 @@ export const SharedAssetViewer: React.FC = () => {
           <img
             src={src}
             alt={alt}
-            className="w-full select-none"
+            className="select-none max-w-full h-auto"
             style={{
-              maxHeight: isFullscreen ? '100vh' : '70vh',
-              objectFit: 'contain',
+              maxHeight: isFullscreen ? '100vh' : undefined,
               transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
               transition: isDragging ? 'none' : 'transform 0.2s ease-out',
             }}
@@ -341,15 +340,18 @@ export const SharedAssetViewer: React.FC = () => {
           </div>
         </header>
 
-        {/* Media Section - Fixed height */}
-        <div className="flex-shrink-0 max-w-4xl mx-auto w-full px-4 pt-4">
+        {/* Media Section */}
+        <div className="mx-auto px-4 pt-4 flex justify-center">
           <div className="relative group">
             {isVideo ? (
-              <video src={`${imageUrl}&type=original`} controls className="w-full rounded-lg shadow-2xl max-h-[50vh] object-contain bg-black" poster={imageUrl || undefined} />
+              <video src={`${imageUrl}&type=original`} controls className="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain bg-black" poster={imageUrl || undefined} />
             ) : (
-              <div className="max-h-[50vh] overflow-hidden rounded-lg shadow-2xl">
-                <ZoomableImage src={`${imageUrl}&type=original`} alt="Shared photo" />
-              </div>
+              <img
+                src={`${imageUrl}&type=original`}
+                alt="Shared photo"
+                className="max-w-full max-h-[85vh] rounded-lg shadow-2xl"
+                style={{ width: 'auto', height: 'auto' }}
+              />
             )}
           </div>
 

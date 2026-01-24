@@ -12,6 +12,7 @@ const CRAWLER_AGENTS = [
   'WhatsApp',
   'LinkedInBot',
   'Slackbot',
+  'Slack-ImgProxy',
   'TelegramBot',
   'Discordbot',
   'Pinterest',
