@@ -326,6 +326,7 @@ interface ImageUploaderProps {
   targetAlbumId?: string | null;  // Optional - if not provided, uploads to assets only
   onImagesUploaded: (count: number) => void;
   onClose: () => void;
+  initialFiles?: File[];  // Optional - files to process immediately on mount (e.g., from drag-drop)
 }
 
 interface UploadedFile {
@@ -520,13 +521,15 @@ const generateVideoThumbnail = async (file: File, maxSize: number = 300): Promis
 export const ImageUploader: React.FC<ImageUploaderProps> = ({
   targetAlbumId,
   onImagesUploaded,
-  onClose
+  onClose,
+  initialFiles
 }) => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadComplete, setUploadComplete] = useState(false);
   const { user } = useAuth();
+  const initialFilesProcessed = React.useRef(false);
 
   // Generate unique file ID
   const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -721,6 +724,18 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       window.removeEventListener('drop', preventDefaults);
     };
   }, []);
+
+  // Process initial files if provided (e.g., from global drag-drop)
+  React.useEffect(() => {
+    if (initialFiles && initialFiles.length > 0 && !initialFilesProcessed.current) {
+      initialFilesProcessed.current = true;
+      console.log('📥 Processing initial files:', initialFiles.length);
+      // Create a FileList-like object
+      const dataTransfer = new DataTransfer();
+      initialFiles.forEach(file => dataTransfer.items.add(file));
+      handleFileSelect(dataTransfer.files);
+    }
+  }, [initialFiles, handleFileSelect]);
 
   // Handle file input change
   const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {

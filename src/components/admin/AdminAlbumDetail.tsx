@@ -470,6 +470,8 @@ export const AdminAlbumDetail: React.FC = () => {
   const [shareRole, setShareRole] = useState('read_only');
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
   const [showImageUploader, setShowImageUploader] = useState(false);
+  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [memoryCounts, setMemoryCounts] = useState<Record<string, number>>({});
   const [memoriesAssetId, setMemoriesAssetId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string>('read_only');
@@ -528,6 +530,61 @@ export const AdminAlbumDetail: React.FC = () => {
 
   useEffect(() => { fetchAlbum(); fetchCircles(); }, [fetchAlbum]);
   useEffect(() => { loadMemoryCounts(); }, [loadMemoryCounts]);
+
+  // Drag-drop for uploading to this album
+  useEffect(() => {
+    let dragCounter = 0;
+
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter++;
+      if (e.dataTransfer?.types.includes('Files')) {
+        setIsDraggingOver(true);
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter === 0) {
+        setIsDraggingOver(false);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter = 0;
+      setIsDraggingOver(false);
+
+      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+        const files = Array.from(e.dataTransfer.files).filter(file =>
+          file.type.startsWith('image/') || file.type.startsWith('video/') ||
+          file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')
+        );
+        if (files.length > 0) {
+          setDroppedFiles(files);
+          setShowImageUploader(true);
+        }
+      }
+    };
+
+    document.addEventListener('dragenter', handleDragEnter);
+    document.addEventListener('dragleave', handleDragLeave);
+    document.addEventListener('dragover', handleDragOver);
+    document.addEventListener('drop', handleDrop);
+
+    return () => {
+      document.removeEventListener('dragenter', handleDragEnter);
+      document.removeEventListener('dragleave', handleDragLeave);
+      document.removeEventListener('dragover', handleDragOver);
+      document.removeEventListener('drop', handleDrop);
+    };
+  }, []);
 
   const handleUpdateTitle = async () => {
     if (!album || !editedTitle.trim()) return;
@@ -1015,9 +1072,23 @@ export const AdminAlbumDetail: React.FC = () => {
       {showImageUploader && (
         <ImageUploader
           targetAlbumId={album.id}
-          onImagesUploaded={() => { setShowImageUploader(false); fetchAlbum(); }}
-          onClose={() => setShowImageUploader(false)}
+          onImagesUploaded={() => { setShowImageUploader(false); setDroppedFiles([]); fetchAlbum(); }}
+          onClose={() => { setShowImageUploader(false); setDroppedFiles([]); }}
+          initialFiles={droppedFiles}
         />
+      )}
+
+      {/* Drag-drop overlay */}
+      {isDraggingOver && (
+        <div className="fixed inset-0 bg-purple-500/20 border-4 border-dashed border-purple-500 z-50 flex items-center justify-center pointer-events-none">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-8 shadow-2xl">
+            <div className="text-center">
+              <i className="fi fi-sr-cloud-upload text-6xl text-purple-500 mb-4 block"></i>
+              <p className="text-xl font-semibold text-gray-800 dark:text-white">Drop files to upload</p>
+              <p className="text-gray-500 dark:text-gray-400 mt-2">Files will be added to "{album?.title || 'this album'}"</p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Memories Panel */}

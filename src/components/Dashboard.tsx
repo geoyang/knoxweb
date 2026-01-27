@@ -47,7 +47,7 @@ interface UserProfile {
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, session, user: authUser, loading: authLoading } = useAuth();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [userCreatedAt, setUserCreatedAt] = useState<string | null>(null);
   const [circles, setCircles] = useState<Circle[]>([]);
@@ -81,19 +81,23 @@ export const Dashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    loadUserData();
-  }, []);
-
-  const loadUserData = async () => {
-    try {
-      // Check if user is logged in
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-      if (sessionError || !session) {
+    // Wait for auth to finish loading before loading user data
+    if (!authLoading) {
+      if (!session) {
         navigate('/login');
         return;
       }
+      loadUserData();
+    }
+  }, [authLoading, session]);
 
+  const loadUserData = async () => {
+    if (!session) {
+      navigate('/login');
+      return;
+    }
+
+    try {
       const userId = session.user.id;
       setUserCreatedAt(session.user.created_at);
 

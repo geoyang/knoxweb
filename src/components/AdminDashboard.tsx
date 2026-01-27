@@ -25,6 +25,7 @@ import { chatApi } from '../services/chatApi';
 import { adminApi } from '../services/adminApi';
 import { getFolders } from '../services/foldersApi';
 import { contactsApi } from '../services/contactsApi';
+import { ImageUploader } from './admin/ImageUploader';
 
 export const AdminDashboard: React.FC = () => {
   const { user, userProfile, signOut, loading, isSuperAdmin } = useAuth();
@@ -49,6 +50,11 @@ export const AdminDashboard: React.FC = () => {
     contacts: 0,
     invitations: 0,
   });
+
+  // Global drag-drop upload
+  const [showUploader, setShowUploader] = useState(false);
+  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   // Get member duration
   const getMemberDuration = (): string => {
@@ -193,7 +199,71 @@ export const AdminDashboard: React.FC = () => {
     const interval = setInterval(fetchNotificationCount, 30000);
     return () => clearInterval(interval);
   }, [user]);
-  
+
+  // Global drag-drop for file upload
+  useEffect(() => {
+    let dragCounter = 0;
+
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter++;
+      if (e.dataTransfer?.types.includes('Files')) {
+        setIsDraggingOver(true);
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter === 0) {
+        setIsDraggingOver(false);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter = 0;
+      setIsDraggingOver(false);
+
+      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+        const files = Array.from(e.dataTransfer.files).filter(file =>
+          file.type.startsWith('image/') || file.type.startsWith('video/') ||
+          file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')
+        );
+        if (files.length > 0) {
+          setDroppedFiles(files);
+          setShowUploader(true);
+        }
+      }
+    };
+
+    document.addEventListener('dragenter', handleDragEnter);
+    document.addEventListener('dragleave', handleDragLeave);
+    document.addEventListener('dragover', handleDragOver);
+    document.addEventListener('drop', handleDrop);
+
+    return () => {
+      document.removeEventListener('dragenter', handleDragEnter);
+      document.removeEventListener('dragleave', handleDragLeave);
+      document.removeEventListener('dragover', handleDragOver);
+      document.removeEventListener('drop', handleDrop);
+    };
+  }, []);
+
+  // Handle upload completion
+  const handleUploadComplete = (count: number) => {
+    setShowUploader(false);
+    setDroppedFiles([]);
+    // Refresh counts
+    if (count > 0) {
+      setCounts(prev => ({ ...prev, media: prev.media + count }));
+    }
+  };
+
   console.log('AdminDashboard render:', { 
     loading, 
     hasUser: !!user, 
@@ -581,10 +651,35 @@ export const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Account Screen Modal */}
-      <AccountScreen 
-        isOpen={showAccountScreen} 
-        onClose={() => setShowAccountScreen(false)} 
+      <AccountScreen
+        isOpen={showAccountScreen}
+        onClose={() => setShowAccountScreen(false)}
       />
+
+      {/* Global drag-drop overlay */}
+      {isDraggingOver && (
+        <div className="fixed inset-0 bg-blue-500/20 border-4 border-dashed border-blue-500 z-50 flex items-center justify-center pointer-events-none">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-8 shadow-2xl">
+            <div className="text-center">
+              <i className="fi fi-sr-cloud-upload text-6xl text-blue-500 mb-4 block"></i>
+              <p className="text-xl font-semibold text-gray-800 dark:text-white">Drop files to upload</p>
+              <p className="text-gray-500 dark:text-gray-400 mt-2">Images and videos will be added to your library</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Uploader Modal */}
+      {showUploader && (
+        <ImageUploader
+          onImagesUploaded={handleUploadComplete}
+          onClose={() => {
+            setShowUploader(false);
+            setDroppedFiles([]);
+          }}
+          initialFiles={droppedFiles}
+        />
+      )}
     </div>
   );
 };
