@@ -56,64 +56,47 @@ export const DebugSupabase: React.FC = () => {
           return;
         }
 
-        // Test 2: Basic Supabase connection with simpler query
-        setStatus('🔍 Testing database connection...');
-        console.log('Testing database connection...');
-        
-        try {
-          // Test with albums table instead of profiles - profiles may have RLS restrictions
-          setStatus('🔍 Testing with albums table...');
-          console.log('Testing database connection with albums table...');
-          
-          const { data: albumData, error: albumError } = await Promise.race([
-            supabase
-              .from('albums')
-              .select('id')
-              .limit(1),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Albums query timeout')), 8000)
-            )
-          ]) as any;
+        // Test 2: Test edge function connectivity (no direct database calls)
+        setStatus('🔍 Testing API connection...');
+        console.log('Testing API connection...');
 
-          if (albumError) {
-            console.error('Albums table error:', albumError);
-            
-            // Try circles table as fallback
-            setStatus('🔍 Retrying with circles table...');
-            const { data: circleData, error: circleError } = await Promise.race([
-              supabase
-                .from('circles')
-                .select('id')
-                .limit(1),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Circles query timeout')), 8000)
-              )
-            ]) as any;
-            
-            if (circleError) {
-              console.error('Circles table error:', circleError);
-              setStatus('❌ Database connection failed');
-              setDetails({ 
-                albumError: albumError.message,
-                circleError: circleError.message,
-                suggestion: 'Both albums and circles tables failed'
-              });
-              return;
-            }
-            
-            console.log('Database connection successful with circles:', circleData);
-            
-          } else {
-            console.log('Database connection successful with albums:', albumData);
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+          // Test subscription API (public endpoint)
+          const response = await fetch(`${url}/functions/v1/subscription-api?action=plans`, {
+            method: 'GET',
+            headers: {
+              'apikey': key,
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            console.error('API test failed:', response.status);
+            setStatus('❌ API connection failed');
+            setDetails({
+              status: response.status,
+              statusText: response.statusText,
+              suggestion: 'Edge function API not responding'
+            });
+            return;
           }
-          
-        } catch (dbErr) {
-          console.error('Database connection timeout or error:', dbErr);
-          setStatus('❌ Database timeout');
-          setDetails({ 
-            error: dbErr instanceof Error ? dbErr.message : 'Database connection timeout',
+
+          const apiData = await response.json();
+          console.log('API connection successful:', apiData);
+
+        } catch (apiErr) {
+          console.error('API connection timeout or error:', apiErr);
+          setStatus('❌ API timeout');
+          setDetails({
+            error: apiErr instanceof Error ? apiErr.message : 'API connection timeout',
             timeout: '8 seconds',
-            suggestion: 'Database connection timeout - check network or Supabase status'
+            suggestion: 'API connection timeout - check network or Supabase status'
           });
           return;
         }

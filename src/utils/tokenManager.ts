@@ -9,30 +9,40 @@ export interface UserTokenSettings {
 }
 
 export class TokenManager {
-  
-  /**
-   * Get user's token settings or create defaults
-   */
-  static async getUserTokenSettings(userId: string): Promise<UserTokenSettings> {
-    try {
-      const { data, error } = await supabase
-        .from('user_token_settings')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
 
-      if (error) {
-        console.warn('Error fetching user token settings, using defaults', error);
+  private static async getAuthHeaders(): Promise<Record<string, string> | null> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+    return {
+      'Authorization': `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+    };
+  }
+
+  /**
+   * Get user's token settings via API
+   */
+  static async getUserTokenSettings(_userId: string): Promise<UserTokenSettings> {
+    try {
+      const headers = await TokenManager.getAuthHeaders();
+      if (!headers) {
+        console.warn('No auth session for token settings');
         return TokenManager.getDefaultSettings();
       }
 
-      return {
-        token_expiry_days: data.token_expiry_days || 30,
-        allow_code_auth: data.allow_code_auth ?? true,
-        allow_magic_link_auth: data.allow_magic_link_auth ?? true,
-        max_active_sessions: data.max_active_sessions || 3,
-        require_code_for_sensitive: data.require_code_for_sensitive ?? false,
-      };
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/user-token-settings-api`,
+        { method: 'GET', headers }
+      );
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        console.warn('Error fetching user token settings via API', data.error);
+        return TokenManager.getDefaultSettings();
+      }
+
+      return data.settings;
     } catch (error) {
       console.warn('Exception getting user token settings', error);
       return TokenManager.getDefaultSettings();
@@ -40,27 +50,35 @@ export class TokenManager {
   }
 
   /**
-   * Update user's token settings
+   * Update user's token settings via API
    */
   static async updateUserTokenSettings(
-    userId: string, 
+    _userId: string,
     settings: Partial<UserTokenSettings>
   ): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from('user_token_settings')
-        .upsert({
-          user_id: userId,
-          ...settings,
-          updated_at: new Date().toISOString(),
-        });
-
-      if (error) {
-        console.warn('Error updating user token settings', error);
+      const headers = await TokenManager.getAuthHeaders();
+      if (!headers) {
+        console.warn('No auth session for updating token settings');
         return false;
       }
 
-      console.log('Updated user token settings', { userId, settings });
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/user-token-settings-api`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify(settings),
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        console.warn('Error updating user token settings via API', data.error);
+        return false;
+      }
+
+      console.log('Updated user token settings', { settings });
       return true;
     } catch (error) {
       console.warn('Exception updating user token settings', error);

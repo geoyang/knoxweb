@@ -125,21 +125,32 @@ export const Dashboard: React.FC = () => {
         console.error('Error fetching subscription:', subError);
       }
 
-      // Load user profile
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, avatar_url')
-        .eq('id', userId)
-        .single();
-
-      if (profileError) {
+      // Load user profile via API
+      try {
+        const profileResponse = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/profiles-api`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+          }
+        );
+        const profileData = await profileResponse.json();
+        if (profileResponse.ok && profileData.success) {
+          setUser(profileData.profile);
+        } else {
+          // Fall back to session user data
+          setUser({
+            id: session.user.id,
+            full_name: session.user.user_metadata?.full_name || 'User',
+            email: session.user.email || '',
+          });
+        }
+      } catch (profileError) {
         console.error('Profile error:', profileError);
-      } else {
-        setUser(profileData);
-      }
-
-      // If no profile, use session user data
-      if (!profileData && session.user) {
         setUser({
           id: session.user.id,
           full_name: session.user.user_metadata?.full_name || 'User',
@@ -147,45 +158,19 @@ export const Dashboard: React.FC = () => {
         });
       }
 
-      // Load circles the user belongs to
-      const { data: circleUsersData, error: circleUsersError } = await supabase
-        .from('circle_users')
-        .select(`
-          id,
-          role,
-          circle_id,
-          circles (
-            id,
-            name,
-            description
-          )
-        `)
-        .eq('user_id', userId)
-        .eq('status', 'accepted');
-
-      if (circleUsersError) {
-        console.error('Circle users error:', circleUsersError);
-      }
-
-      // Process circles and get album counts
+      // Load circles via admin API
+      const circlesResult = await adminApi.getCircles();
       const processedCircles: Circle[] = [];
-      for (const cu of circleUsersData || []) {
-        const circle = cu.circles as any;
-        if (circle) {
-          // Get album count for this circle
-          const { count: albumCount } = await supabase
-            .from('album_shares')
-            .select('*', { count: 'exact', head: true })
-            .eq('circle_id', circle.id)
-            .eq('is_active', true);
 
+      if (circlesResult.success && circlesResult.data?.circles) {
+        for (const circle of circlesResult.data.circles) {
           processedCircles.push({
             id: circle.id,
             name: circle.name,
             description: circle.description,
-            role: cu.role,
-            album_count: albumCount || 0,
-            photo_count: 0, // We'll calculate this if needed
+            role: circle.user_role || 'read_only',
+            album_count: 0, // Will be calculated from albums below
+            photo_count: 0,
           });
         }
       }
@@ -234,6 +219,19 @@ export const Dashboard: React.FC = () => {
         }
 
         setAlbums(processedAlbums);
+
+        // Update circle album counts from processed albums
+        const circleAlbumCounts = new Map<string, number>();
+        for (const album of processedAlbums) {
+          if (album.circle_id) {
+            circleAlbumCounts.set(album.circle_id, (circleAlbumCounts.get(album.circle_id) || 0) + 1);
+          }
+        }
+
+        setCircles(prev => prev.map(circle => ({
+          ...circle,
+          album_count: circleAlbumCounts.get(circle.id) || 0,
+        })));
       } else {
         console.error('Failed to load albums:', albumsResult.error);
       }

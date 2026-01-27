@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { addPhotosToAlbum } from '../../services/albumsApi';
+import { adminApi } from '../../services/adminApi';
 
 interface StandaloneImageUploaderProps {
   onImagesUploaded: (count: number) => void;
@@ -36,18 +37,19 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
   // Generate unique file ID
   const generateId = () => Math.random().toString(36).substr(2, 9);
 
-  // Load user's albums
+  // Load user's albums via API
   React.useEffect(() => {
     const loadUserAlbums = async () => {
       if (!user?.id) return;
 
-      const { data: albums } = await supabase
-        .from('albums')
-        .select('id, title')
-        .eq('user_id', user.id)
-        .order('title');
-
-      setUserAlbums(albums || []);
+      const result = await adminApi.getAlbums();
+      if (result.success && result.data?.albums) {
+        const albums = result.data.albums
+          .filter((a: any) => a.isOwner)
+          .map((a: any) => ({ id: a.id, title: a.title }))
+          .sort((a: any, b: any) => a.title.localeCompare(b.title));
+        setUserAlbums(albums);
+      }
     };
 
     loadUserAlbums();

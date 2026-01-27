@@ -249,17 +249,13 @@ export const CirclesManager: React.FC = () => {
     try {
       setSavingEdit(true);
 
-      const { error: updateError } = await supabase
-        .from('circles')
-        .update({
-          name: editName.trim(),
-          description: editDescription.trim() || null,
-          date_modified: new Date().toISOString()
-        })
-        .eq('id', editingCircle.id)
-        .eq('owner_id', user!.id);
+      const result = await adminApi.updateCircle({
+        circle_id: editingCircle.id,
+        name: editName.trim(),
+        description: editDescription.trim() || undefined,
+      });
 
-      if (updateError) throw updateError;
+      if (!result.success) throw new Error(result.error || 'Failed to update circle');
 
       setShowEditCircleForm(false);
       setEditingCircle(null);

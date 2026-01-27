@@ -127,14 +127,28 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
         updates.avatar_url = urlData.publicUrl;
       }
 
-      // Update profile
+      // Update profile via API
       if (Object.keys(updates).length > 0) {
-        const { error } = await supabase
-          .from('profiles')
-          .update(updates)
-          .eq('id', user.id);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('Not authenticated');
 
-        if (error) throw error;
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/profiles-api`,
+          {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify(updates),
+          }
+        );
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Failed to update profile');
+        }
       }
 
       // Force reload to update the context

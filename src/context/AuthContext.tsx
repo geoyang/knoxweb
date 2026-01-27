@@ -50,39 +50,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
     try {
-      // Add timeout to profile fetch to prevent hanging
-      const { data: profile, error } = await Promise.race([
-        supabase
-          .from('profiles')
-          .select('id, full_name, email, avatar_url')
-          .eq('id', userId)
-          .single(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
-        )
-      ]) as any;
-
-      if (error) {
-        console.warn('Error fetching user profile:', error);
-        // Return default profile if we can't fetch it - don't treat as fatal error
-        return {
-          id: userId,
-          full_name: null,
-          email: null,
-          avatar_url: null,
-        };
+      // Get auth headers for API call
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession?.access_token) {
+        console.warn('No session for profile fetch');
+        return { id: userId, full_name: null, email: null, avatar_url: null };
       }
 
-      return profile;
+      // Fetch profile via API with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/profiles-api`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${currentSession.access_token}`,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          signal: controller.signal,
+        }
+      );
+
+      clearTimeout(timeoutId);
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        console.warn('Error fetching user profile via API:', data.error);
+        return { id: userId, full_name: null, email: null, avatar_url: null };
+      }
+
+      return data.profile;
     } catch (err) {
       console.warn('Profile fetch timeout or error (using defaults):', err);
-      // Return default profile on timeouts - don't block auth flow
-      return {
-        id: userId,
-        full_name: null,
-        email: null,
-        avatar_url: null,
-      };
+      return { id: userId, full_name: null, email: null, avatar_url: null };
     }
   };
 

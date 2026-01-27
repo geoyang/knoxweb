@@ -52,73 +52,45 @@ export const UsersManager: React.FC = () => {
     try {
       setLoading(true);
 
-      // Get users from auth.users via admin API
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-      if (authError) throw authError;
-
-      // Get profiles data
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          email,
-          full_name,
-          date_created,
-          date_modified
-        `);
-
-      if (profilesError) throw profilesError;
-
-      // Get circle memberships
-      const { data: memberships, error: membershipsError } = await supabase
-        .from('circle_users')
-        .select('id, user_id, role, status, circle_id');
-
-      if (membershipsError) throw membershipsError;
-
-      // Get circles separately
-      let circlesData: any[] = [];
-      if (memberships && memberships.length > 0) {
-        const circleIds = [...new Set(memberships.map(m => m.circle_id))];
-        const { data: circlesList } = await supabase
-          .from('circles')
-          .select('id, name')
-          .in('id', circleIds);
-        
-        circlesData = circlesList || [];
+      // Get session for API call
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
       }
 
-      // Get album counts
-      const { data: albumCounts, error: albumError } = await supabase
-        .from('albums')
-        .select('user_id');
+      // Fetch users via admin-users-api
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users-api`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+        }
+      );
 
-      if (albumError) throw albumError;
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to load users');
+      }
 
-      // Combine data
-      const combinedUsers: User[] = authUsers.users.map(authUser => {
-        const profile = profiles?.find(p => p.id === authUser.id);
-        const userMemberships = memberships?.filter(m => m.user_id === authUser.id).map(membership => ({
-          ...membership,
-          circles: circlesData.find(circle => circle.id === membership.circle_id) || { id: membership.circle_id, name: 'Unknown Circle' }
-        })) || [];
-        const userAlbumCount = albumCounts?.filter(a => a.user_id === authUser.id).length || 0;
-
-        return {
-          id: authUser.id,
-          email: authUser.email || profile?.email || null,
-          full_name: profile?.full_name || null,
-          date_created: profile?.date_created || authUser.created_at,
-          date_modified: profile?.date_modified || authUser.updated_at || authUser.created_at,
-          created_at: authUser.created_at,
-          last_sign_in_at: authUser.last_sign_in_at,
-          circle_memberships: userMemberships,
-          album_count: userAlbumCount,
-        };
-      });
+      // Map API response to User interface
+      const combinedUsers: User[] = (data.users || []).map((apiUser: any) => ({
+        id: apiUser.id,
+        email: apiUser.email,
+        full_name: apiUser.full_name,
+        date_created: apiUser.date_created,
+        date_modified: apiUser.date_modified,
+        created_at: apiUser.date_created,
+        last_sign_in_at: null, // Not available from profiles table
+        circle_memberships: apiUser.circle_memberships || [],
+        album_count: apiUser.album_count || 0,
+      }));
 
       setUsers(combinedUsers);
-      setError(null); // Clear any previous errors on successful load
+      setError(null);
     } catch (err) {
       console.error('Error loading users:', err);
       setError(err instanceof Error ? err.message : 'Failed to load users');

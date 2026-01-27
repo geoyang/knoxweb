@@ -264,14 +264,10 @@ export const AlbumsManager: React.FC = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      // Get existing shares for this album to build the new circle_ids array
-      const { data: existingShares } = await supabase
-        .from('album_shares')
-        .select('circle_id')
-        .eq('album_id', selectedAlbum.id)
-        .eq('is_active', true);
-
-      const existingCircleIds = (existingShares || []).map(s => s.circle_id);
+      // Use existing album_shares from selectedAlbum state
+      const existingCircleIds = (selectedAlbum.album_shares || [])
+        .filter(s => s.is_active)
+        .map(s => s.circle_id);
       const newCircleIds = [...new Set([...existingCircleIds, circleId])];
 
       // Call edge function to handle sharing
@@ -314,25 +310,14 @@ export const AlbumsManager: React.FC = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      // Get the circle_id of the share being removed
-      const { data: shareToRemove } = await supabase
-        .from('album_shares')
-        .select('circle_id')
-        .eq('id', shareId)
-        .single();
-
+      // Find the share being removed from selectedAlbum state
+      const shareToRemove = selectedAlbum.album_shares?.find(s => s.id === shareId);
       if (!shareToRemove) throw new Error('Share not found');
 
-      // Get all current active shares except the one being removed
-      const { data: existingShares } = await supabase
-        .from('album_shares')
-        .select('circle_id')
-        .eq('album_id', selectedAlbum.id)
-        .eq('is_active', true);
-
-      const remainingCircleIds = (existingShares || [])
-        .map(s => s.circle_id)
-        .filter(id => id !== shareToRemove.circle_id);
+      // Get remaining active shares from selectedAlbum state
+      const remainingCircleIds = (selectedAlbum.album_shares || [])
+        .filter(s => s.is_active && s.id !== shareId)
+        .map(s => s.circle_id);
 
       // Call edge function to update sharing
       const response = await fetch(
@@ -470,18 +455,34 @@ export const AlbumsManager: React.FC = () => {
     return album.shared_via?.some(share => editRoles.includes(share.role)) || false;
   };
 
-  // Remove asset from album (doesn't delete the image from vault)
+  // Remove asset from album via API (doesn't delete the image from vault)
   const handleRemoveFromAlbum = async (assetId: string) => {
     if (!selectedAlbum) return;
 
     try {
-      const { error } = await supabase
-        .from('album_assets')
-        .delete()
-        .eq('id', assetId)
-        .eq('album_id', selectedAlbum.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
 
-      if (error) throw error;
+      // Find the asset to get its asset_id
+      const asset = selectedAlbum.album_assets?.find(a => a.id === assetId);
+      if (!asset) throw new Error('Asset not found');
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?album_id=${selectedAlbum.id}&action=remove_photo`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ asset_id: asset.asset_id }),
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to remove from album');
+      }
 
       // Update local state
       setSelectedAlbum(prev => {
@@ -499,21 +500,19 @@ export const AlbumsManager: React.FC = () => {
     }
   };
 
-  // Set asset as key photo for album
+  // Set asset as key photo for album via API
   const handleSetAsKeyPhoto = async (asset: NonNullable<Album['album_assets']>[0]) => {
     if (!selectedAlbum) return;
 
     try {
-      // Store the asset_id as the key photo reference
-      const { error } = await supabase
-        .from('albums')
-        .update({
-          keyphoto: asset.asset_id,
-        })
-        .eq('id', selectedAlbum.id)
-        .eq('user_id', user!.id);
+      const result = await adminApi.updateAlbum({
+        album_id: selectedAlbum.id,
+        keyphoto: asset.asset_id,
+      });
 
-      if (error) throw error;
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to set key photo');
+      }
 
       // Update local state
       setSelectedAlbum(prev => {

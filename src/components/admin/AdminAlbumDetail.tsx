@@ -564,10 +564,8 @@ export const AdminAlbumDetail: React.FC = () => {
 
   const handleRemoveShare = async (shareId: string) => {
     if (!confirm('Remove this share?')) return;
+    if (!album) return;
     try {
-      const { data: shareData } = await supabase.from('album_shares').select('circle_id').eq('id', shareId).single();
-      if (!shareData || !album) return;
-
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 

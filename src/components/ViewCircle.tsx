@@ -39,40 +39,34 @@ export const ViewCircle: React.FC = () => {
   const [userCircles, setUserCircles] = useState<UserCircle[]>([]);
   const [loadingCircles, setLoadingCircles] = useState(false);
 
-  const fetchUserCircles = async (userId: string) => {
+  const fetchUserCircles = async (_userId: string) => {
     try {
       setLoadingCircles(true);
-      const { data: circlesData, error: circlesError } = await supabase
-        .from('circle_users')
-        .select(`
-          id,
-          circle_id,
-          role,
-          status,
-          circles (
-            id,
-            name,
-            description
-          )
-        `)
-        .eq('user_id', userId)
-        .eq('status', 'accepted');
-
-      if (circlesError) {
-        console.error('Error fetching user circles:', circlesError);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        console.error('No session for fetching circles');
         return;
       }
 
-      if (circlesData) {
-        const circles = circlesData.map((c: any) => ({
-          id: c.id,
-          circle_id: c.circle_id,
-          role: c.role,
-          status: c.status,
-          circle: c.circles,
-        }));
-        setUserCircles(circles);
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/view-circle-api?action=my_circles`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        console.error('Error fetching user circles:', data.error);
+        return;
       }
+
+      setUserCircles(data.circles || []);
     } catch (err) {
       console.error('Error fetching user circles:', err);
     } finally {
@@ -105,30 +99,26 @@ export const ViewCircle: React.FC = () => {
         return;
       }
 
-      const { data: inviteData, error: inviteError } = await supabase
-        .from('circle_users')
-        .select(`
-          id,
-          circle_id,
-          email,
-          role,
-          status,
-          user_id,
-          circles (
-            id,
-            name,
-            description
-          )
-        `)
-        .eq('id', inviteId)
-        .single();
+      // Fetch invite via API
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/view-circle-api?invite_id=${inviteId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+        }
+      );
 
-      if (inviteError) {
-        console.error('Invite error:', inviteError);
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        console.error('Invite error:', data.error);
         setError('Invalid or expired invitation');
         return;
       }
 
+      const inviteData = data.invite;
       if (!inviteData) {
         setError('Invitation not found');
         return;

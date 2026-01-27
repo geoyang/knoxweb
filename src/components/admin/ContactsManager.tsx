@@ -157,26 +157,33 @@ export const ContactsManager: React.FC = () => {
     }
   };
 
-  // Load friend IDs from the friendships table
-  const loadFriendIds = async (contactsList: Contact[]) => {
+  // Load friend IDs via friends-api
+  const loadFriendIds = async (_contactsList: Contact[]) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
 
-      // Get all friendships for the current user
-      const { data: friendships, error } = await supabase
-        .from('friendships')
-        .select('friend_id')
-        .eq('user_id', user.id);
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/friends-api?action=list`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+        }
+      );
 
-      if (error) {
-        console.error('Error loading friendships:', error);
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        console.error('Error loading friendships:', data.error);
         return;
       }
 
-      // Create a Set of friend IDs
+      // Create a Set of friend IDs from the friends list
       const friendIdSet = new Set<string>(
-        (friendships || []).map((f: { friend_id: string }) => f.friend_id)
+        (data.friends || []).map((f: { friend: { id: string } }) => f.friend?.id).filter(Boolean)
       );
       setFriendIds(friendIdSet);
     } catch (err) {

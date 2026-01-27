@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { addPhotosToAlbum } from '../../services/albumsApi';
+import { adminApi } from '../../services/adminApi';
 
 interface Asset {
   id: string;
@@ -52,25 +53,43 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
       setLoading(true);
       setError(null);
 
-      // Get all assets owned by the user from the assets table
-      const { data: assetsData, error: assetsError } = await supabase
-        .from('assets')
-        .select('id, path, thumbnail, web_uri, media_type, created_at, user_id')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false });
+      // Get all assets via admin-images-api
+      const imagesResult = await adminApi.getImages('all', 'date_added');
+      if (!imagesResult.success || !imagesResult.data) {
+        throw new Error(imagesResult.error || 'Failed to load images');
+      }
 
-      if (assetsError) throw assetsError;
-
-      const assets = assetsData || [];
+      // Map API response to Asset interface
+      const assets: Asset[] = (imagesResult.data.assets || []).map((a: any) => ({
+        id: a.id,
+        path: a.path,
+        thumbnail: a.thumbnail,
+        web_uri: a.web_uri,
+        media_type: a.media_type,
+        created_at: a.created_at,
+        user_id: a.user_id,
+      }));
       setAllAssets(assets);
 
-      // Get asset IDs already in the target album
-      const { data: existingAssets } = await supabase
-        .from('album_assets')
-        .select('asset_id')
-        .eq('album_id', targetAlbumId);
+      // Get album details to find assets already in the target album
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
 
-      const existingAssetIds = new Set((existingAssets || []).map(a => a.asset_id));
+      const albumResponse = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?album_id=${targetAlbumId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+        }
+      );
+      const albumData = await albumResponse.json();
+      const existingAssetIds = new Set(
+        (albumData.album?.album_assets || []).map((a: any) => a.asset_id)
+      );
 
       // Filter out assets that are already in the target album
       const available = assets.filter(asset => !existingAssetIds.has(asset.id));

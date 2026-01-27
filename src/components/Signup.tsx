@@ -52,44 +52,33 @@ export const Signup: React.FC = () => {
 
   const loadInviteDetails = async () => {
     try {
-      // Try to fetch invite details - this may be blocked by RLS for anonymous users
-      // We'll just show a generic message if we can't load details
-      const { data, error } = await supabase
-        .from('circle_users')
-        .select(`
-          email,
-          role,
-          circle_id
-        `)
-        .eq('id', inviteId)
-        .single();
-
-      if (!error && data) {
-        // Try to get circle name
-        let circleName = 'a photo circle';
-        if (data.circle_id) {
-          const { data: circleData } = await supabase
-            .from('circles')
-            .select('name')
-            .eq('id', data.circle_id)
-            .single();
-          if (circleData?.name) {
-            circleName = circleData.name;
-          }
+      // Fetch invite details via API (doesn't require auth)
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/view-circle-api?invite_id=${inviteId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
         }
+      );
 
+      const data = await response.json();
+      if (response.ok && data.success && data.invite) {
+        const invite = data.invite;
         setInviteDetails({
-          circleName,
-          role: data.role,
-          inviterName: 'Someone',
+          circleName: invite.circles?.name || 'a photo circle',
+          role: invite.role,
+          inviterName: invite.circles?.profiles?.full_name || 'Someone',
         });
         // Pre-fill email if available from invite (and not already set from URL)
-        if (data.email && !email) {
-          setEmail(data.email);
+        if (invite.email && !email) {
+          setEmail(invite.email);
         }
       } else {
-        // RLS blocked access - that's OK, we'll show generic invitation message
-        console.log('Could not load invite details (RLS), proceeding with generic signup');
+        // API returned error - show generic invitation message
+        console.log('Could not load invite details, proceeding with generic signup');
       }
     } catch (err) {
       console.log('Could not load invite details:', err);
