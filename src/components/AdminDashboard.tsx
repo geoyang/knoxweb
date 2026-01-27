@@ -120,6 +120,17 @@ export const AdminDashboard: React.FC = () => {
           chatApi.getConversations(),
         ]);
 
+        // Debug logging for counts
+        console.log('Count API responses:', {
+          albums: albumsRes,
+          images: imagesRes,
+          circles: circlesRes,
+          invitations: invitationsRes,
+          folders: foldersRes,
+          contacts: contactsRes,
+          chats: chatRes,
+        });
+
         setCounts({
           albums: albumsRes.success && albumsRes.data ? albumsRes.data.count || albumsRes.data.albums?.length || 0 : 0,
           media: imagesRes.success && imagesRes.data ? imagesRes.data.count || imagesRes.data.assets?.length || 0 : 0,

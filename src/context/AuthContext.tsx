@@ -48,13 +48,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Ref to track current profile ID for closure access in callbacks
   const userProfileRef = useRef<string | null>(null);
 
-  const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
+  const fetchUserProfile = async (userId: string): Promise<{ profile: UserProfile | null; isSuperAdmin: boolean }> => {
     try {
       // Get auth headers for API call
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       if (!currentSession?.access_token) {
         console.warn('No session for profile fetch');
-        return { id: userId, full_name: null, email: null, avatar_url: null };
+        return { profile: { id: userId, full_name: null, email: null, avatar_url: null }, isSuperAdmin: false };
       }
 
       // Fetch profile via API with timeout
@@ -79,45 +79,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const data = await response.json();
       if (!response.ok || !data.success) {
         console.warn('Error fetching user profile via API:', data.error);
-        return { id: userId, full_name: null, email: null, avatar_url: null };
+        return { profile: { id: userId, full_name: null, email: null, avatar_url: null }, isSuperAdmin: false };
       }
 
-      return data.profile;
+      return { profile: data.profile, isSuperAdmin: data.isSuperAdmin === true };
     } catch (err) {
       console.warn('Profile fetch timeout or error (using defaults):', err);
-      return { id: userId, full_name: null, email: null, avatar_url: null };
-    }
-  };
-
-  const fetchSuperAdminStatus = async (userId: string): Promise<boolean> => {
-    // Skip super admin check on subscription page - not needed there
-    if (window.location.pathname === '/subscription') {
-      console.log('Skipping super admin check on subscription page');
-      return false;
-    }
-
-    try {
-      console.log('Fetching super admin status for user:', userId);
-      // Call the RPC function with timeout to prevent hanging
-      const result = await Promise.race([
-        supabase.rpc('is_current_user_superadmin'),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Super admin check timeout')), 5000)
-        )
-      ]) as any;
-
-      const { data, error } = result;
-
-      if (error) {
-        console.error('Error checking super admin status:', error);
-        return false;
-      }
-
-      console.log('Super admin status from RPC:', data);
-      return data === true;
-    } catch (err) {
-      console.error('Error fetching super admin status:', err);
-      return false;
+      return { profile: { id: userId, full_name: null, email: null, avatar_url: null }, isSuperAdmin: false };
     }
   };
 
@@ -196,12 +164,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (session?.user) {
         console.log('Fetching profile for user:', session.user.id);
         console.log('User object:', session.user);
-        
+
         try {
-          const [profile, superAdminStatus] = await Promise.all([
-            fetchUserProfile(session.user.id),
-            fetchSuperAdminStatus(session.user.id)
-          ]);
+          const { profile, isSuperAdmin: superAdminStatus } = await fetchUserProfile(session.user.id);
 
           console.log('Profile fetched:', profile);
           console.log('Super admin status:', superAdminStatus);
@@ -269,16 +234,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
             if (shouldSkipProfileFetch) {
               console.log('Profile already loaded for user, skipping fetch:', session.user.id);
-              // Still fetch super admin status
-              const superAdminStatus = await fetchSuperAdminStatus(session.user.id);
+              // Fetch profile anyway to get super admin status (it's included in the response now)
+              const { isSuperAdmin: superAdminStatus } = await fetchUserProfile(session.user.id);
               setIsSuperAdmin(superAdminStatus);
             } else {
               console.log('Fetching profile for user on auth change:', session.user.id);
 
-              const [profile, superAdminStatus] = await Promise.all([
-                fetchUserProfile(session.user.id),
-                fetchSuperAdminStatus(session.user.id)
-              ]);
+              const { profile, isSuperAdmin: superAdminStatus } = await fetchUserProfile(session.user.id);
 
               console.log('Profile fetched on auth change:', profile);
               console.log('Super admin status on auth change:', superAdminStatus);
