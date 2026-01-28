@@ -131,7 +131,7 @@ export const ChatManager: React.FC = () => {
         ));
       }
     }
-  }, [user]);
+  }, [user?.id]);
 
   // Fetch messages for selected conversation (initial load)
   const fetchMessages = useCallback(async (conversationId: string) => {

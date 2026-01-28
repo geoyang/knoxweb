@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, getAccessToken } from '../lib/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://quqlovduekdasldqadge.supabase.co';
 const ALBUMS_API_URL = `${SUPABASE_URL}/functions/v1/admin-albums-api`;
@@ -52,18 +52,18 @@ interface RemovePhotoParams {
  * Add photos to an album via edge function
  */
 export async function addPhotosToAlbum({ albumId, assets }: AddPhotosParams): Promise<{ success: boolean; added: number }> {
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  const accessToken = getAccessToken();
 
-  if (sessionError || !session?.access_token) {
+  if (!accessToken) {
     throw new Error('User not authenticated');
   }
 
   const response = await fetch(`${ALBUMS_API_URL}?album_id=${albumId}`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${session.access_token}`,
+      'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      'apikey': session.access_token,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
     },
     body: JSON.stringify({ assets }),
   });
@@ -81,18 +81,18 @@ export async function addPhotosToAlbum({ albumId, assets }: AddPhotosParams): Pr
  * Remove a photo from an album via edge function
  */
 export async function removePhotoFromAlbum({ albumId, assetId }: RemovePhotoParams): Promise<boolean> {
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  const accessToken = getAccessToken();
 
-  if (sessionError || !session?.access_token) {
+  if (!accessToken) {
     throw new Error('User not authenticated');
   }
 
   const response = await fetch(`${ALBUMS_API_URL}?action=remove_photo`, {
     method: 'DELETE',
     headers: {
-      'Authorization': `Bearer ${session.access_token}`,
+      'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      'apikey': session.access_token,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
     },
     body: JSON.stringify({
       album_id: albumId,
@@ -114,18 +114,18 @@ export async function removePhotoFromAlbum({ albumId, assetId }: RemovePhotoPara
  * This ensures consistent asset creation between web and mobile apps
  */
 export async function createAssetInLibrary(assetData: AssetData): Promise<{ success: boolean; id: string }> {
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  const accessToken = getAccessToken();
 
-  if (sessionError || !session?.access_token) {
+  if (!accessToken) {
     throw new Error('User not authenticated');
   }
 
   const response = await fetch(IMAGES_API_URL, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${session.access_token}`,
+      'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      'apikey': session.access_token,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
     },
     body: JSON.stringify(assetData),
   });
@@ -133,7 +133,9 @@ export async function createAssetInLibrary(assetData: AssetData): Promise<{ succ
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error || 'Failed to create asset');
+    const errorMessage = data.details ? `${data.error}: ${data.details}` : data.error || 'Failed to create asset';
+    console.error('createAssetInLibrary error response:', data);
+    throw new Error(errorMessage);
   }
 
   return { success: true, id: data.id };

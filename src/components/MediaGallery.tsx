@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { adminApi } from '../services/adminApi';
 import { VideoPlayer } from './VideoPlayer';
+import { ImageUploader } from './admin/ImageUploader';
 
 type SortOption = 'date_added' | 'created_at' | 'type' | 'filename';
 type ViewMode = 'grid' | 'list';
@@ -37,6 +38,7 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect }) => 
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const [stats, setStats] = useState<{ total: number; photos: number; videos: number } | null>(null);
+  const [showUploader, setShowUploader] = useState(false);
 
   useEffect(() => {
     loadAssets();
@@ -207,6 +209,18 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect }) => 
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Upload Button */}
+            <button
+              onClick={() => setShowUploader(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              title="Upload media"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Upload
+            </button>
+
             {/* Search Toggle */}
             <button
               onClick={() => setShowSearch(!showSearch)}
@@ -540,6 +554,18 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect }) => 
           onDelete={() => {
             handleDelete([selectedAsset.id]);
             setSelectedAsset(null);
+          }}
+        />
+      )}
+
+      {/* Upload Modal */}
+      {showUploader && (
+        <ImageUploader
+          onClose={() => setShowUploader(false)}
+          onImagesUploaded={(count) => {
+            if (count > 0) {
+              loadAssets();
+            }
           }}
         />
       )}

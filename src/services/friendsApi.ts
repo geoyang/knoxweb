@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, getAccessToken } from '../lib/supabase';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -43,9 +43,9 @@ export interface FriendRequest {
 class FriendsApiService {
   private async getAuthHeaders(): Promise<{ Authorization: string } | null> {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error || !session?.access_token) return null;
-      return { 'Authorization': `Bearer ${session.access_token}` };
+      const accessToken = getAccessToken();
+      if (!accessToken) return null;
+      return { 'Authorization': `Bearer ${accessToken}` };
     } catch {
       return null;
     }

@@ -1,0 +1,411 @@
+/**
+ * TagSyncPreviewTab Component
+ * Preview and apply manual face tag to AI detection matching
+ */
+
+import React, { useState, useCallback, useRef } from 'react';
+import { aiApi } from '../../../services/aiApi';
+
+interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface ManualTag {
+  tag_id: string;
+  contact_id: string;
+  contact_name?: string;
+  bounding_box: BoundingBox;
+}
+
+interface AIDetection {
+  face_id: string;
+  bounding_box: BoundingBox;
+  cluster_id?: string;
+  thumbnail_url?: string;
+}
+
+interface TagMatch {
+  manual_tag_id: string;
+  ai_face_id: string;
+  iou_score: number;
+  status: 'matched' | 'low_confidence' | 'no_match';
+}
+
+interface AssetPreview {
+  asset_id: string;
+  thumbnail_url?: string;
+  image_width?: number;
+  image_height?: number;
+  metadata?: any;
+  manual_tags: ManualTag[];
+  ai_detections: AIDetection[];
+  matches: TagMatch[];
+}
+
+interface Summary {
+  total_assets: number;
+  total_manual_tags: number;
+  total_ai_faces: number;
+  matched: number;
+  unmatched_manual: number;
+  unmatched_ai: number;
+}
+
+export const TagSyncPreviewTab: React.FC = () => {
+  const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [assets, setAssets] = useState<AssetPreview[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [iouThreshold, setIouThreshold] = useState(0.3);
+  const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
+  const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
+  const [renderedSizes, setRenderedSizes] = useState<Record<string, { naturalWidth: number; naturalHeight: number; displayWidth: number; displayHeight: number }>>({});
+
+  // Helper to calculate position in 0-100 range for SVG viewBox
+  // Manual tags use normalized 0-1 values, AI detections may use pixels
+  const getBboxCoord = (value: number, dimension: number | undefined, isNormalized: boolean): number => {
+    if (isNormalized) {
+      // Already 0-1 range, just multiply by 100
+      return value * 100;
+    }
+    // Pixel values - divide by dimension
+    if (!dimension || dimension === 0) return 0;
+    return (value / dimension) * 100;
+  };
+
+  // Check if bounding box values are normalized (0-1) or pixel values
+  const isNormalizedBbox = (bbox: BoundingBox): boolean => {
+    return bbox.x <= 1 && bbox.y <= 1 && bbox.width <= 1 && bbox.height <= 1;
+  };
+
+  const loadPreview = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await aiApi.previewTagSync({ iou_threshold: iouThreshold, limit: 50 });
+      if (result.success && result.data) {
+        setAssets(result.data.assets);
+        setSummary(result.data.summary);
+        const initialSelected = new Set<string>();
+        result.data.assets.forEach(asset => {
+          asset.matches.forEach(match => {
+            if (match.status === 'matched') {
+              initialSelected.add(`${match.manual_tag_id}:${match.ai_face_id}`);
+            }
+          });
+        });
+        setSelectedMatches(initialSelected);
+      } else {
+        setError(result.error || 'Failed to load preview');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load preview');
+    } finally {
+      setLoading(false);
+    }
+  }, [iouThreshold]);
+
+  const toggleMatch = (manualTagId: string, aiFaceId: string) => {
+    const key = `${manualTagId}:${aiFaceId}`;
+    setSelectedMatches(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const applyMatches = async () => {
+    const matches = Array.from(selectedMatches).map(key => {
+      const [manual_tag_id, ai_face_id] = key.split(':');
+      return { manual_tag_id, ai_face_id };
+    });
+
+    if (matches.length === 0) {
+      setError('No matches selected');
+      return;
+    }
+
+    try {
+      setApplying(true);
+      setError(null);
+      const result = await aiApi.applyTagSync(matches);
+      if (result.success && result.data) {
+        alert(`Applied ${result.data.applied} matches successfully!`);
+        loadPreview();
+      } else {
+        setError(result.error || 'Failed to apply matches');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to apply matches');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const getMatchStatus = (match: TagMatch): string => {
+    const key = `${match.manual_tag_id}:${match.ai_face_id}`;
+    const isSelected = selectedMatches.has(key);
+    if (match.status === 'matched' && isSelected) return 'selected-match';
+    if (match.status === 'matched' && !isSelected) return 'deselected-match';
+    if (match.status === 'low_confidence' && isSelected) return 'selected-low';
+    if (match.status === 'low_confidence' && !isSelected) return 'unselected-low';
+    return 'no-match';
+  };
+
+  return (
+    <div className="tag-sync-preview-tab">
+      <div className="section-header">
+        <h3>Tag Sync Preview</h3>
+        <p className="section-description">
+          Compare manual face tags from the mobile app with AI detections.
+          Review matches and apply confirmed ones to train clustering.
+        </p>
+      </div>
+
+      <div className="controls-row">
+        <div className="threshold-control">
+          <label>IoU Threshold:</label>
+          <input
+            type="range"
+            min="0.1"
+            max="0.9"
+            step="0.1"
+            value={iouThreshold}
+            onChange={(e) => setIouThreshold(parseFloat(e.target.value))}
+          />
+          <span>{iouThreshold.toFixed(1)}</span>
+        </div>
+        <label className="debug-toggle">
+          <input
+            type="checkbox"
+            checked={showDebug}
+            onChange={(e) => setShowDebug(e.target.checked)}
+          />
+          Show Debug Info
+        </label>
+        <button
+          className="btn btn-primary"
+          onClick={loadPreview}
+          disabled={loading}
+        >
+          {loading ? 'Loading...' : 'Load Preview'}
+        </button>
+      </div>
+
+      {error && <div className="error-message">{error}</div>}
+
+      {summary && (
+        <div className="summary-cards">
+          <div className="summary-card">
+            <span className="summary-value">{summary.total_assets}</span>
+            <span className="summary-label">Assets</span>
+          </div>
+          <div className="summary-card">
+            <span className="summary-value">{summary.total_manual_tags}</span>
+            <span className="summary-label">Manual Tags</span>
+          </div>
+          <div className="summary-card">
+            <span className="summary-value">{summary.total_ai_faces}</span>
+            <span className="summary-label">AI Detections</span>
+          </div>
+          <div className="summary-card success">
+            <span className="summary-value">{summary.matched}</span>
+            <span className="summary-label">Matched</span>
+          </div>
+          <div className="summary-card warning">
+            <span className="summary-value">{summary.unmatched_manual}</span>
+            <span className="summary-label">Unmatched Tags</span>
+          </div>
+          <div className="summary-card info">
+            <span className="summary-value">{summary.unmatched_ai}</span>
+            <span className="summary-label">Unmatched AI</span>
+          </div>
+        </div>
+      )}
+
+      {assets.length > 0 && (
+        <>
+          <div className="apply-section">
+            <span>{selectedMatches.size} matches selected</span>
+            <button
+              className="btn btn-success"
+              onClick={applyMatches}
+              disabled={applying || selectedMatches.size === 0}
+            >
+              {applying ? 'Applying...' : `Apply ${selectedMatches.size} Matches`}
+            </button>
+          </div>
+
+          <div className="assets-grid">
+            {assets.map((asset, index) => (
+              <div
+                key={asset.asset_id}
+                className={`asset-preview-card ${expandedAsset === asset.asset_id ? 'expanded' : ''}`}
+                onClick={() => setExpandedAsset(expandedAsset === asset.asset_id ? null : asset.asset_id)}
+              >
+                <div className="asset-image-container">
+                  {asset.thumbnail_url ? (
+                    <img
+                      src={asset.thumbnail_url}
+                      alt="Asset"
+                      className="asset-thumbnail"
+                      onLoad={(e) => {
+                        const img = e.target as HTMLImageElement;
+                        setRenderedSizes(prev => ({
+                          ...prev,
+                          [asset.asset_id]: {
+                            naturalWidth: img.naturalWidth,
+                            naturalHeight: img.naturalHeight,
+                            displayWidth: img.clientWidth,
+                            displayHeight: img.clientHeight
+                          }
+                        }));
+                      }}
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        target.nextElementSibling?.classList.add('visible');
+                      }}
+                    />
+                  ) : null}
+                  <div className={`no-thumbnail ${!asset.thumbnail_url ? 'visible' : ''}`}>
+                    No Image
+                    {showDebug && <span className="debug-url">{asset.thumbnail_url || 'null'}</span>}
+                  </div>
+                  <svg className="bbox-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    {asset.manual_tags.map(tag => {
+                      const isNorm = isNormalizedBbox(tag.bounding_box);
+                      return (
+                        <g key={tag.tag_id}>
+                          <rect
+                            x={getBboxCoord(tag.bounding_box.x, asset.image_width, isNorm)}
+                            y={getBboxCoord(tag.bounding_box.y, asset.image_height, isNorm)}
+                            width={getBboxCoord(tag.bounding_box.width, asset.image_width, isNorm)}
+                            height={getBboxCoord(tag.bounding_box.height, asset.image_height, isNorm)}
+                            fill="none"
+                            stroke="#22c55e"
+                            strokeWidth="1"
+                          />
+                          <text
+                            x={getBboxCoord(tag.bounding_box.x, asset.image_width, isNorm)}
+                            y={Math.max(2, getBboxCoord(tag.bounding_box.y, asset.image_height, isNorm) - 1)}
+                            fill="#22c55e"
+                            fontSize="3"
+                            fontWeight="bold"
+                            style={{ textShadow: '0 0 2px white' }}
+                          >
+                            {tag.contact_name || 'Unknown'}
+                          </text>
+                        </g>
+                      );
+                    })}
+                    {asset.ai_detections.map(det => {
+                      const isNorm = isNormalizedBbox(det.bounding_box);
+                      return (
+                        <rect
+                          key={det.face_id}
+                          x={getBboxCoord(det.bounding_box.x, asset.image_width, isNorm)}
+                          y={getBboxCoord(det.bounding_box.y, asset.image_height, isNorm)}
+                          width={getBboxCoord(det.bounding_box.width, asset.image_width, isNorm)}
+                          height={getBboxCoord(det.bounding_box.height, asset.image_height, isNorm)}
+                          fill="none"
+                          stroke="#3b82f6"
+                          strokeWidth="1"
+                          strokeDasharray="2 1"
+                        />
+                      );
+                    })}
+                  </svg>
+                </div>
+                <div className="asset-info">
+                  <span className="tag-count" style={{ background: '#1f2937', color: 'white' }}>#{index}</span>
+                  <span className="tag-count green">{asset.manual_tags.length} tags</span>
+                  <span className="tag-count blue">{asset.ai_detections.length} AI</span>
+                  <span className="tag-count">{asset.matches.filter(m => m.status === 'matched').length} matches</span>
+                </div>
+                {showDebug && (
+                  <div className="debug-info" onClick={e => e.stopPropagation()}>
+                    <div className="debug-dimensions">
+                      <strong>DB Dimensions:</strong> {asset.image_width ?? 'null'} x {asset.image_height ?? 'null'}
+                      {' | '}
+                      <strong>Actual Image:</strong> {renderedSizes[asset.asset_id]?.naturalWidth ?? '?'} x {renderedSizes[asset.asset_id]?.naturalHeight ?? '?'}
+                    </div>
+                    <div className="debug-boxes">
+                      <strong>Manual Tags ({asset.manual_tags.length}):</strong>
+                      {asset.manual_tags.map(tag => {
+                        const isNorm = tag.bounding_box ? isNormalizedBbox(tag.bounding_box) : false;
+                        return (
+                          <div key={tag.tag_id} className="debug-box-item">
+                            {tag.contact_name}: x={tag.bounding_box?.x?.toFixed(3) ?? 'null'}, y={tag.bounding_box?.y?.toFixed(3) ?? 'null'},
+                            w={tag.bounding_box?.width?.toFixed(3) ?? 'null'}, h={tag.bounding_box?.height?.toFixed(3) ?? 'null'}
+                            <span style={{color: '#059669'}}> [{isNorm ? 'normalized' : 'pixels'}] → {getBboxCoord(tag.bounding_box?.x || 0, asset.image_width, isNorm).toFixed(1)}%, {getBboxCoord(tag.bounding_box?.y || 0, asset.image_height, isNorm).toFixed(1)}%</span>
+                          </div>
+                        );
+                      })}
+                      <strong>AI Detections ({asset.ai_detections.length}):</strong>
+                      {asset.ai_detections.map(det => {
+                        const isNorm = det.bounding_box ? isNormalizedBbox(det.bounding_box) : false;
+                        return (
+                          <div key={det.face_id} className="debug-box-item">
+                            face: x={det.bounding_box?.x?.toFixed(3) ?? 'null'}, y={det.bounding_box?.y?.toFixed(3) ?? 'null'},
+                            w={det.bounding_box?.width?.toFixed(3) ?? 'null'}, h={det.bounding_box?.height?.toFixed(3) ?? 'null'}
+                            <span style={{color: '#3b82f6'}}> [{isNorm ? 'normalized' : 'pixels'}] → {getBboxCoord(det.bounding_box?.x || 0, asset.image_width, isNorm).toFixed(1)}%, {getBboxCoord(det.bounding_box?.y || 0, asset.image_height, isNorm).toFixed(1)}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {expandedAsset === asset.asset_id && (
+                  <div className="matches-list" onClick={e => e.stopPropagation()}>
+                    <h4>Matches</h4>
+                    {asset.matches.length === 0 ? (
+                      <p className="no-matches">No matches found</p>
+                    ) : (
+                      asset.matches.map(match => {
+                        const manualTag = asset.manual_tags.find(t => t.tag_id === match.manual_tag_id);
+                        const aiDet = asset.ai_detections.find(d => d.face_id === match.ai_face_id);
+                        return (
+                          <div
+                            key={`${match.manual_tag_id}-${match.ai_face_id}`}
+                            className={`match-item ${getMatchStatus(match)}`}
+                            onClick={() => toggleMatch(match.manual_tag_id, match.ai_face_id)}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedMatches.has(`${match.manual_tag_id}:${match.ai_face_id}`)}
+                              onChange={() => {}}
+                            />
+                            <span className="contact-name">{manualTag?.contact_name || 'Unknown'}</span>
+                            <span className="iou-score">IoU: {(match.iou_score * 100).toFixed(0)}%</span>
+                            {aiDet?.thumbnail_url && (
+                              <img src={aiDet.thumbnail_url} alt="Face" className="face-thumb" />
+                            )}
+                            <span className={`status-badge ${match.status}`}>{match.status}</span>
+                          </div>
+                        );
+                      })
+                    )}
+                    <div className="legend">
+                      <span className="legend-item"><span className="box green"></span> Manual Tag</span>
+                      <span className="legend-item"><span className="box blue dashed"></span> AI Detection</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};

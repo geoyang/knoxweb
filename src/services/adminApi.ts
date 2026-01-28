@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, getAccessToken } from '../lib/supabase';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -9,22 +9,15 @@ interface ApiResponse<T = any> {
 }
 
 class AdminApiService {
-  private async getAuthHeaders(): Promise<{ Authorization: string } | null> {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error || !session?.access_token) {
-        console.error('No valid session for API call:', error);
-        return null;
-      }
-
-      return {
-        'Authorization': `Bearer ${session.access_token}`,
-      };
-    } catch (error) {
-      console.error('Error getting auth headers:', error);
+  private getAuthHeaders(): { Authorization: string } | null {
+    const accessToken = getAccessToken();
+    if (!accessToken) {
+      console.error('No valid session for API call');
       return null;
     }
+    return {
+      'Authorization': `Bearer ${accessToken}`,
+    };
   }
 
   private async makeApiCall<T>(
@@ -32,7 +25,7 @@ class AdminApiService {
     options: { body?: any; headers?: Record<string, string>; method?: string } = {}
   ): Promise<ApiResponse<T>> {
     try {
-      const authHeaders = await this.getAuthHeaders();
+      const authHeaders = this.getAuthHeaders();
 
       if (!authHeaders) {
         return {

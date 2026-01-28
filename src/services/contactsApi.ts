@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, getAccessToken } from '../lib/supabase';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -90,15 +90,15 @@ export const RELATIONSHIP_COLORS: Record<string, string> = {
 class ContactsApiService {
   private async getAuthHeaders(): Promise<{ Authorization: string; apikey: string } | null> {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const accessToken = getAccessToken();
 
-      if (error || !session?.access_token) {
+      if (!accessToken) {
         console.error('No valid session for API call:', error);
         return null;
       }
 
       return {
-        'Authorization': `Bearer ${session.access_token}`,
+        'Authorization': `Bearer ${accessToken}`,
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
       };
     } catch (error) {

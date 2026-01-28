@@ -17,6 +17,25 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
+/**
+ * Get the access token from localStorage without calling getSession().
+ * This is faster and avoids timeout issues with the Supabase auth API.
+ */
+export function getAccessToken(): string | null {
+  try {
+    const projectRef = supabaseUrl.split('//')[1]?.split('.')[0];
+    const storageKey = `sb-${projectRef}-auth-token`;
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed?.access_token || null;
+    }
+  } catch {
+    // Fall back to null if parsing fails
+  }
+  return null;
+}
+
 export type Database = {
   public: {
     Tables: {

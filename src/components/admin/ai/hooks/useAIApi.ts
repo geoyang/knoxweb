@@ -26,7 +26,9 @@ export function useAIApi(): UseAIApiReturn {
     try {
       setLoading(true);
       setError(null);
+      console.log('[AI API] Checking health...');
       const result = await aiApi.healthCheck();
+      console.log('[AI API] Health check result:', result);
 
       if (result.success && result.data) {
         setConnected(true);
@@ -34,8 +36,10 @@ export function useAIApi(): UseAIApiReturn {
       } else {
         setConnected(false);
         setError(result.error || 'Failed to connect');
+        console.warn('[AI API] Health check failed:', result.error);
       }
     } catch (err) {
+      console.error('[AI API] Health check exception:', err);
       setConnected(false);
       setError(err instanceof Error ? err.message : 'Connection failed');
     } finally {

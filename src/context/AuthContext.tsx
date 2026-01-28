@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, getAccessToken } from '../lib/supabase';
 import { TokenManager } from '../utils/tokenManager';
 
 interface UserProfile {
@@ -50,10 +50,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchUserProfile = async (userId: string): Promise<{ profile: UserProfile | null; isSuperAdmin: boolean }> => {
     try {
-      // Get auth headers for API call
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      if (!currentSession?.access_token) {
-        console.warn('No session for profile fetch');
+      // Get auth token from localStorage (fast, no network call)
+      const accessToken = getAccessToken();
+      if (!accessToken) {
+        console.warn('No access token for profile fetch');
         return { profile: { id: userId, full_name: null, email: null, avatar_url: null }, isSuperAdmin: false };
       }
 
@@ -66,7 +66,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${currentSession.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
             'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
@@ -127,85 +127,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return;
     }
     
-    // Try to get session with graceful fallback
+    // Try to get session from localStorage directly (faster than API call)
     const initializeAuth = async () => {
       try {
-        const sessionResult = await Promise.race([
-        supabase.auth.getSession(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('getSession timeout')), 8000)
-        )
-      ]) as any;
-      
-      const { data: { session }, error } = sessionResult;
-      console.log('getSession result:', { session: !!session, error });
-      
-      if (error) {
-        console.error('getSession error:', error);
-        // Don't throw, just treat as no session
-        console.warn('Treating getSession error as no session');
+        // Check if we have a stored token
+        const storedToken = getAccessToken();
+        if (storedToken) {
+          console.log('Found stored auth token, checking validity...');
+          // Try to get the user with the token - this validates it
+          const { data: { user }, error } = await supabase.auth.getUser();
+
+          if (error || !user) {
+            console.log('Stored token is invalid or expired, clearing...');
+            // Token is invalid - clear it and set no session
+            clearTimeout(loadingTimeout);
+            setSession(null);
+            setUser(null);
+            setUserProfile(null);
+            setIsSuperAdmin(false);
+            setLoading(false);
+            return;
+          }
+
+          // Token is valid - onAuthStateChange should handle it
+          console.log('Token is valid, waiting for onAuthStateChange...');
+          hasReceivedSession = true;
+          return;
+        }
+
+        // No stored token - user is not logged in
+        console.log('No stored auth token found');
         clearTimeout(loadingTimeout);
         setSession(null);
         setUser(null);
         setUserProfile(null);
         setIsSuperAdmin(false);
         setLoading(false);
-        return;
+      } catch (err) {
+        console.error('Error in initializeAuth:', err);
+        clearTimeout(loadingTimeout);
+        setLoading(false);
       }
-      
-      clearTimeout(loadingTimeout);
-      console.log('Auth session loaded:', !!session);
-      if (session) {
-        hasReceivedSession = true;
-      }
-      setSession(session);
-      setUser(session?.user || null);
-    
-      if (session?.user) {
-        console.log('Fetching profile for user:', session.user.id);
-        console.log('User object:', session.user);
-
-        try {
-          const { profile, isSuperAdmin: superAdminStatus } = await fetchUserProfile(session.user.id);
-
-          console.log('Profile fetched:', profile);
-          console.log('Super admin status:', superAdminStatus);
-
-          setUserProfile(profile);
-          userProfileRef.current = profile?.id || null;
-          setIsSuperAdmin(superAdminStatus);
-        } catch (profileErr) {
-          console.warn('Error fetching profile, using defaults:', profileErr);
-          setUserProfile(null);
-          userProfileRef.current = null;
-          setIsSuperAdmin(false);
-        }
-      } else {
-        console.log('No session user, setting profile to null');
-        setUserProfile(null);
-        userProfileRef.current = null;
-        setIsSuperAdmin(false);
-      }
-      
-      console.log('Setting loading to false');
-      setLoading(false);
-      
-    } catch (err) {
-      clearTimeout(loadingTimeout);
-      console.error('Error loading initial session:', err);
-      // Only clear state if we haven't received a valid session from onAuthStateChange
-      if (!hasReceivedSession) {
-        console.warn('Falling back to no session state');
-        setSession(null);
-        setUser(null);
-        setUserProfile(null);
-        userProfileRef.current = null;
-        setIsSuperAdmin(false);
-      } else {
-        console.warn('Session already received via onAuthStateChange, keeping state');
-      }
-      setLoading(false);
-    }
     };
     
     // Initialize auth

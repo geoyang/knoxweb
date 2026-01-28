@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, getAccessToken } from '../lib/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
@@ -126,12 +126,12 @@ export interface DuplicateGroup {
 // Helper
 async function getAuthHeaders(): Promise<Record<string, string> | null> {
   try {
-    const { data: { session }, error } = await supabase.auth.getSession();
-    if (error || !session?.access_token) {
+    const accessToken = getAccessToken();
+    if (!accessToken) {
       return null;
     }
     return {
-      'Authorization': `Bearer ${session.access_token}`,
+      'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
     };

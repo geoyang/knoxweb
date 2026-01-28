@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, getAccessToken } from '../lib/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -90,13 +90,13 @@ export interface ConversationSearchResult {
 }
 
 async function getAuthHeaders(): Promise<Record<string, string> | null> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) {
+  const accessToken = getAccessToken();
+  if (!accessToken) {
     console.error('No valid session for chat API');
     return null;
   }
   return {
-    'Authorization': `Bearer ${session.access_token}`,
+    'Authorization': `Bearer ${accessToken}`,
     'Content-Type': 'application/json',
     'apikey': SUPABASE_ANON_KEY,
   };

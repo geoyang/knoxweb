@@ -9,8 +9,10 @@ import { useAIApi } from './hooks';
 import { SingleImageTab } from './SingleImageTab';
 import { AlbumProcessingTab } from './AlbumProcessingTab';
 import { FaceClustersTab } from './FaceClustersTab';
+import { TagSyncPreviewTab } from './TagSyncPreviewTab';
 import { SearchTab } from './SearchTab';
 import { ActivityDashboardTab } from './ActivityDashboardTab';
+import { UploadQueueTab } from './UploadQueueTab';
 import { ReindexTab } from './ReindexTab';
 import './ai-processing.css';
 
@@ -18,8 +20,10 @@ const TAB_COMPONENTS: Record<TabId, React.FC> = {
   single: SingleImageTab,
   album: AlbumProcessingTab,
   faces: FaceClustersTab,
+  'tag-sync': TagSyncPreviewTab,
   search: SearchTab,
   activity: ActivityDashboardTab,
+  'upload-queue': UploadQueueTab,
   reindex: ReindexTab,
 };
 
@@ -71,7 +75,7 @@ export const AIProcessingManager: React.FC = () => {
 
       {/* Content */}
       <div className="ai-processing__content">
-        {!connected && !loading ? (
+        {!connected && !loading && activeTab !== 'upload-queue' ? (
           <div className="ai-error">
             <strong>AI API not connected</strong>
             <p style={{ marginTop: '0.5rem' }}>

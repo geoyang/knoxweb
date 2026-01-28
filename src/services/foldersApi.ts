@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, getAccessToken } from '../lib/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://quqlovduekdasldqadge.supabase.co';
 const FOLDERS_API_URL = `${SUPABASE_URL}/functions/v1/admin-folders-api`;
@@ -145,14 +145,14 @@ export interface FolderShare {
 
 // Helper to get auth headers
 async function getAuthHeaders(): Promise<HeadersInit> {
-  const { data: { session }, error } = await supabase.auth.getSession();
-  if (error || !session?.access_token) {
+  const accessToken = getAccessToken();
+  if (!accessToken) {
     throw new Error('User not authenticated');
   }
   return {
-    'Authorization': `Bearer ${session.access_token}`,
+    'Authorization': `Bearer ${accessToken}`,
     'Content-Type': 'application/json',
-    'apikey': session.access_token,
+    'apikey': accessToken,
   };
 }
 
@@ -806,7 +806,7 @@ export async function uploadDocumentFile(
   file: File,
   folderId?: string
 ): Promise<{ document: Document }> {
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  const accessToken = getAccessToken();
   if (authError || !session?.user) {
     throw new Error('User not authenticated');
   }

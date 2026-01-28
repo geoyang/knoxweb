@@ -106,12 +106,12 @@ export const AdminDashboard: React.FC = () => {
     };
 
     fetchSubscription();
-  }, [user]);
+  }, [user?.id]);
 
   // Fetch all counts
   useEffect(() => {
     const fetchCounts = async () => {
-      if (!user) return;
+      if (!user?.id) return;
 
       setCountsLoading(true);
       try {
@@ -158,7 +158,7 @@ export const AdminDashboard: React.FC = () => {
     };
 
     fetchCounts();
-  }, [user]);
+  }, [user?.id]);
 
   // Helper to render count or loading spinner
   const renderCount = (count: number) => {
@@ -173,7 +173,7 @@ export const AdminDashboard: React.FC = () => {
   // Fetch unread chat count
   useEffect(() => {
     const fetchUnreadCount = async () => {
-      if (user) {
+      if (user?.id) {
         const count = await chatApi.getTotalUnreadCount();
         setUnreadChatCount(count);
       }
@@ -183,12 +183,12 @@ export const AdminDashboard: React.FC = () => {
     // Refresh every 30 seconds
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user?.id]);
 
   // Fetch unread notification count
   useEffect(() => {
     const fetchNotificationCount = async () => {
-      if (user) {
+      if (user?.id) {
         const count = await notificationsApi.getUnreadCount();
         setUnreadNotificationCount(count);
       }
@@ -198,7 +198,7 @@ export const AdminDashboard: React.FC = () => {
     // Refresh every 30 seconds
     const interval = setInterval(fetchNotificationCount, 30000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user?.id]);
 
   // Global drag-drop for file upload
   useEffect(() => {

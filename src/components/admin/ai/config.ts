@@ -48,8 +48,10 @@ export const AI_CONFIG = {
     { id: 'single', label: 'Single Test', icon: '🖼️' },
     { id: 'album', label: 'Album Processing', icon: '📁' },
     { id: 'faces', label: 'Face Clusters', icon: '👥' },
+    { id: 'tag-sync', label: 'Tag Sync', icon: '🏷️' },
     { id: 'search', label: 'Search Test', icon: '🔍' },
     { id: 'activity', label: 'Activity', icon: '📊' },
+    { id: 'upload-queue', label: 'Upload Queue', icon: '📤' },
     { id: 'reindex', label: 'Reindex', icon: '🔄' },
   ],
 

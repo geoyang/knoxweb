@@ -3,7 +3,7 @@
  * Communicates with Kizu-AI backend for image processing
  */
 
-import { supabase } from '../lib/supabase';
+import { supabase, getAccessToken } from '../lib/supabase';
 import type {
   AIApiResponse,
   AIHealthStatus,
@@ -24,12 +24,12 @@ class AIApiService {
   }
 
   private async getAuthHeaders(): Promise<Record<string, string>> {
-    const { data: { session } } = await supabase.auth.getSession();
+    const accessToken = getAccessToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`;
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
     }
     return headers;
   }
@@ -396,6 +396,64 @@ class AIApiService {
     count: number;
   }>> {
     return this.request('/api/v1/jobs/queue/workers');
+  }
+
+  // Preview manual tag to AI detection matching
+  async previewTagSync(params?: {
+    asset_ids?: string[];
+    iou_threshold?: number;
+    limit?: number;
+  }): Promise<AIApiResponse<{
+    assets: Array<{
+      asset_id: string;
+      thumbnail_url?: string;
+      manual_tags: Array<{
+        tag_id: string;
+        contact_id: string;
+        contact_name?: string;
+        bounding_box: { x: number; y: number; width: number; height: number };
+      }>;
+      ai_detections: Array<{
+        face_id: string;
+        bounding_box: { x: number; y: number; width: number; height: number };
+        cluster_id?: string;
+        thumbnail_url?: string;
+      }>;
+      matches: Array<{
+        manual_tag_id: string;
+        ai_face_id: string;
+        iou_score: number;
+        status: 'matched' | 'low_confidence' | 'no_match';
+      }>;
+    }>;
+    summary: {
+      total_assets: number;
+      total_manual_tags: number;
+      total_ai_faces: number;
+      matched: number;
+      unmatched_manual: number;
+      unmatched_ai: number;
+    };
+  }>> {
+    return this.request('/api/v1/faces/tag-sync/preview', {
+      method: 'POST',
+      body: JSON.stringify(params || {}),
+    });
+  }
+
+  // Apply confirmed tag sync matches
+  async applyTagSync(matches: Array<{
+    manual_tag_id: string;
+    ai_face_id: string;
+  }>): Promise<AIApiResponse<{
+    status: string;
+    applied: number;
+    errors?: string[];
+  }>> {
+    return this.request('/api/v1/faces/tag-sync/apply', {
+      method: 'POST',
+      body: JSON.stringify({ matches, action: 'link' }),
+    });
   }
 }
 

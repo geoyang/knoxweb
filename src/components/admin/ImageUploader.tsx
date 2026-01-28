@@ -896,7 +896,24 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         if (exifMetadata.shutterSpeed) assetData.shutter_speed = exifMetadata.shutterSpeed;
         if (exifMetadata.flash) assetData.flash = exifMetadata.flash;
         if (exifMetadata.whiteBalance) assetData.white_balance = exifMetadata.whiteBalance;
-        if (exifMetadata.rawExif) assetData.metadata = exifMetadata.rawExif;
+        // Sanitize raw EXIF data to avoid Unicode escape issues in PostgreSQL
+        if (exifMetadata.rawExif) {
+          try {
+            // Test that it can be serialized to JSON without issues
+            const sanitized = JSON.parse(JSON.stringify(exifMetadata.rawExif, (key, value) => {
+              // Skip binary data, buffers, and problematic values
+              if (value instanceof ArrayBuffer || value instanceof Uint8Array) return undefined;
+              if (typeof value === 'string') {
+                // Remove null bytes and invalid Unicode escape sequences
+                return value.replace(/\x00/g, '').replace(/\\u0000/g, '');
+              }
+              return value;
+            }));
+            assetData.metadata = sanitized;
+          } catch (e) {
+            console.warn('Could not serialize EXIF metadata, skipping:', e);
+          }
+        }
       }
 
       // Update progress to 75% after uploads

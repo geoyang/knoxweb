@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { getAccessToken } from '../lib/supabase';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -26,17 +26,13 @@ export interface Notification {
 }
 
 class NotificationsApiService {
-  private async getAuthHeaders(): Promise<{ Authorization: string; apikey: string } | null> {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error || !session?.access_token) return null;
-      return {
-        'Authorization': `Bearer ${session.access_token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-      };
-    } catch {
-      return null;
-    }
+  private getAuthHeaders(): { Authorization: string; apikey: string } | null {
+    const accessToken = getAccessToken();
+    if (!accessToken) return null;
+    return {
+      'Authorization': `Bearer ${accessToken}`,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+    };
   }
 
   async getNotifications(page = 1, limit = 20): Promise<ApiResponse<{
@@ -44,7 +40,7 @@ class NotificationsApiService {
     pagination: { page: number; limit: number; total: number; totalPages: number };
   }>> {
     try {
-      const authHeaders = await this.getAuthHeaders();
+      const authHeaders = this.getAuthHeaders();
       if (!authHeaders) {
         return { success: false, error: 'Authentication required' };
       }
@@ -75,7 +71,7 @@ class NotificationsApiService {
 
   async getUnreadCount(): Promise<number> {
     try {
-      const authHeaders = await this.getAuthHeaders();
+      const authHeaders = this.getAuthHeaders();
       if (!authHeaders) return 0;
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -99,7 +95,7 @@ class NotificationsApiService {
 
   async markAsRead(notificationId: string): Promise<ApiResponse> {
     try {
-      const authHeaders = await this.getAuthHeaders();
+      const authHeaders = this.getAuthHeaders();
       if (!authHeaders) {
         return { success: false, error: 'Authentication required' };
       }
@@ -126,7 +122,7 @@ class NotificationsApiService {
 
   async markAllAsRead(): Promise<ApiResponse> {
     try {
-      const authHeaders = await this.getAuthHeaders();
+      const authHeaders = this.getAuthHeaders();
       if (!authHeaders) {
         return { success: false, error: 'Authentication required' };
       }
@@ -152,7 +148,7 @@ class NotificationsApiService {
 
   async deleteNotification(notificationId: string): Promise<ApiResponse> {
     try {
-      const authHeaders = await this.getAuthHeaders();
+      const authHeaders = this.getAuthHeaders();
       if (!authHeaders) {
         return { success: false, error: 'Authentication required' };
       }
@@ -179,7 +175,7 @@ class NotificationsApiService {
   // Friend request actions
   async acceptFriendRequest(requestId: string): Promise<ApiResponse> {
     try {
-      const authHeaders = await this.getAuthHeaders();
+      const authHeaders = this.getAuthHeaders();
       if (!authHeaders) {
         return { success: false, error: 'Authentication required' };
       }
@@ -206,7 +202,7 @@ class NotificationsApiService {
 
   async declineFriendRequest(requestId: string): Promise<ApiResponse> {
     try {
-      const authHeaders = await this.getAuthHeaders();
+      const authHeaders = this.getAuthHeaders();
       if (!authHeaders) {
         return { success: false, error: 'Authentication required' };
       }
@@ -234,7 +230,7 @@ class NotificationsApiService {
   // Get pending friend requests for current user
   async getPendingFriendRequests(): Promise<ApiResponse<{ requests: any[] }>> {
     try {
-      const authHeaders = await this.getAuthHeaders();
+      const authHeaders = this.getAuthHeaders();
       if (!authHeaders) {
         return { success: false, error: 'Authentication required' };
       }
