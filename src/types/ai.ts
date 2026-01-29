@@ -22,7 +22,7 @@ export interface FaceDetection {
   bounding_box?: BoundingBox;
   confidence: number;
   cluster_id?: string;
-  knox_contact_id?: string;
+  contact_id?: string;
   embedding?: number[];
 }
 
@@ -62,7 +62,7 @@ export interface ProcessingJob {
 export interface FaceCluster {
   id: string;
   name?: string;
-  knox_contact_id?: string;
+  contact_id?: string;
   face_count: number;
   representative_face_id?: string;
   updated_at?: string;

@@ -65,7 +65,7 @@ export const ClusterDetail: React.FC<ClusterDetailProps> = ({
 
       {/* Status */}
       <div className="cluster-detail__status">
-        {cluster.knox_contact_id ? (
+        {cluster.contact_id ? (
           <span className="cluster-card__badge cluster-card__badge--labeled">
             Linked to contact
           </span>
@@ -141,7 +141,7 @@ export const ClusterDetail: React.FC<ClusterDetailProps> = ({
           onClick={handleAssignClick}
           style={{ flex: 1 }}
         >
-          {cluster.knox_contact_id ? 'Change Contact' : 'Assign to Contact'}
+          {cluster.contact_id ? 'Change Contact' : 'Assign to Contact'}
         </button>
       </div>
     </div>

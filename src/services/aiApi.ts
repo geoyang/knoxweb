@@ -110,12 +110,22 @@ class AIApiService {
   async processBatch(params: {
     asset_ids?: string[];
     user_id?: string;
-    features: ProcessingOperation[];
+    features?: ProcessingOperation[];
+    operations?: ProcessingOperation[];
     limit?: number;
+    force_reprocess?: boolean;
+    skip_processed?: boolean;
   }): Promise<AIApiResponse<ProcessingJob>> {
+    const body = {
+      asset_ids: params.asset_ids,
+      operations: params.operations || params.features || ['all'],
+      limit: params.limit,
+      force_reprocess: params.force_reprocess ?? false,
+      skip_processed: params.skip_processed ?? false,
+    };
     return this.request<ProcessingJob>('/api/v1/process/batch', {
       method: 'POST',
-      body: JSON.stringify(params),
+      body: JSON.stringify(body),
     });
   }
 
@@ -178,7 +188,7 @@ class AIApiService {
     return this.request(`/api/v1/faces/clusters/${clusterId}/assign`, {
       method: 'POST',
       body: JSON.stringify({
-        knox_contact_id: contactId,
+        contact_id: contactId,
         name,
         exclude_face_ids: excludeFaceIds?.length ? excludeFaceIds : undefined,
       }),
@@ -278,6 +288,53 @@ class AIApiService {
   // Get list of detected object classes
   async getDetectedObjects(): Promise<AIApiResponse<{ objects: { class: string; count: number }[] }>> {
     return this.request('/api/v1/search/objects');
+  }
+
+  // Get count of unprocessed assets
+  async getUnprocessedCount(): Promise<AIApiResponse<{
+    total_unprocessed: number;
+  }>> {
+    return this.request('/api/v1/process/unprocessed-count');
+  }
+
+  // Get a page of unprocessed assets with their web_uri
+  async getUnprocessedAssets(limit: number = 100, offset: number = 0): Promise<AIApiResponse<{
+    assets: Array<{ id: string; web_uri: string }>;
+    count: number;
+    offset: number;
+    next_offset: number;
+  }>> {
+    return this.request(`/api/v1/process/unprocessed?limit=${limit}&offset=${offset}`);
+  }
+
+  // Queue a batch of unprocessed assets to ai_processing_jobs for the worker
+  async queueAllBatch(batchSize: number = 100, offset: number = 0): Promise<AIApiResponse<{
+    queued: number;
+    skipped: number;
+    total_remaining: number;
+    next_offset: number;
+    done: boolean;
+    message: string;
+  }>> {
+    return this.request(
+      `/api/v1/process/queue-all?batch_size=${batchSize}&offset=${offset}`,
+      { method: 'POST' }
+    );
+  }
+
+  // Process a batch of all unprocessed assets (server-side batch)
+  async processAllBatch(batchSize: number = 100, offset: number = 0): Promise<AIApiResponse<{
+    processed: number;
+    failed: number;
+    total_remaining: number;
+    next_offset: number;
+    errors: Array<{ asset_id: string; error: string }>;
+    message: string;
+  }>> {
+    return this.request(
+      `/api/v1/process/batch-all?batch_size=${batchSize}&offset=${offset}`,
+      { method: 'POST' }
+    );
   }
 
   // Reindex assets (batch process unprocessed assets)

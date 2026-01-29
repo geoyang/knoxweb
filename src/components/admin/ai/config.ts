@@ -53,6 +53,7 @@ export const AI_CONFIG = {
     { id: 'activity', label: 'Activity', icon: '📊' },
     { id: 'upload-queue', label: 'Upload Queue', icon: '📤' },
     { id: 'reindex', label: 'Reindex', icon: '🔄' },
+    { id: 'process-all', label: 'Process All', icon: '⚡' },
   ],
 
   // Status badge colors

@@ -60,7 +60,7 @@ export const ClusterGrid: React.FC<ClusterGridProps> = ({
     <div className="cluster-grid">
       {clusters.map(cluster => {
         const isSelected = selectedIds.includes(cluster.id);
-        const isLabeled = !!cluster.knox_contact_id || !!cluster.name;
+        const isLabeled = !!cluster.contact_id || !!cluster.name;
         const firstFace = cluster.sample_faces?.[0];
         const isFromVideo = firstFace?.is_from_video ?? false;
 

@@ -31,7 +31,7 @@ interface DetectedObjectClass {
 interface Cluster {
   id: string;
   name?: string;
-  knox_contact_id?: string;
+  contact_id?: string;
   face_count: number;
 }
 
@@ -54,7 +54,7 @@ export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
   isExpanded,
   onToggleExpand,
 }) => {
-  const labeledClusters = clusters.filter(c => c.name || c.knox_contact_id);
+  const labeledClusters = clusters.filter(c => c.name || c.contact_id);
 
   const updateFilter = <K extends keyof SearchFilterState>(
     key: K,

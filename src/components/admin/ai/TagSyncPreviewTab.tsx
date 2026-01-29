@@ -34,6 +34,14 @@ interface TagMatch {
   status: 'matched' | 'low_confidence' | 'no_match';
 }
 
+interface DetectedObject {
+  id: string;
+  object_class: string;
+  confidence: number;
+  bounding_box?: BoundingBox;
+  model_version?: string;
+}
+
 interface AssetPreview {
   asset_id: string;
   thumbnail_url?: string;
@@ -42,6 +50,7 @@ interface AssetPreview {
   metadata?: any;
   manual_tags: ManualTag[];
   ai_detections: AIDetection[];
+  detected_objects?: DetectedObject[];
   matches: TagMatch[];
 }
 
@@ -57,10 +66,12 @@ interface Summary {
 export const TagSyncPreviewTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [reprocessing, setReprocessing] = useState(false);
+  const [reprocessStatus, setReprocessStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [assets, setAssets] = useState<AssetPreview[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [iouThreshold, setIouThreshold] = useState(0.3);
+  const [iouThreshold, setIouThreshold] = useState(0.4);
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
@@ -87,7 +98,7 @@ export const TagSyncPreviewTab: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const result = await aiApi.previewTagSync({ iou_threshold: iouThreshold, limit: 50 });
+      const result = await aiApi.previewTagSync({ iou_threshold: iouThreshold, limit: 200 });
       if (result.success && result.data) {
         setAssets(result.data.assets);
         setSummary(result.data.summary);
@@ -151,6 +162,32 @@ export const TagSyncPreviewTab: React.FC = () => {
     }
   };
 
+  const reprocessAssets = async () => {
+    if (assets.length === 0) return;
+    const assetIds = assets.map(a => a.asset_id);
+    try {
+      setReprocessing(true);
+      setError(null);
+      setReprocessStatus(`Submitting ${assetIds.length} assets for reprocessing (faces + objects)...`);
+      const result = await aiApi.processBatch({
+        asset_ids: assetIds,
+        operations: ['faces', 'objects'],
+        force_reprocess: true,
+      });
+      if (result.success && result.data) {
+        setReprocessStatus(`Job started: ${result.data.total} assets queued. Reload preview when done.`);
+      } else {
+        setError(result.error || 'Failed to start reprocessing');
+        setReprocessStatus(null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start reprocessing');
+      setReprocessStatus(null);
+    } finally {
+      setReprocessing(false);
+    }
+  };
+
   const getMatchStatus = (match: TagMatch): string => {
     const key = `${match.manual_tag_id}:${match.ai_face_id}`;
     const isSelected = selectedMatches.has(key);
@@ -202,6 +239,9 @@ export const TagSyncPreviewTab: React.FC = () => {
       </div>
 
       {error && <div className="error-message">{error}</div>}
+      {reprocessStatus && (
+        <div className="reprocess-status">{reprocessStatus}</div>
+      )}
 
       {summary && (
         <div className="summary-cards">
@@ -236,13 +276,22 @@ export const TagSyncPreviewTab: React.FC = () => {
         <>
           <div className="apply-section">
             <span>{selectedMatches.size} matches selected</span>
-            <button
-              className="btn btn-success"
-              onClick={applyMatches}
-              disabled={applying || selectedMatches.size === 0}
-            >
-              {applying ? 'Applying...' : `Apply ${selectedMatches.size} Matches`}
-            </button>
+            <div className="apply-section__buttons">
+              <button
+                className="btn btn-secondary"
+                onClick={reprocessAssets}
+                disabled={reprocessing}
+              >
+                {reprocessing ? 'Submitting...' : `Reprocess ${assets.length} Assets (Faces + Objects)`}
+              </button>
+              <button
+                className="btn btn-success"
+                onClick={applyMatches}
+                disabled={applying || selectedMatches.size === 0}
+              >
+                {applying ? 'Applying...' : `Apply ${selectedMatches.size} Matches`}
+              </button>
+            </div>
           </div>
 
           <div className="assets-grid">
@@ -279,7 +328,10 @@ export const TagSyncPreviewTab: React.FC = () => {
                   ) : null}
                   <div className={`no-thumbnail ${!asset.thumbnail_url ? 'visible' : ''}`}>
                     No Image
-                    {showDebug && <span className="debug-url">{asset.thumbnail_url || 'null'}</span>}
+                    <span className="debug-url" style={{ marginTop: '0.5rem', fontSize: '0.6rem' }}>
+                      ID: {asset.asset_id.slice(0, 8)}...
+                    </span>
+                    {showDebug && <span className="debug-url">{asset.thumbnail_url || 'thumbnail: null'}</span>}
                   </div>
                   <svg className="bbox-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
                     {asset.manual_tags.map(tag => {
@@ -331,6 +383,11 @@ export const TagSyncPreviewTab: React.FC = () => {
                   <span className="tag-count green">{asset.manual_tags.length} tags</span>
                   <span className="tag-count blue">{asset.ai_detections.length} AI</span>
                   <span className="tag-count">{asset.matches.filter(m => m.status === 'matched').length} matches</span>
+                  {(asset.detected_objects?.length ?? 0) > 0 && (
+                    <span className="tag-count" style={{ background: '#a855f7', color: 'white' }}>
+                      {asset.detected_objects!.length} objects
+                    </span>
+                  )}
                 </div>
                 {showDebug && (
                   <div className="debug-info" onClick={e => e.stopPropagation()}>
@@ -363,6 +420,22 @@ export const TagSyncPreviewTab: React.FC = () => {
                         );
                       })}
                     </div>
+                    {(asset.detected_objects?.length ?? 0) > 0 && (
+                      <div className="debug-boxes">
+                        <strong style={{color: '#a855f7'}}>Detected Objects ({asset.detected_objects!.length}):</strong>
+                        {asset.detected_objects!.map(obj => (
+                          <div key={obj.id} className="debug-box-item">
+                            <span style={{color: '#a855f7'}}>{obj.object_class}</span>
+                            {' '}confidence: {(obj.confidence * 100).toFixed(0)}%
+                            {obj.bounding_box && (
+                              <span style={{color: '#9ca3af'}}>
+                                {' '}bbox: [{obj.bounding_box.x.toFixed(1)}, {obj.bounding_box.y.toFixed(1)}, {obj.bounding_box.width.toFixed(1)}, {obj.bounding_box.height.toFixed(1)}]
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 {expandedAsset === asset.asset_id && (

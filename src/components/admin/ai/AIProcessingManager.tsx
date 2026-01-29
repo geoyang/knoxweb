@@ -14,6 +14,7 @@ import { SearchTab } from './SearchTab';
 import { ActivityDashboardTab } from './ActivityDashboardTab';
 import { UploadQueueTab } from './UploadQueueTab';
 import { ReindexTab } from './ReindexTab';
+import { ProcessAllTab } from './ProcessAllTab';
 import './ai-processing.css';
 
 const TAB_COMPONENTS: Record<TabId, React.FC> = {
@@ -25,6 +26,7 @@ const TAB_COMPONENTS: Record<TabId, React.FC> = {
   activity: ActivityDashboardTab,
   'upload-queue': UploadQueueTab,
   reindex: ReindexTab,
+  'process-all': ProcessAllTab,
 };
 
 export const AIProcessingManager: React.FC = () => {

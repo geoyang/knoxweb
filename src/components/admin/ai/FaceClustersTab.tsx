@@ -51,13 +51,13 @@ export const FaceClustersTab: React.FC = () => {
         const mappedClusters = (result.data.clusters || []).map((c: {
           cluster_id: string;
           name?: string;
-          knox_contact_id?: string;
+          contact_id?: string;
           face_count: number;
           sample_faces?: { asset_id: string; face_index: number; thumbnail_url?: string; is_from_video?: boolean }[];
         }) => ({
           id: c.cluster_id,
           name: c.name,
-          knox_contact_id: c.knox_contact_id,
+          contact_id: c.contact_id,
           face_count: c.face_count,
           sample_faces: c.sample_faces
         }));
@@ -121,7 +121,7 @@ export const FaceClustersTab: React.FC = () => {
         const mappedCluster = {
           id: clusterData.cluster_id || clusterData.id,
           name: clusterData.name,
-          knox_contact_id: clusterData.knox_contact_id,
+          contact_id: clusterData.contact_id,
           face_count: clusterData.face_count,
         };
         setSelectedCluster(mappedCluster);
