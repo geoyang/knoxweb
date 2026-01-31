@@ -721,8 +721,8 @@ export const SubscriptionPage: React.FC = () => {
           </div>
         )}
 
-        {/* Show promo code for non-active users or users without existing promo - not for Apple subscribers */}
-        {(!isSubscribed || !hasPromoApplied) && !hasAppleSubscription && (
+        {/* Show promo code for non-active users or users without existing promo */}
+        {(!isSubscribed || !hasPromoApplied) && (
           <div className="mb-6 mt-6">
             <button
               onClick={() => setShowPromoInput(!showPromoInput)}

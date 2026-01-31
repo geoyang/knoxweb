@@ -96,6 +96,7 @@ export const ChatManager: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const isSearchNavigating = useRef(false);
 
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
@@ -201,8 +202,9 @@ export const ChatManager: React.FC = () => {
     };
   }, [selectedConversation, fetchMessages, pollMessages]);
 
-  // Scroll to bottom on new messages
+  // Scroll to bottom on new messages (skip during search navigation)
   useEffect(() => {
+    if (isSearchNavigating.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -464,16 +466,72 @@ export const ChatManager: React.FC = () => {
     }
   };
 
-  // Handle navigating to a specific message
-  const handleNavigateToMessage = (messageId: string) => {
+  // Handle navigating to a specific message, loading older pages if needed
+  const handleNavigateToMessage = useCallback(async (messageId: string) => {
     setHighlightedMessageId(messageId);
-    const messageEl = messageRefs.current[messageId];
-    if (messageEl) {
-      messageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Helper to scroll once the element is in the DOM
+    const scrollToMessage = () => {
+      requestAnimationFrame(() => {
+        const el = messageRefs.current[messageId];
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        isSearchNavigating.current = false;
+      });
+      setTimeout(() => setHighlightedMessageId(null), 2000);
+    };
+
+    // Check if message is already rendered
+    if (messageRefs.current[messageId]) {
+      scrollToMessage();
+      return;
     }
-    // Clear highlight after animation
+
+    // Check if message is loaded but not yet rendered
+    if (messages.some(m => m.id === messageId)) {
+      scrollToMessage();
+      return;
+    }
+
+    // Message not loaded yet — load older pages until found
+    if (!selectedConversation) return;
+
+    isSearchNavigating.current = true;
+    let page = currentPage;
+    let moreAvailable = hasMore;
+    const MAX_PAGES_TO_LOAD = 50;
+
+    for (let i = 0; i < MAX_PAGES_TO_LOAD && moreAvailable; i++) {
+      page += 1;
+      try {
+        const result = await chatApi.getMessages(selectedConversation.id, page, 20);
+        if (!result.success || !result.data) break;
+
+        const newMessages = result.data.messages;
+        moreAvailable = result.data.pagination?.hasMore || false;
+
+        setMessages(prev => [...newMessages, ...prev]);
+        setCurrentPage(page);
+        setHasMore(moreAvailable);
+        fetchAllMessageReactions(newMessages);
+
+        if (newMessages.some((m: Message) => m.id === messageId)) {
+          // Wait for React to render the new messages, then scroll
+          await new Promise(resolve => setTimeout(resolve, 100));
+          scrollToMessage();
+          return;
+        }
+      } catch (err) {
+        console.error('Error loading messages for search navigation:', err);
+        break;
+      }
+    }
+
+    // Exhausted pages without finding the message
+    isSearchNavigating.current = false;
     setTimeout(() => setHighlightedMessageId(null), 2000);
-  };
+  }, [messages, selectedConversation, currentPage, hasMore, fetchAllMessageReactions]);
 
   // Close in-chat search
   const handleCloseInChatSearch = () => {

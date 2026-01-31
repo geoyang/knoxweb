@@ -4,6 +4,21 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://quqlovduekdas
 const ALBUMS_API_URL = `${SUPABASE_URL}/functions/v1/admin-albums-api`;
 const IMAGES_API_URL = `${SUPABASE_URL}/functions/v1/admin-images-api`;
 
+// Structured error for upload limit violations
+export class UploadLimitError extends Error {
+  code: string;
+  current: number;
+  limit: number;
+
+  constructor(message: string, code: string, current: number, limit: number) {
+    super(message);
+    this.name = 'UploadLimitError';
+    this.code = code;
+    this.current = current;
+    this.limit = limit;
+  }
+}
+
 // Asset data for creating new assets via edge function
 interface AssetData {
   needsCreation?: boolean;
@@ -113,12 +128,14 @@ export async function removePhotoFromAlbum({ albumId, assetId }: RemovePhotoPara
  * Create an asset in the library (without adding to an album) via edge function
  * This ensures consistent asset creation between web and mobile apps
  */
-export async function createAssetInLibrary(assetData: AssetData): Promise<{ success: boolean; id: string }> {
+export async function createAssetInLibrary(assetData: AssetData, skipLimitCheck?: boolean): Promise<{ success: boolean; id: string }> {
   const accessToken = getAccessToken();
 
   if (!accessToken) {
     throw new Error('User not authenticated');
   }
+
+  const body = skipLimitCheck ? { ...assetData, skip_limit_check: true } : assetData;
 
   const response = await fetch(IMAGES_API_URL, {
     method: 'POST',
@@ -127,14 +144,22 @@ export async function createAssetInLibrary(assetData: AssetData): Promise<{ succ
       'Content-Type': 'application/json',
       'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
     },
-    body: JSON.stringify(assetData),
+    body: JSON.stringify(body),
   });
 
   const data = await response.json();
 
   if (!response.ok) {
-    const errorMessage = data.details ? `${data.error}: ${data.details}` : data.error || 'Failed to create asset';
     console.error('createAssetInLibrary error response:', data);
+    if (data.code === 'PHOTO_LIMIT_REACHED' || data.code === 'VIDEO_LIMIT_REACHED') {
+      throw new UploadLimitError(
+        data.message || 'Upload limit reached',
+        data.code,
+        data.current ?? 0,
+        data.limit ?? 0,
+      );
+    }
+    const errorMessage = data.details ? `${data.error}: ${data.details}` : data.error || 'Failed to create asset';
     throw new Error(errorMessage);
   }
 

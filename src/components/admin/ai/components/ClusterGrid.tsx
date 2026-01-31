@@ -17,6 +17,7 @@ interface ClusterGridProps {
   onToggleSelect?: (clusterId: string) => void;
   selectionMode?: boolean;
   loading?: boolean;
+  contactNames?: Record<string, string>;
 }
 
 export const ClusterGrid: React.FC<ClusterGridProps> = ({
@@ -26,6 +27,7 @@ export const ClusterGrid: React.FC<ClusterGridProps> = ({
   onToggleSelect,
   selectionMode = false,
   loading = false,
+  contactNames = {},
 }) => {
   if (loading) {
     return (
@@ -61,6 +63,9 @@ export const ClusterGrid: React.FC<ClusterGridProps> = ({
       {clusters.map(cluster => {
         const isSelected = selectedIds.includes(cluster.id);
         const isLabeled = !!cluster.contact_id || !!cluster.name;
+        const displayName = cluster.name
+          || (cluster.contact_id && contactNames[cluster.contact_id])
+          || undefined;
         const firstFace = cluster.sample_faces?.[0];
         const isFromVideo = firstFace?.is_from_video ?? false;
 
@@ -95,7 +100,7 @@ export const ClusterGrid: React.FC<ClusterGridProps> = ({
                 <>
                   <img
                     src={firstFace.thumbnail_url}
-                    alt={cluster.name || 'Face'}
+                    alt={displayName || 'Face'}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -132,7 +137,7 @@ export const ClusterGrid: React.FC<ClusterGridProps> = ({
 
             <div className="cluster-card__info">
               <div className="cluster-card__name">
-                {cluster.name || 'Unknown'}
+                {displayName || 'Unknown'}
               </div>
               <div className="cluster-card__count">
                 {cluster.face_count} {cluster.face_count === 1 ? 'face' : 'faces'}
@@ -140,7 +145,7 @@ export const ClusterGrid: React.FC<ClusterGridProps> = ({
               <span className={`cluster-card__badge ${
                 isLabeled ? 'cluster-card__badge--labeled' : 'cluster-card__badge--unlabeled'
               }`}>
-                {isLabeled ? (cluster.name || 'Linked') : 'Unlabeled'}
+                {isLabeled ? (displayName || 'Linked') : 'Unlabeled'}
               </span>
             </div>
           </div>

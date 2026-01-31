@@ -804,7 +804,7 @@ export const AlbumViewer: React.FC = () => {
             <p className="text-gray-500">Albums will appear here when they're shared with this circle.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {albums.map(album => {
               const keyphotoUrl = getKeyphotoUrl(album);
               const photoCount = album.assets.filter(a => getThumbnailUrl(a) !== null).length;
@@ -812,55 +812,48 @@ export const AlbumViewer: React.FC = () => {
               return (
                 <div
                   key={album.id}
-                  className="cursor-pointer group"
+                  className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer overflow-hidden"
                   onClick={() => navigate(`/album/${inviteId}/${album.id}`)}
                 >
                   {/* Album Cover */}
-                  <div className="relative aspect-square bg-gray-100 rounded-2xl overflow-hidden shadow-lg group-hover:shadow-xl transition-all group-hover:scale-[1.02]">
+                  <div className="aspect-square bg-gray-100 overflow-hidden flex items-center justify-center">
                     {keyphotoUrl ? (
-                      <>
-                        {/* Folder icon background */}
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="text-8xl text-yellow-400 drop-shadow-lg">📁</div>
-                        </div>
-                        {/* Photo inside folder */}
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-[55%] h-[55%] rounded-lg overflow-hidden border-2 border-white/80 shadow-md mt-2">
-                            <img
-                              src={keyphotoUrl}
-                              alt={album.title}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                            />
-                          </div>
-                        </div>
-                      </>
+                      <img
+                        src={keyphotoUrl}
+                        alt={album.title}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
                     ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="text-8xl text-yellow-400 drop-shadow-lg">📁</div>
+                      <div className="w-full h-full bg-blue-50 flex items-center justify-center">
+                        <svg className="w-12 h-12 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
                       </div>
                     )}
                   </div>
 
                   {/* Album Info */}
-                  <div className="mt-3 text-center">
-                    <h3 className="font-semibold text-gray-800 truncate">{album.title}</h3>
-                    <p className="text-sm text-gray-500">{photoCount} photos</p>
+                  <div className="p-3">
+                    <h3 className="font-semibold text-gray-800 truncate text-sm">{album.title}</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {photoCount} photo{photoCount !== 1 ? 's' : ''} • {new Date(album.date_created).toLocaleDateString()}
+                    </p>
                     {/* Owner info */}
                     {album.owner && (
-                      <div className="flex items-center justify-center gap-2 mt-2">
+                      <div className="flex items-center gap-1.5 mt-1.5">
                         {album.owner.avatar_url ? (
                           <img
                             src={album.owner.avatar_url}
                             alt={album.owner.full_name || 'Owner'}
-                            className="w-5 h-5 rounded-full object-cover"
+                            className="w-4 h-4 rounded-full object-cover"
                           />
                         ) : (
-                          <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-medium">
+                          <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center text-white text-[8px] font-medium">
                             {(album.owner.full_name || album.owner.email || '?')[0].toUpperCase()}
                           </div>
                         )}
-                        <span className="text-xs text-gray-500 truncate max-w-[100px]">
+                        <span className="text-[10px] text-gray-500 truncate">
                           {album.owner.full_name || album.owner.email || 'Unknown'}
                         </span>
                       </div>

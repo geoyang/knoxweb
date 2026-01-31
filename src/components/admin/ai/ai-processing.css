@@ -734,6 +734,11 @@
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
   padding: 1rem;
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
 }
 
 .cluster-detail__header {
@@ -1907,6 +1912,10 @@
 
 .tag-sync-preview-tab .legend-item .box.blue {
   border-color: #3b82f6;
+}
+
+.tag-sync-preview-tab .legend-item .box.purple {
+  border-color: #a855f7;
 }
 
 .tag-sync-preview-tab .legend-item .box.dashed {

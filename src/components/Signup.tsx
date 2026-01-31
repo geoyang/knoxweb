@@ -405,15 +405,17 @@ export const Signup: React.FC = () => {
             </div>
 
             {/* Debug info */}
+            {window.location.hostname !== 'dashboard.kizu.online' && (
             <div className="mt-4 p-3 bg-gray-100 dark:bg-gray-800 rounded text-xs text-gray-600 dark:text-gray-400">
               <p><strong>Device:</strong> {isMobile ? '📱 Mobile' : '💻 Desktop'}</p>
               <p className="mt-1 break-all"><strong>UA:</strong> {userAgent.substring(0, 100)}...</p>
             </div>
+            )}
           </>
         )}
 
         {/* Debug log panel */}
-        {debugLogs.length > 0 && (
+        {debugLogs.length > 0 && window.location.hostname !== 'dashboard.kizu.online' && (
           <div className="mt-4 p-3 bg-black text-green-400 rounded text-xs font-mono max-h-40 overflow-y-auto">
             <p className="text-white mb-1 font-bold">Debug Log:</p>
             {debugLogs.map((log, i) => (

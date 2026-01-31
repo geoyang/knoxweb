@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import type { FaceCluster, SampleFace } from '../../../../types/ai';
+import { contactsApi, type Contact } from '../../../../services/contactsApi';
 
 interface ClusterDetailProps {
   cluster: FaceCluster;
@@ -21,13 +22,20 @@ export const ClusterDetail: React.FC<ClusterDetailProps> = ({
   onAssign,
   loading = false,
 }) => {
-  // Track which faces are excluded (unchecked)
   const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
+  const [linkedContact, setLinkedContact] = useState<Contact | null>(null);
 
-  // Reset exclusions when cluster changes
+  // Reset exclusions and fetch contact when cluster changes
   useEffect(() => {
     setExcludedIds(new Set());
-  }, [cluster.id]);
+    setLinkedContact(null);
+
+    if (cluster.contact_id) {
+      contactsApi.getContact(cluster.contact_id).then(contact => {
+        if (contact) setLinkedContact(contact);
+      });
+    }
+  }, [cluster.id, cluster.contact_id]);
 
   const toggleFace = (faceId: string) => {
     setExcludedIds(prev => {
@@ -63,12 +71,60 @@ export const ClusterDetail: React.FC<ClusterDetailProps> = ({
         </button>
       </div>
 
-      {/* Status */}
+      {/* Status / Linked Contact */}
       <div className="cluster-detail__status">
         {cluster.contact_id ? (
-          <span className="cluster-card__badge cluster-card__badge--labeled">
-            Linked to contact
-          </span>
+          linkedContact ? (
+            <div style={{
+              padding: '0.75rem',
+              backgroundColor: '#f0fdf4',
+              borderRadius: '0.5rem',
+              border: '1px solid #bbf7d0',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                {linkedContact.avatar_url ? (
+                  <img
+                    src={linkedContact.avatar_url}
+                    alt=""
+                    style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%',
+                    backgroundColor: '#d1fae5', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.75rem', fontWeight: 600, color: '#065f46',
+                  }}>
+                    {(linkedContact.display_name || linkedContact.first_name || '?')[0].toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#065f46' }}>
+                    {linkedContact.display_name || [linkedContact.first_name, linkedContact.last_name].filter(Boolean).join(' ') || 'Unknown'}
+                  </div>
+                  {linkedContact.relationship_type && (
+                    <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                      {linkedContact.relationship_type}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {linkedContact.email_addresses?.[0] && (
+                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                  {linkedContact.email_addresses[0].email}
+                </div>
+              )}
+              {linkedContact.phone_numbers?.[0] && (
+                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.125rem' }}>
+                  {linkedContact.phone_numbers[0].number}
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="cluster-card__badge cluster-card__badge--labeled">
+              Linked to contact
+            </span>
+          )
         ) : (
           <span className="cluster-card__badge cluster-card__badge--unlabeled">
             Not linked

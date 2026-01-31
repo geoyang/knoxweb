@@ -3,7 +3,8 @@ import heic2any from 'heic2any';
 import exifr from 'exifr';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { addPhotosToAlbum, createAssetInLibrary } from '../../services/albumsApi';
+import { useNavigate } from 'react-router-dom';
+import { addPhotosToAlbum, createAssetInLibrary, UploadLimitError } from '../../services/albumsApi';
 
 // Interface for extracted EXIF metadata (matches mobile app's AssetMetadata)
 interface ExifMetadata {
@@ -327,6 +328,7 @@ interface ImageUploaderProps {
   onImagesUploaded: (count: number) => void;
   onClose: () => void;
   initialFiles?: File[];  // Optional - files to process immediately on mount (e.g., from drag-drop)
+  onAssetCreated?: (assetId: string) => void | Promise<void>;  // Optional - called after each asset is created (e.g., for folder linking)
 }
 
 interface UploadedFile {
@@ -522,14 +524,36 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   targetAlbumId,
   onImagesUploaded,
   onClose,
-  initialFiles
+  initialFiles,
+  onAssetCreated
 }) => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadComplete, setUploadComplete] = useState(false);
+  const [uploadLimitInfo, setUploadLimitInfo] = useState<{
+    code: string;
+    current: number;
+    limit: number;
+    message: string;
+  } | null>(null);
   const { user } = useAuth();
+  const navigate = useNavigate();
   const initialFilesProcessed = React.useRef(false);
+  const skipLimitCheckRef = React.useRef(false);
+  const uploadedFilesRef = React.useRef<UploadedFile[]>([]);
+  const onAssetCreatedRef = React.useRef(onAssetCreated);
+  // Keep onAssetCreated ref in sync
+  onAssetCreatedRef.current = onAssetCreated;
+
+  // Wrapper to keep uploadedFilesRef in sync immediately (not deferred via useEffect)
+  const setUploadedFilesTracked = React.useCallback((updater: React.SetStateAction<UploadedFile[]>) => {
+    setUploadedFiles(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      uploadedFilesRef.current = next;
+      return next;
+    });
+  }, []);
 
   // Generate unique file ID
   const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -600,15 +624,15 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   };
 
   // Handle file selection
-  const handleFileSelect = useCallback(async (files: FileList) => {
+  const handleFileSelect = useCallback(async (files: FileList | File[]) => {
     const processedFiles: UploadedFile[] = [];
 
     for (const file of Array.from(files)) {
       // Check if it's a HEIC file by extension (type might be wrong/empty)
       const isHeic = isHeicFile(file);
 
-      // Validate file type - allow image, video, and HEIC
-      if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !isHeic) {
+      // Validate file type - allow image, video, audio, and HEIC
+      if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/') && !isHeic) {
         console.log('Skipping unsupported file:', file.name, file.type);
         continue;
       }
@@ -629,9 +653,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           preview = URL.createObjectURL(jpegBlob);
         } catch (err) {
           console.warn('Could not create HEIC preview:', err);
-          // Use a placeholder for failed HEIC preview
           preview = '';
         }
+      } else if (file.type.startsWith('audio/')) {
+        // Audio files have no visual preview
+        preview = '';
       } else {
         preview = URL.createObjectURL(file);
       }
@@ -646,7 +672,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     }
 
     if (processedFiles.length > 0) {
-      setUploadedFiles(prev => [...prev, ...processedFiles]);
+      setUploadedFilesTracked(prev => [...prev, ...processedFiles]);
     }
   }, []);
 
@@ -729,11 +755,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   React.useEffect(() => {
     if (initialFiles && initialFiles.length > 0 && !initialFilesProcessed.current) {
       initialFilesProcessed.current = true;
-      console.log('📥 Processing initial files:', initialFiles.length);
-      // Create a FileList-like object
-      const dataTransfer = new DataTransfer();
-      initialFiles.forEach(file => dataTransfer.items.add(file));
-      handleFileSelect(dataTransfer.files);
+      handleFileSelect(initialFiles);
     }
   }, [initialFiles, handleFileSelect]);
 
@@ -746,7 +768,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
   // Remove file
   const removeFile = (id: string) => {
-    setUploadedFiles(prev => {
+    setUploadedFilesTracked(prev => {
       const file = prev.find(f => f.id === id);
       if (file?.preview) {
         URL.revokeObjectURL(file.preview);
@@ -756,16 +778,17 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   };
 
   // Upload single file - follows mobile app pattern
-  // Returns true if successful, false otherwise
-  const uploadFile = async (fileObj: UploadedFile): Promise<boolean> => {
+  // Returns true if successful, false otherwise, 'limit' if upload limit reached
+  const uploadFile = async (fileObj: UploadedFile): Promise<boolean | 'limit'> => {
     try {
       // Update status to uploading
-      setUploadedFiles(prev => prev.map(f =>
+      setUploadedFilesTracked(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, status: 'uploading', progress: 0 } : f
       ));
 
       const isHeic = isHeicFile(fileObj.file);
       const isImage = fileObj.file.type.startsWith('image/') || isHeic;
+      const isAudio = fileObj.file.type.startsWith('audio/');
       const timestamp = Date.now();
 
       // Step 0: Extract metadata before uploading (EXIF for images, video metadata for videos)
@@ -786,7 +809,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       console.log('File type:', fileObj.file.type);
       console.log('File size:', Math.round(fileObj.file.size / 1024 / 1024 * 100) / 100, 'MB');
       console.log('Is video:', isVideoFile);
-      setUploadedFiles(prev => prev.map(f =>
+      setUploadedFilesTracked(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, progress: 10 } : f
       ));
 
@@ -802,7 +825,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       let webUrl = originalUrl; // Default to original
       if (isHeic) {
         console.log('Converting HEIC to JPEG for web display...');
-        setUploadedFiles(prev => prev.map(f =>
+        setUploadedFilesTracked(prev => prev.map(f =>
           f.id === fileObj.id ? { ...f, progress: 30 } : f
         ));
 
@@ -827,11 +850,14 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       let thumbnailData: string | null = null;
       const isVideo = fileObj.file.type.startsWith('video/');
 
-      setUploadedFiles(prev => prev.map(f =>
+      setUploadedFilesTracked(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, progress: 50 } : f
       ));
 
-      if (isVideo) {
+      if (isAudio) {
+        // Audio files have no visual thumbnail
+        console.log('Audio file - skipping thumbnail generation');
+      } else if (isVideo) {
         // Generate thumbnail from video at 2 seconds
         try {
           thumbnailData = await generateVideoThumbnail(fileObj.file);
@@ -850,7 +876,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         }
       }
 
-      setUploadedFiles(prev => prev.map(f =>
+      setUploadedFilesTracked(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, progress: 60 } : f
       ));
 
@@ -860,7 +886,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         ? exifMetadata.createdAt.toISOString()
         : new Date().toISOString();
       const uploadedAt = new Date().toISOString();
-      const mediaType = fileObj.file.type.startsWith('video/') ? 'video' : 'photo';
+      const mediaType = fileObj.file.type.startsWith('video/') ? 'video' : isAudio ? 'audio' : 'photo';
 
       // Build asset data with all metadata (used for both album and library-only uploads)
       const assetData: Record<string, unknown> = {
@@ -917,7 +943,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       }
 
       // Update progress to 75% after uploads
-      setUploadedFiles(prev => prev.map(f =>
+      setUploadedFilesTracked(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, progress: 75 } : f
       ));
 
@@ -934,12 +960,15 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       } else {
         // Library-only upload - use admin-images-api POST
         console.log('Creating asset in library:', assetData);
-        await createAssetInLibrary(assetData);
-        console.log('Asset created in library via edge function');
+        const result = await createAssetInLibrary(assetData, skipLimitCheckRef.current);
+        console.log('Asset created in library via edge function, id:', result.id);
+        if (onAssetCreatedRef.current) {
+          await onAssetCreatedRef.current(result.id);
+        }
       }
 
       // Update status to success
-      setUploadedFiles(prev => prev.map(f =>
+      setUploadedFilesTracked(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, status: 'success', progress: 100, url: webUrl } : f
       ));
 
@@ -947,7 +976,20 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
     } catch (error) {
       console.error('Upload error:', error);
-      setUploadedFiles(prev => prev.map(f =>
+      if (error instanceof UploadLimitError) {
+        // Reset file status back to pending so it can be retried
+        setUploadedFilesTracked(prev => prev.map(f =>
+          f.id === fileObj.id ? { ...f, status: 'pending', progress: 0 } : f
+        ));
+        setUploadLimitInfo({
+          code: error.code,
+          current: error.current,
+          limit: error.limit,
+          message: error.message,
+        });
+        return 'limit';
+      }
+      setUploadedFilesTracked(prev => prev.map(f =>
         f.id === fileObj.id ? {
           ...f,
           status: 'error',
@@ -960,28 +1002,76 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
   // Upload all files
   const handleUploadAll = async () => {
-    const filesToUpload = uploadedFiles.filter(f => f.status === 'pending');
+    // Read from ref to get latest state (avoids stale closure after limit dialog)
+    const filesToUpload = uploadedFilesRef.current.filter(f => f.status === 'pending');
     if (filesToUpload.length === 0) return;
 
     setIsUploading(true);
     let successCount = 0;
+    let hitLimit = false;
 
-    // Upload files in batches of 3 to avoid overwhelming the server
-    const batchSize = 3;
-    for (let i = 0; i < filesToUpload.length; i += batchSize) {
-      const batch = filesToUpload.slice(i, i + batchSize);
-      const results = await Promise.all(batch.map(file => uploadFile(file)));
-      successCount += results.filter(Boolean).length;
+    // Upload files one at a time to detect limit errors early
+    for (const file of filesToUpload) {
+      const result = await uploadFile(file);
+      if (result === 'limit') {
+        hitLimit = true;
+        break;
+      }
+      if (result === true) {
+        successCount++;
+      }
     }
 
     setIsUploading(false);
+
+    if (hitLimit) {
+      // Dialog will be shown by the uploadLimitInfo state set in uploadFile
+      // Don't close or mark complete — user needs to choose an action
+      return;
+    }
+
     setUploadComplete(true);
 
     // Auto-close after successful upload
+    const totalSuccess = uploadedFilesRef.current.filter(f => f.status === 'success').length;
+    setTimeout(() => {
+      onImagesUploaded(totalSuccess);
+      onClose();
+    }, 2000);
+  };
+
+  // Handle "Import what fits" — remove remaining pending files and finish
+  const handleImportWhatFits = () => {
+    setUploadLimitInfo(null);
+    // Remove all pending files (they can't be uploaded within the limit)
+    setUploadedFilesTracked(prev => prev.filter(f => f.status !== 'pending'));
+    const successCount = uploadedFilesRef.current.filter(f => f.status === 'success').length;
+    setUploadComplete(true);
     setTimeout(() => {
       onImagesUploaded(successCount);
       onClose();
     }, 2000);
+  };
+
+  // Handle "Import anyway" — retry with limit check skipped
+  const handleImportAnyway = async () => {
+    setUploadLimitInfo(null);
+    skipLimitCheckRef.current = true;
+    // Re-trigger upload for remaining pending files
+    await handleUploadAll();
+    skipLimitCheckRef.current = false;
+  };
+
+  // Handle "Upgrade" — navigate to subscription page
+  const handleUpgrade = () => {
+    setUploadLimitInfo(null);
+    onClose();
+    navigate('/subscription');
+  };
+
+  // Handle "Cancel" — dismiss the dialog, keep files in their current state
+  const handleLimitCancel = () => {
+    setUploadLimitInfo(null);
   };
 
   // Retry failed upload
@@ -1053,7 +1143,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                 <input
                   type="file"
                   multiple
-                  accept="image/*,video/*"
+                  accept="image/*,video/*,audio/*"
                   onChange={handleFileInputChange}
                   className="hidden"
                 />
@@ -1083,7 +1173,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                     <input
                       type="file"
                       multiple
-                      accept="image/*,video/*"
+                      accept="image/*,video/*,audio/*"
                       onChange={handleFileInputChange}
                       className="hidden"
                     />
@@ -1096,11 +1186,18 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                 {uploadedFiles.map(fileObj => (
                   <div key={fileObj.id} className="relative group">
                     <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                      <img
-                        src={fileObj.preview}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
+                      {fileObj.preview ? (
+                        <img
+                          src={fileObj.preview}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
+                          <span className="text-3xl mb-1">{fileObj.file.type.startsWith('audio/') ? '🎵' : '📄'}</span>
+                          <span className="text-xs text-center px-2 truncate w-full">{fileObj.file.name}</span>
+                        </div>
+                      )}
                       
                       {/* Status Overlay */}
                       <div className={`absolute inset-0 flex items-center justify-center ${
@@ -1195,6 +1292,79 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           </div>
         )}
       </div>
+
+      {/* Upload Limit Dialog */}
+      {uploadLimitInfo && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg max-w-md w-full shadow-2xl">
+            <div className="px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Upload Limit Reached</h3>
+                  <p className="text-sm text-gray-600 mt-1">{uploadLimitInfo.message}</p>
+                  <div className="mt-2 bg-gray-50 rounded-md px-3 py-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">
+                        {uploadLimitInfo.code === 'VIDEO_LIMIT_REACHED' ? 'Video minutes used' : 'Photos uploaded'}
+                      </span>
+                      <span className="font-medium text-gray-900">
+                        {uploadLimitInfo.current} / {uploadLimitInfo.limit}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className="bg-amber-500 h-1.5 rounded-full"
+                        style={{ width: `${Math.min(100, (uploadLimitInfo.current / uploadLimitInfo.limit) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  {uploadedFiles.filter(f => f.status === 'pending').length > 0 && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      {uploadedFiles.filter(f => f.status === 'pending').length} file{uploadedFiles.filter(f => f.status === 'pending').length !== 1 ? 's' : ''} remaining
+                      {uploadedFiles.filter(f => f.status === 'success').length > 0 && (
+                        <span>, {uploadedFiles.filter(f => f.status === 'success').length} uploaded successfully</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="border-t px-6 py-4 flex flex-col gap-2">
+              {uploadedFiles.filter(f => f.status === 'success').length > 0 && (
+                <button
+                  onClick={handleImportWhatFits}
+                  className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors"
+                >
+                  Keep {uploadedFiles.filter(f => f.status === 'success').length} uploaded, skip the rest
+                </button>
+              )}
+              <button
+                onClick={handleImportAnyway}
+                className="w-full px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md text-sm font-medium transition-colors"
+              >
+                Import anyway (exceed limit)
+              </button>
+              <button
+                onClick={handleUpgrade}
+                className="w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium transition-colors"
+              >
+                Upgrade plan
+              </button>
+              <button
+                onClick={handleLimitCancel}
+                className="w-full px-4 py-2.5 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

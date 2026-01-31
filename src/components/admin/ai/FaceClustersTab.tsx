@@ -253,11 +253,14 @@ export const FaceClustersTab: React.FC = () => {
 
   const getClusteringStatusMessage = () => {
     if (!clusteringJob) return 'Starting clustering...';
+    if (clusteringJob.status === 'processing' && clusteringJob.error_message) {
+      return clusteringJob.error_message;
+    }
     switch (clusteringJob.status) {
       case 'pending': return 'Preparing to cluster faces...';
       case 'processing': return 'Clustering faces...';
       case 'completed': return 'Clustering complete!';
-      case 'failed': return 'Clustering failed';
+      case 'failed': return `Clustering failed: ${clusteringJob.error_message || 'Unknown error'}`;
       default: return 'Processing...';
     }
   };
@@ -419,6 +422,7 @@ export const FaceClustersTab: React.FC = () => {
           onToggleSelect={handleToggleSelect}
           selectionMode={selectionMode}
           loading={loading}
+          contactNames={Object.fromEntries(contacts.map(c => [c.id, c.name]))}
         />
 
         {/* Detail Panel */}

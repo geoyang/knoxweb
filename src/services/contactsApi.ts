@@ -12,6 +12,7 @@ export interface LinkedProfile {
   full_name: string | null;
   email: string | null;
   avatar_url: string | null;
+  account_type: string | null;
 }
 
 export interface PhoneNumber {

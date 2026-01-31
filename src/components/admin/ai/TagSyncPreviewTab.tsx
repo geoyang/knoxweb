@@ -13,11 +13,19 @@ interface BoundingBox {
   height: number;
 }
 
+interface TaggedBy {
+  source?: string;
+  worker_id?: string;
+  model?: string;
+  similarity?: number;
+}
+
 interface ManualTag {
   tag_id: string;
   contact_id: string;
   contact_name?: string;
   bounding_box: BoundingBox;
+  tagged_by?: TaggedBy | null;
 }
 
 interface AIDetection {
@@ -76,6 +84,11 @@ export const TagSyncPreviewTab: React.FC = () => {
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [renderedSizes, setRenderedSizes] = useState<Record<string, { naturalWidth: number; naturalHeight: number; displayWidth: number; displayHeight: number }>>({});
+
+  // Tag source: manual (green), AI-matched (purple), or AI detection (blue)
+  const isAiMatched = (tag: ManualTag): boolean => !!tag.tagged_by?.source;
+  const getTagColor = (tag: ManualTag): string => isAiMatched(tag) ? '#a855f7' : '#22c55e';
+  const getTagLabel = (tag: ManualTag): string => isAiMatched(tag) ? 'AI Matched' : 'Manual';
 
   // Helper to calculate position in 0-100 range for SVG viewBox
   // Manual tags use normalized 0-1 values, AI detections may use pixels
@@ -249,10 +262,24 @@ export const TagSyncPreviewTab: React.FC = () => {
             <span className="summary-value">{summary.total_assets}</span>
             <span className="summary-label">Assets</span>
           </div>
-          <div className="summary-card">
-            <span className="summary-value">{summary.total_manual_tags}</span>
-            <span className="summary-label">Manual Tags</span>
-          </div>
+          {(() => {
+            const manualCount = assets.reduce((sum, a) => sum + a.manual_tags.filter(t => !t.tagged_by?.source).length, 0);
+            const aiMatchedCount = assets.reduce((sum, a) => sum + a.manual_tags.filter(t => !!t.tagged_by?.source).length, 0);
+            return (
+              <>
+                <div className="summary-card">
+                  <span className="summary-value">{manualCount}</span>
+                  <span className="summary-label">Manual Tags</span>
+                </div>
+                {aiMatchedCount > 0 && (
+                  <div className="summary-card" style={{ borderColor: '#a855f7' }}>
+                    <span className="summary-value" style={{ color: '#a855f7' }}>{aiMatchedCount}</span>
+                    <span className="summary-label">AI Matched</span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
           <div className="summary-card">
             <span className="summary-value">{summary.total_ai_faces}</span>
             <span className="summary-label">AI Detections</span>
@@ -336,6 +363,7 @@ export const TagSyncPreviewTab: React.FC = () => {
                   <svg className="bbox-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
                     {asset.manual_tags.map(tag => {
                       const isNorm = isNormalizedBbox(tag.bounding_box);
+                      const color = getTagColor(tag);
                       return (
                         <g key={tag.tag_id}>
                           <rect
@@ -344,13 +372,14 @@ export const TagSyncPreviewTab: React.FC = () => {
                             width={getBboxCoord(tag.bounding_box.width, asset.image_width, isNorm)}
                             height={getBboxCoord(tag.bounding_box.height, asset.image_height, isNorm)}
                             fill="none"
-                            stroke="#22c55e"
+                            stroke={color}
                             strokeWidth="1"
+                            strokeDasharray={isAiMatched(tag) ? '2 1' : undefined}
                           />
                           <text
                             x={getBboxCoord(tag.bounding_box.x, asset.image_width, isNorm)}
                             y={Math.max(2, getBboxCoord(tag.bounding_box.y, asset.image_height, isNorm) - 1)}
-                            fill="#22c55e"
+                            fill={color}
                             fontSize="3"
                             fontWeight="bold"
                             style={{ textShadow: '0 0 2px white' }}
@@ -360,27 +389,53 @@ export const TagSyncPreviewTab: React.FC = () => {
                         </g>
                       );
                     })}
-                    {asset.ai_detections.map(det => {
-                      const isNorm = isNormalizedBbox(det.bounding_box);
-                      return (
-                        <rect
-                          key={det.face_id}
-                          x={getBboxCoord(det.bounding_box.x, asset.image_width, isNorm)}
-                          y={getBboxCoord(det.bounding_box.y, asset.image_height, isNorm)}
-                          width={getBboxCoord(det.bounding_box.width, asset.image_width, isNorm)}
-                          height={getBboxCoord(det.bounding_box.height, asset.image_height, isNorm)}
-                          fill="none"
-                          stroke="#3b82f6"
-                          strokeWidth="1"
-                          strokeDasharray="2 1"
-                        />
+                    {(() => {
+                      // Skip blue boxes for AI detections already covered by AI-matched tags
+                      const aiMatchedTagIds = new Set(
+                        asset.manual_tags.filter(t => isAiMatched(t)).map(t => t.tag_id)
                       );
-                    })}
+                      const coveredAiFaceIds = new Set(
+                        asset.matches
+                          .filter(m => aiMatchedTagIds.has(m.manual_tag_id))
+                          .map(m => m.ai_face_id)
+                      );
+                      return asset.ai_detections
+                        .filter(det => !coveredAiFaceIds.has(det.face_id))
+                        .map(det => {
+                          const isNorm = isNormalizedBbox(det.bounding_box);
+                          return (
+                            <rect
+                              key={det.face_id}
+                              x={getBboxCoord(det.bounding_box.x, asset.image_width, isNorm)}
+                              y={getBboxCoord(det.bounding_box.y, asset.image_height, isNorm)}
+                              width={getBboxCoord(det.bounding_box.width, asset.image_width, isNorm)}
+                              height={getBboxCoord(det.bounding_box.height, asset.image_height, isNorm)}
+                              fill="none"
+                              stroke="#3b82f6"
+                              strokeWidth="1"
+                              strokeDasharray="2 1"
+                            />
+                          );
+                        });
+                    })()}
                   </svg>
                 </div>
                 <div className="asset-info">
                   <span className="tag-count" style={{ background: '#1f2937', color: 'white' }}>#{index}</span>
-                  <span className="tag-count green">{asset.manual_tags.length} tags</span>
+                  {(() => {
+                    const manualCount = asset.manual_tags.filter(t => !t.tagged_by?.source).length;
+                    const aiMatchedCount = asset.manual_tags.filter(t => !!t.tagged_by?.source).length;
+                    return (
+                      <>
+                        {manualCount > 0 && (
+                          <span className="tag-count green">{manualCount} manual</span>
+                        )}
+                        {aiMatchedCount > 0 && (
+                          <span className="tag-count" style={{ background: '#a855f7', color: 'white' }}>{aiMatchedCount} AI matched</span>
+                        )}
+                      </>
+                    );
+                  })()}
                   <span className="tag-count blue">{asset.ai_detections.length} AI</span>
                   <span className="tag-count">{asset.matches.filter(m => m.status === 'matched').length} matches</span>
                   {(asset.detected_objects?.length ?? 0) > 0 && (
@@ -397,11 +452,13 @@ export const TagSyncPreviewTab: React.FC = () => {
                       <strong>Actual Image:</strong> {renderedSizes[asset.asset_id]?.naturalWidth ?? '?'} x {renderedSizes[asset.asset_id]?.naturalHeight ?? '?'}
                     </div>
                     <div className="debug-boxes">
-                      <strong>Manual Tags ({asset.manual_tags.length}):</strong>
+                      <strong>Tags ({asset.manual_tags.length}):</strong>
                       {asset.manual_tags.map(tag => {
                         const isNorm = tag.bounding_box ? isNormalizedBbox(tag.bounding_box) : false;
+                        const color = getTagColor(tag);
                         return (
                           <div key={tag.tag_id} className="debug-box-item">
+                            <span style={{color}}>[{getTagLabel(tag)}]</span>{' '}
                             {tag.contact_name}: x={tag.bounding_box?.x?.toFixed(3) ?? 'null'}, y={tag.bounding_box?.y?.toFixed(3) ?? 'null'},
                             w={tag.bounding_box?.width?.toFixed(3) ?? 'null'}, h={tag.bounding_box?.height?.toFixed(3) ?? 'null'}
                             <span style={{color: '#059669'}}> [{isNorm ? 'normalized' : 'pixels'}] → {getBboxCoord(tag.bounding_box?.x || 0, asset.image_width, isNorm).toFixed(1)}%, {getBboxCoord(tag.bounding_box?.y || 0, asset.image_height, isNorm).toFixed(1)}%</span>
@@ -458,7 +515,17 @@ export const TagSyncPreviewTab: React.FC = () => {
                               checked={selectedMatches.has(`${match.manual_tag_id}:${match.ai_face_id}`)}
                               onChange={() => {}}
                             />
-                            <span className="contact-name">{manualTag?.contact_name || 'Unknown'}</span>
+                            <a
+                              className="contact-name"
+                              href={`/admin/contacts?id=${manualTag?.contact_id || ''}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ color: '#2563eb', textDecoration: 'underline', cursor: 'pointer' }}
+                              title="Open contact details"
+                            >
+                              {manualTag?.contact_name || 'Unknown'}
+                            </a>
                             <span className="iou-score">IoU: {(match.iou_score * 100).toFixed(0)}%</span>
                             {aiDet?.thumbnail_url && (
                               <img src={aiDet.thumbnail_url} alt="Face" className="face-thumb" />
@@ -470,6 +537,7 @@ export const TagSyncPreviewTab: React.FC = () => {
                     )}
                     <div className="legend">
                       <span className="legend-item"><span className="box green"></span> Manual Tag</span>
+                      <span className="legend-item"><span className="box purple dashed"></span> AI Matched</span>
                       <span className="legend-item"><span className="box blue dashed"></span> AI Detection</span>
                     </div>
                   </div>

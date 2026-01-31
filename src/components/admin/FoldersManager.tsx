@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   getFolders,
@@ -17,6 +18,8 @@ import {
   FolderShare,
 } from '../../services/foldersApi';
 import { adminApi } from '../../services/adminApi';
+import { MediaViewer } from '../MediaViewer';
+import { ImageUploader } from './ImageUploader';
 
 interface Circle {
   id: string;
@@ -25,6 +28,7 @@ interface Circle {
 
 export const FoldersManager: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
   const [folderItems, setFolderItems] = useState<FolderItem[]>([]);
@@ -59,6 +63,17 @@ export const FoldersManager: React.FC = () => {
   // Document viewer
   const [viewingDocument, setViewingDocument] = useState<FolderItem | null>(null);
 
+  // Asset viewer
+  const [viewingAsset, setViewingAsset] = useState<FolderItem | null>(null);
+
+  // Media upload
+  const [showMediaUploader, setShowMediaUploader] = useState(false);
+  const [mediaUploaderFiles, setMediaUploaderFiles] = useState<File[] | undefined>(undefined);
+  const selectedFolderRef = useRef<Folder | null>(null);
+
+  // Drag-and-drop
+  const [isDragOver, setIsDragOver] = useState(false);
+
   // Form states
   const [newFolderTitle, setNewFolderTitle] = useState('');
   const [newFolderDescription, setNewFolderDescription] = useState('');
@@ -69,6 +84,11 @@ export const FoldersManager: React.FC = () => {
 
   const [isOwner, setIsOwner] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+
+  // Keep ref in sync so async callbacks always see the latest folder
+  useEffect(() => {
+    selectedFolderRef.current = selectedFolder;
+  }, [selectedFolder]);
 
   useEffect(() => {
     if (user?.id) {
@@ -297,9 +317,13 @@ export const FoldersManager: React.FC = () => {
         setUploadProgress(`Uploading ${file.name} (${i + 1}/${files.length})...`);
 
         if (isMediaFile(file)) {
-          // For photos/videos, show a message that they should use the Albums feature
-          setError(`"${file.name}" is a photo/video. Please use Albums to upload media files.`);
-          continue;
+          // Route media files to the media uploader
+          const mediaFilesFromInput = Array.from(files).filter(f => isMediaFile(f));
+          if (mediaFilesFromInput.length > 0) {
+            setMediaUploaderFiles(mediaFilesFromInput);
+            setShowMediaUploader(true);
+          }
+          break;
         }
 
         // Upload document file
@@ -325,6 +349,104 @@ export const FoldersManager: React.FC = () => {
   const triggerFileUpload = () => {
     setShowAddMenu(false);
     fileInputRef.current?.click();
+  };
+
+  const triggerMediaUpload = () => {
+    setShowAddMenu(false);
+    setMediaUploaderFiles(undefined);
+    setShowMediaUploader(true);
+  };
+
+  const handleAssetCreated = async (assetId: string) => {
+    const folder = selectedFolderRef.current;
+    if (!folder) return;
+    try {
+      await addItemToFolder({
+        folder_id: folder.id,
+        item_type: 'asset',
+        item_id: assetId,
+      });
+    } catch (err) {
+      console.error('Error adding asset to folder:', err);
+    }
+  };
+
+  const handleMediaUploaderClose = () => {
+    setShowMediaUploader(false);
+    setMediaUploaderFiles(undefined);
+    if (selectedFolder) {
+      loadFolderDetail(selectedFolder.id);
+    }
+  };
+
+  const handleMediaUploaded = (count: number) => {
+    console.log('Media uploaded:', count);
+    if (selectedFolder) {
+      loadFolderDetail(selectedFolder.id);
+    }
+  };
+
+  const handleFolderDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleFolderDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isStillInside = e.clientX >= rect.left && e.clientX <= rect.right &&
+                          e.clientY >= rect.top && e.clientY <= rect.bottom;
+    if (!isStillInside) {
+      setIsDragOver(false);
+    }
+  };
+
+  const handleFolderDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    if (!e.dataTransfer?.files || e.dataTransfer.files.length === 0 || !selectedFolder) return;
+
+    const files = Array.from(e.dataTransfer.files);
+    const mediaFiles: File[] = [];
+    const docFiles: File[] = [];
+
+    for (const file of files) {
+      if (isMediaFile(file) || file.type.startsWith('image/') || file.type.startsWith('video/') || file.type.startsWith('audio/')) {
+        mediaFiles.push(file);
+      } else {
+        docFiles.push(file);
+      }
+    }
+
+    // Handle media files via ImageUploader
+    if (mediaFiles.length > 0) {
+      setMediaUploaderFiles(mediaFiles);
+      setShowMediaUploader(true);
+    }
+
+    // Handle document files inline
+    if (docFiles.length > 0) {
+      setUploadingDocument(true);
+      try {
+        for (let i = 0; i < docFiles.length; i++) {
+          const file = docFiles[i];
+          setUploadProgress(`Uploading ${file.name} (${i + 1}/${docFiles.length})...`);
+          await uploadDocumentFile(file, selectedFolder.id);
+        }
+        setUploadProgress('');
+        await loadFolderDetail(selectedFolder.id);
+      } catch (err) {
+        console.error('Error uploading document:', err);
+        setError(err instanceof Error ? err.message : 'Failed to upload document');
+      } finally {
+        setUploadingDocument(false);
+        setUploadProgress('');
+      }
+    }
   };
 
   const openEditModal = () => {
@@ -510,14 +632,16 @@ export const FoldersManager: React.FC = () => {
   };
 
   const handleItemClick = (item: FolderItem) => {
-    console.log('Item clicked:', item);
+    console.log('Item clicked:', item, 'asset:', item.asset);
     if (item.item_type === 'folder') {
       loadFolderDetail(item.item_id);
+    } else if (item.item_type === 'album') {
+      navigate(`/admin/albums/${item.item_id}`);
     } else if (item.item_type === 'document') {
-      console.log('Opening document:', item.document);
       setViewingDocument(item);
+    } else if (item.item_type === 'asset') {
+      setViewingAsset(item);
     }
-    // Other item types can be handled here in the future
   };
 
   const getItemTitle = (item: FolderItem) => {
@@ -540,46 +664,101 @@ export const FoldersManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Folders</h2>
-        <div className="flex items-center space-x-4">
+      {selectedFolder ? (
+        <div className="flex items-center gap-3">
           <button
-            onClick={() => setShowCreateFolder(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+            onClick={() => {
+              if (selectedFolder.parent_folder_id) {
+                loadFolderDetail(selectedFolder.parent_folder_id);
+              } else {
+                setSelectedFolder(null);
+                setFolderItems([]);
+                setFolderShares([]);
+              }
+            }}
+            className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium"
           >
-            <span>+</span>
-            Create Folder
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            {selectedFolder.parent_folder_id ? 'Back to parent folder' : 'Back to Folders'}
           </button>
-          {/* Hierarchy/Flat toggle */}
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showAllFolders}
-              onChange={(e) => setShowAllFolders(e.target.checked)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            Show all folders
-          </label>
-          <div className="flex bg-gray-200 rounded-lg p-1">
+          <span className="text-gray-300">|</span>
+          <span className="text-3xl">📂</span>
+          <h2 className="text-2xl font-bold text-gray-900">{selectedFolder.title}</h2>
+          {isOwner ? (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+              Owner
+            </span>
+          ) : (
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(userRole || 'read_only')}`}>
+              {(userRole || 'read_only').replace('_', ' ')}
+            </span>
+          )}
+          {isOwner && (
+            <div className="ml-auto flex gap-2">
+              <button
+                onClick={openEditModal}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+              >
+                Edit
+              </button>
+              <button
+                onClick={openShareModal}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+              >
+                Share
+              </button>
+              <button
+                onClick={() => setShowAddMenu(!showAddMenu)}
+                className="btn-primary flex items-center gap-1"
+              >
+                <span>+</span> Add Items
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-gray-900">Folders</h2>
+          <div className="flex items-center space-x-4">
             <button
-              onClick={() => setViewMode('grid')}
-              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'grid' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'
-              }`}
+              onClick={() => setShowCreateFolder(true)}
+              className="btn-primary flex items-center gap-2"
             >
-              Grid
+              <span>+</span>
+              Create Folder
             </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'list' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'
-              }`}
-            >
-              List
-            </button>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showAllFolders}
+                onChange={(e) => setShowAllFolders(e.target.checked)}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              Show all folders
+            </label>
+            <div className="flex bg-gray-200 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'grid' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'
+                }`}
+              >
+                Grid
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'list' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'
+                }`}
+              >
+                List
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
@@ -587,303 +766,516 @@ export const FoldersManager: React.FC = () => {
         </div>
       )}
 
-      {/* Grid View */}
-      {viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {folders.map(folder => (
-            <div
-              key={folder.id}
-              className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => loadFolderDetail(folder.id)}
-            >
-              <div className="aspect-square bg-gradient-to-br from-amber-50 to-amber-100 rounded-t-lg overflow-hidden flex items-center justify-center">
-                <div className="text-6xl">📂</div>
-              </div>
-              <div className="p-3">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <h3 className="font-semibold text-gray-900 truncate flex-1 text-sm">{folder.title}</h3>
-                  {folder.isOwner ? (
-                    <span className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800">
-                      Owner
-                    </span>
-                  ) : (
-                    <span className={`flex-shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getRoleColor(folder.shared_via?.[0]?.role || 'read_only')}`}>
-                      {(folder.shared_via?.[0]?.role || 'read_only').replace('_', ' ')}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500">
-                  {folder.item_count || 0} items
-                </p>
-                {!folder.isOwner && folder.shared_via && folder.shared_via.length > 0 && (
-                  <p className="text-[10px] text-blue-600 mt-0.5 truncate">
-                    via {folder.shared_via.map(s => s.circle_name).filter(Boolean).join(', ')}
-                  </p>
-                )}
+      {selectedFolder ? (
+        <>
+          {/* Folder description */}
+          {selectedFolder.description && (
+            <p className="text-gray-600">{selectedFolder.description}</p>
+          )}
+
+          {/* Add Menu Popup (relative to header) */}
+          {showAddMenu && isOwner && (
+            <div className="relative">
+              <div className="absolute right-0 top-0 bg-white rounded-lg shadow-xl border w-56 overflow-hidden z-10">
+                <button
+                  onClick={() => {
+                    setShowAddMenu(false);
+                    setShowCreateSubfolder(true);
+                  }}
+                  className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                >
+                  <span className="text-xl">📁</span>
+                  <div>
+                    <p className="font-medium text-gray-900">New Subfolder</p>
+                    <p className="text-xs text-gray-500">Create a folder inside</p>
+                  </div>
+                </button>
+                <button
+                  onClick={openAddItemsModal}
+                  className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors border-t"
+                >
+                  <span className="text-xl">📷</span>
+                  <div>
+                    <p className="font-medium text-gray-900">Add Album</p>
+                    <p className="text-xs text-gray-500">Add an existing album</p>
+                  </div>
+                </button>
+                <button
+                  onClick={triggerMediaUpload}
+                  className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors border-t"
+                >
+                  <span className="text-xl">🖼️</span>
+                  <div>
+                    <p className="font-medium text-gray-900">Upload Media</p>
+                    <p className="text-xs text-gray-500">Photos, videos, or audio</p>
+                  </div>
+                </button>
+                <button
+                  onClick={triggerFileUpload}
+                  disabled={uploadingDocument}
+                  className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors border-t disabled:opacity-50"
+                >
+                  <span className="text-xl">📄</span>
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {uploadingDocument ? 'Uploading...' : 'Upload Document'}
+                    </p>
+                    <p className="text-xs text-gray-500">Upload a file</p>
+                  </div>
+                </button>
               </div>
             </div>
-          ))}
-        </div>
-      ) : (
-        /* List View */
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Folder</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {folders.map(folder => (
-                <tr key={folder.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <span className="text-2xl mr-3">📂</span>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{folder.title}</div>
-                        {folder.description && (
-                          <div className="text-sm text-gray-500 truncate max-w-xs">{folder.description}</div>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {folder.isOwner ? (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                        Owner
-                      </span>
-                    ) : (
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(folder.shared_via?.[0]?.role || 'read_only')}`}>
-                        {(folder.shared_via?.[0]?.role || 'read_only').replace('_', ' ')}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {folder.item_count || 0}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => loadFolderDetail(folder.id)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        View
-                      </button>
-                      {folder.isOwner && (
+          )}
+
+          {/* Shares Section */}
+          {isOwner && folderShares.length > 0 && (
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-3">Shared with</h4>
+              <div className="flex flex-wrap gap-2">
+                {folderShares.map(share => (
+                  <div key={share.id} className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full">
+                    <span className="text-sm">{share.type === 'circle' ? '👥' : '👤'}</span>
+                    <span className="text-sm font-medium">
+                      {share.type === 'circle' ? share.circles?.name : share.profile?.full_name || share.profile?.email}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getRoleColor(share.role)}`}>
+                      {share.role.replace('_', ' ')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Folder Items Grid - Full width with drag-and-drop */}
+          <div
+            className={`relative rounded-lg transition-colors ${isDragOver ? 'ring-2 ring-blue-400 ring-dashed bg-blue-50/50' : ''}`}
+            onDragOver={handleFolderDragOver}
+            onDragEnter={handleFolderDragOver}
+            onDragLeave={handleFolderDragLeave}
+            onDrop={handleFolderDrop}
+          >
+          {isDragOver && (
+            <div className="absolute inset-0 bg-blue-50/80 flex items-center justify-center z-10 rounded-lg pointer-events-none">
+              <div className="text-center">
+                <span className="text-4xl mb-2 block">📥</span>
+                <p className="text-blue-700 font-semibold">Drop files here to upload</p>
+                <p className="text-blue-500 text-sm">Media files or documents</p>
+              </div>
+            </div>
+          )}
+          {folderItems.length > 0 ? (
+            <div className="space-y-6">
+              {(['folders_albums', 'document', 'asset', 'other'] as const).map(groupType => {
+                const groupItems = groupType === 'folders_albums'
+                  ? folderItems.filter(i => i.item_type === 'folder' || i.item_type === 'album')
+                  : groupType === 'other'
+                  ? folderItems.filter(i => !['folder', 'album', 'document', 'asset'].includes(i.item_type))
+                  : folderItems.filter(i => i.item_type === groupType);
+                if (groupItems.length === 0) return null;
+                const groupLabel = groupType === 'folders_albums' ? 'Folders & Albums'
+                  : groupType === 'document' ? 'Documents'
+                  : groupType === 'asset' ? 'Media'
+                  : 'Other';
+                return (
+                  <div key={groupType}>
+                    <h3 className="text-sm font-semibold text-theme-muted uppercase tracking-wide mb-2">{groupLabel}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {groupItems.sort((a, b) => {
+                        const order: Record<string, number> = { folder: 0, album: 1 };
+                        return (order[a.item_type] ?? 2) - (order[b.item_type] ?? 2);
+                      }).map(item => {
+                // Asset items render as photo thumbnails
+                if (item.item_type === 'asset') {
+                  const thumbnailUrl = item.asset?.thumbnail || item.asset?.web_uri;
+                  const isVideo = item.asset?.media_type === 'video';
+                  return (
+                    <div
+                      key={item.id}
+                      className="w-[180px] h-[180px] bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform relative group"
+                      onClick={() => handleItemClick(item)}
+                    >
+                      {thumbnailUrl ? (
+                        <img
+                          src={thumbnailUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          draggable={false}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
+                          <div className="text-sm mb-0.5">{isVideo ? '🎥' : '📸'}</div>
+                          <div className="text-[9px] text-center px-1">
+                            {isVideo ? 'Video' : 'Image'}
+                          </div>
+                        </div>
+                      )}
+                      {isVideo && thumbnailUrl && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="bg-black/50 rounded-full p-1">
+                            <span className="text-white text-xs">▶️</span>
+                          </div>
+                        </div>
+                      )}
+                      {isOwner && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteFolder(folder.id);
+                            handleRemoveFromFolder(item.item_id, item.item_type);
                           }}
-                          className="text-red-600 hover:text-red-800"
+                          className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                         >
-                          Delete
+                          ×
                         </button>
                       )}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  );
+                }
 
-      {folders.length === 0 && (
-        <div className="text-center py-16">
-          <div className="text-6xl mb-4 opacity-50">📂</div>
-          <h3 className="text-2xl font-bold text-gray-700 mb-2">No Folders Yet</h3>
-          <p className="text-gray-500">Create a folder to organize your albums, documents, and more.</p>
-        </div>
-      )}
-
-      {/* Folder Detail Modal */}
-      {selectedFolder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 pt-4 overflow-y-auto">
-          <div className="bg-white rounded-lg p-6 w-full max-w-4xl mb-4 mx-4 relative">
-            <div className="flex justify-between items-start mb-6">
-              <div className="flex-1">
-                {/* Back button for subfolders */}
-                {selectedFolder.parent_folder_id && (
-                  <button
-                    onClick={() => loadFolderDetail(selectedFolder.parent_folder_id!)}
-                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm mb-2"
-                  >
-                    <span>←</span> Back to parent folder
-                  </button>
-                )}
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">📂</span>
-                  <h3 className="text-2xl font-bold text-gray-900">{selectedFolder.title}</h3>
-                  {isOwner ? (
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                      Owner
-                    </span>
-                  ) : (
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(userRole || 'read_only')}`}>
-                      {(userRole || 'read_only').replace('_', ' ')}
-                    </span>
-                  )}
-                </div>
-                {selectedFolder.description && (
-                  <p className="text-gray-600 mt-1 ml-12">{selectedFolder.description}</p>
-                )}
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedFolder(null);
-                  setFolderItems([]);
-                  setFolderShares([]);
-                }}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
-              >
-                x
-              </button>
-            </div>
-
-            {/* Action buttons */}
-            {isOwner && (
-              <div className="flex gap-2 mb-6">
-                <button
-                  onClick={openEditModal}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={openShareModal}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Share
-                </button>
-              </div>
-            )}
-
-            {/* Shares Section */}
-            {isOwner && folderShares.length > 0 && (
-              <div className="mb-6">
-                <h4 className="font-semibold text-gray-900 mb-3">Shared with</h4>
-                <div className="space-y-2">
-                  {folderShares.map(share => (
-                    <div key={share.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{share.type === 'circle' ? '👥' : '👤'}</span>
-                        <span className="font-medium">
-                          {share.type === 'circle' ? share.circles?.name : share.profile?.full_name || share.profile?.email}
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getRoleColor(share.role)}`}>
-                          {share.role.replace('_', ' ')}
-                        </span>
+                // Album items render like album cards (same as AlbumsManager grid)
+                if (item.item_type === 'album' && item.album) {
+                  const albumThumb = item.album.keyphoto_thumbnail || item.album.keyphoto;
+                  const isDisplayable = albumThumb && (albumThumb.startsWith('http') || albumThumb.startsWith('data:'));
+                  return (
+                    <div
+                      key={item.id}
+                      className="w-[180px] card hover:shadow-lg transition-shadow cursor-pointer group relative"
+                      onClick={() => handleItemClick(item)}
+                    >
+                      <div className="aspect-square bg-surface-elevated rounded-t-lg overflow-hidden flex items-center justify-center">
+                        <div className="relative flex items-center justify-center w-full h-full">
+                          {isDisplayable ? (
+                            <img
+                              src={albumThumb!}
+                              alt={item.album.title}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              crossOrigin="anonymous"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-primary-light flex items-center justify-center">
+                              <i className="fi fi-sr-images text-5xl text-theme-accent opacity-50"></i>
+                            </div>
+                          )}
+                        </div>
                       </div>
+                      <div className="p-3">
+                        <h3 className="font-semibold text-theme-primary truncate text-sm">{item.album.title}</h3>
+                        <p className="text-xs text-theme-muted">
+                          {item.album.asset_count || 0} photos
+                          {item.album.date_created && ` • ${new Date(item.album.date_created).toLocaleDateString()}`}
+                        </p>
+                      </div>
+                      {isOwner && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveFromFolder(item.item_id, item.item_type);
+                          }}
+                          className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  );
+                }
 
-            {/* Items Grid - Desktop style */}
-            {folderItems.length > 0 ? (
-              <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {folderItems.map(item => (
+                // Other non-asset items render with icons
+                return (
                   <div
                     key={item.id}
-                    className="flex flex-col items-center p-3 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors group"
+                    className="w-[180px] flex flex-col items-center p-3 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors group"
                     onClick={() => handleItemClick(item)}
                   >
-                    <div className="mb-2">
+                    <div className="mb-2 relative">
                       {getItemIconForDisplay(item)}
+                      {isOwner && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveFromFolder(item.item_id, item.item_type);
+                          }}
+                          className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                     <p className="text-sm text-gray-900 text-center truncate w-full">
                       {getItemTitle(item)}
                     </p>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16 text-gray-400">
-                <div className="text-6xl mb-4 opacity-50">📂</div>
-                <p>Empty folder</p>
-              </div>
-            )}
-
-            {/* FAB for adding items */}
-            {isOwner && (
-              <div className="absolute bottom-6 right-6">
-                {/* Add Menu Popup */}
-                {showAddMenu && (
-                  <div className="absolute bottom-16 right-0 bg-white rounded-lg shadow-xl border w-56 overflow-hidden mb-2">
-                    <button
-                      onClick={() => {
-                        setShowAddMenu(false);
-                        setShowCreateSubfolder(true);
-                      }}
-                      className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
-                    >
-                      <span className="text-xl">📁</span>
-                      <div>
-                        <p className="font-medium text-gray-900">New Subfolder</p>
-                        <p className="text-xs text-gray-500">Create a folder inside</p>
-                      </div>
-                    </button>
-                    <button
-                      onClick={openAddItemsModal}
-                      className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors border-t"
-                    >
-                      <span className="text-xl">📷</span>
-                      <div>
-                        <p className="font-medium text-gray-900">Add Album</p>
-                        <p className="text-xs text-gray-500">Add an existing album</p>
-                      </div>
-                    </button>
-                    <button
-                      onClick={triggerFileUpload}
-                      disabled={uploadingDocument}
-                      className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors border-t disabled:opacity-50"
-                    >
-                      <span className="text-xl">📄</span>
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {uploadingDocument ? 'Uploading...' : 'Upload Document'}
-                        </p>
-                        <p className="text-xs text-gray-500">Upload a file</p>
-                      </div>
-                    </button>
+                );
+              })}
+                    </div>
                   </div>
-                )}
-                {/* FAB Button */}
-                <button
-                  onClick={() => setShowAddMenu(!showAddMenu)}
-                  className={`w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg flex items-center justify-center transition-all ${showAddMenu ? 'rotate-45' : ''}`}
-                >
-                  <span className="text-3xl font-light">+</span>
-                </button>
+                );
+              })}
+              {/* Drag-and-drop hint */}
+              <div className="flex items-center justify-center gap-2 py-3 text-gray-400 text-xs">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <span>Drag and drop files here to upload</span>
               </div>
-            )}
-
-            {/* Hidden file input for document upload */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleDocumentUpload}
-              className="hidden"
-              multiple
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.md,.json,.zip"
-            />
-
-            {/* Upload progress overlay */}
-            {uploadingDocument && (
-              <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-lg">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-700 font-medium">{uploadProgress || 'Uploading...'}</p>
-                </div>
+            </div>
+          ) : (
+            <div className="text-center py-16 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
+              <div className="text-6xl mb-4 opacity-50">📂</div>
+              <p>Empty folder</p>
+              <div className="flex items-center justify-center gap-2 mt-3 text-sm">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <span>Drag and drop files here or use the + menu to add items</span>
               </div>
-            )}
+            </div>
+          )}
           </div>
-        </div>
+
+          {/* Hidden file input for document upload */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleDocumentUpload}
+            className="hidden"
+            multiple
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.md,.json,.zip"
+          />
+
+          {/* Upload progress overlay */}
+          {uploadingDocument && (
+            <div className="fixed inset-0 bg-white/80 flex items-center justify-center z-50">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-700 font-medium">{uploadProgress || 'Uploading...'}</p>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Grid View */}
+          {viewMode === 'grid' ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {folders.map(folder => (
+                <div
+                  key={folder.id}
+                  className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
+                  onClick={() => loadFolderDetail(folder.id)}
+                >
+                  <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-t-lg overflow-hidden flex flex-col items-start p-3 gap-1.5 min-h-[140px]">
+                    <div className="flex items-center gap-2 w-full">
+                      <span className="text-3xl">📂</span>
+                      <span className="text-sm font-semibold text-amber-900">{folder.item_count || 0} items</span>
+                    </div>
+                    {folder.type_counts && Object.keys(folder.type_counts).length > 0 && (
+                      <div className="flex flex-col gap-1.5 w-full">
+                        {folder.type_counts.folder ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] text-amber-700">📁 {folder.type_counts.folder} folder{folder.type_counts.folder > 1 ? 's' : ''}</span>
+                          </div>
+                        ) : null}
+                        {folder.type_counts.album ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[11px] text-amber-700">📷 {folder.type_counts.album} album{folder.type_counts.album > 1 ? 's' : ''}</span>
+                            {folder.previews?.album_previews && folder.previews.album_previews.length > 0 && (
+                              <div className="flex gap-1 flex-wrap">
+                                {folder.previews.album_previews.map(album => (
+                                  <div key={album.id} className="w-8 h-8 rounded shadow-sm overflow-hidden bg-white flex-shrink-0" title={album.title}>
+                                    {(album.keyphoto_thumbnail || album.keyphoto) ? (
+                                      <img src={album.keyphoto_thumbnail || album.keyphoto} alt={album.title} className="w-full h-full object-cover" loading="lazy" />
+                                    ) : (
+                                      <div className="w-full h-full bg-purple-100 flex items-center justify-center">
+                                        <span className="text-[10px]">📷</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+                        {folder.type_counts.asset ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[11px] text-amber-700">🖼️ {folder.type_counts.asset} photo{folder.type_counts.asset > 1 ? 's' : ''}</span>
+                            {folder.previews?.asset_previews && folder.previews.asset_previews.length > 0 && (
+                              <div className="flex gap-1 items-center">
+                                {folder.previews.asset_previews.map(asset => (
+                                  <div key={asset.id} className="w-7 h-7 rounded overflow-hidden bg-white flex-shrink-0">
+                                    <img src={asset.thumbnail || asset.web_uri || ''} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                  </div>
+                                ))}
+                                {folder.type_counts.asset > 5 && (
+                                  <span className="text-[10px] text-amber-600 font-medium">+{folder.type_counts.asset - 5}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+                        {folder.type_counts.document ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] text-amber-700">📄 {folder.type_counts.document} document{folder.type_counts.document > 1 ? 's' : ''}</span>
+                          </div>
+                        ) : null}
+                        {folder.type_counts.list ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] text-amber-700">✓ {folder.type_counts.list} list{folder.type_counts.list > 1 ? 's' : ''}</span>
+                          </div>
+                        ) : null}
+                        {folder.type_counts.live_event ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] text-amber-700">🎥 {folder.type_counts.live_event} event{folder.type_counts.live_event > 1 ? 's' : ''}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <h3 className="font-semibold text-gray-900 truncate flex-1 text-sm">{folder.title}</h3>
+                      {folder.isOwner ? (
+                        <span className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800">
+                          Owner
+                        </span>
+                      ) : (
+                        <span className={`flex-shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getRoleColor(folder.shared_via?.[0]?.role || 'read_only')}`}>
+                          {(folder.shared_via?.[0]?.role || 'read_only').replace('_', ' ')}
+                        </span>
+                      )}
+                    </div>
+                    {!folder.isOwner && folder.shared_via && folder.shared_via.length > 0 && (
+                      <p className="text-[10px] text-blue-600 mt-0.5 truncate">
+                        via {folder.shared_via.map(s => s.circle_name).filter(Boolean).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* List View */
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Folder</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {folders.map(folder => (
+                    <tr key={folder.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <span className="text-2xl mr-3">📂</span>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{folder.title}</div>
+                            {folder.description && (
+                              <div className="text-sm text-gray-500 truncate max-w-xs">{folder.description}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {folder.isOwner ? (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                            Owner
+                          </span>
+                        ) : (
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(folder.shared_via?.[0]?.role || 'read_only')}`}>
+                            {(folder.shared_via?.[0]?.role || 'read_only').replace('_', ' ')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{folder.item_count || 0} items</span>
+                          {folder.type_counts && Object.keys(folder.type_counts).length > 0 && (
+                            <>
+                              {folder.type_counts.folder ? <span className="text-xs text-gray-500">📁 {folder.type_counts.folder} folder{folder.type_counts.folder > 1 ? 's' : ''}</span> : null}
+                              {folder.type_counts.album ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs text-gray-500">📷 {folder.type_counts.album} album{folder.type_counts.album > 1 ? 's' : ''}</span>
+                                  {folder.previews?.album_previews && folder.previews.album_previews.length > 0 && (
+                                    <div className="flex gap-0.5">
+                                      {folder.previews.album_previews.map(album => (
+                                        <div key={album.id} className="w-6 h-6 rounded shadow-sm overflow-hidden bg-white flex-shrink-0" title={album.title}>
+                                          {(album.keyphoto_thumbnail || album.keyphoto) ? (
+                                            <img src={album.keyphoto_thumbnail || album.keyphoto} alt={album.title} className="w-full h-full object-cover" loading="lazy" />
+                                          ) : (
+                                            <div className="w-full h-full bg-purple-100 flex items-center justify-center"><span className="text-[8px]">📷</span></div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+                              {folder.type_counts.asset ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs text-gray-500">🖼️ {folder.type_counts.asset} photo{folder.type_counts.asset > 1 ? 's' : ''}</span>
+                                  {folder.previews?.asset_previews && folder.previews.asset_previews.length > 0 && (
+                                    <div className="flex gap-0.5 items-center">
+                                      {folder.previews.asset_previews.map(asset => (
+                                        <div key={asset.id} className="w-5 h-5 rounded overflow-hidden bg-white flex-shrink-0">
+                                          <img src={asset.thumbnail || asset.web_uri || ''} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                        </div>
+                                      ))}
+                                      {folder.type_counts.asset > 5 && (
+                                        <span className="text-[10px] text-gray-400 font-medium">+{folder.type_counts.asset - 5}</span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+                              {folder.type_counts.document ? <span className="text-xs text-gray-500">📄 {folder.type_counts.document} document{folder.type_counts.document > 1 ? 's' : ''}</span> : null}
+                              {folder.type_counts.list ? <span className="text-xs text-gray-500">✓ {folder.type_counts.list} list{folder.type_counts.list > 1 ? 's' : ''}</span> : null}
+                              {folder.type_counts.live_event ? <span className="text-xs text-gray-500">🎥 {folder.type_counts.live_event} event{folder.type_counts.live_event > 1 ? 's' : ''}</span> : null}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => loadFolderDetail(folder.id)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            View
+                          </button>
+                          {folder.isOwner && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteFolder(folder.id);
+                              }}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {folders.length === 0 && (
+            <div className="text-center py-16">
+              <div className="text-6xl mb-4 opacity-50">📂</div>
+              <h3 className="text-2xl font-bold text-gray-700 mb-2">No Folders Yet</h3>
+              <p className="text-gray-500">Create a folder to organize your albums, documents, and more.</p>
+            </div>
+          )}
+        </>
       )}
 
       {/* Create Subfolder Modal */}
@@ -1227,6 +1619,32 @@ export const FoldersManager: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Media Uploader */}
+      {showMediaUploader && selectedFolder && (
+        <ImageUploader
+          onImagesUploaded={handleMediaUploaded}
+          onClose={handleMediaUploaderClose}
+          initialFiles={mediaUploaderFiles}
+          onAssetCreated={handleAssetCreated}
+        />
+      )}
+
+      {/* Asset Viewer */}
+      {viewingAsset && (
+        <MediaViewer
+          asset={{
+            asset_id: viewingAsset.asset?.id || viewingAsset.item_id,
+            asset_uri: viewingAsset.asset?.web_uri || viewingAsset.asset?.path || '',
+            web_uri: viewingAsset.asset?.web_uri || null,
+            thumbnail: viewingAsset.asset?.thumbnail || null,
+            asset_type: viewingAsset.asset?.media_type === 'video' ? 'video' : 'image',
+          }}
+          displayUrl={viewingAsset.asset?.web_uri || viewingAsset.asset?.thumbnail || viewingAsset.asset?.path || null}
+          originalUrl={viewingAsset.asset?.web_uri || viewingAsset.asset?.path || null}
+          onClose={() => setViewingAsset(null)}
+        />
       )}
 
       {/* Document Viewer Modal */}

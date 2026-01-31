@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { contactsApi, Contact, ContactInput, RELATIONSHIP_TYPES, RELATIONSHIP_COLORS } from '../../services/contactsApi';
 import { friendsApi } from '../../services/friendsApi';
@@ -131,6 +131,7 @@ export const ContactsManager: React.FC = () => {
 
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     if (user?.id) {
@@ -139,6 +140,17 @@ export const ContactsManager: React.FC = () => {
       setLoading(false);
     }
   }, [user?.id]);
+
+  // Auto-select contact from URL query param ?id=xxx
+  useEffect(() => {
+    const contactId = searchParams.get('id');
+    if (contactId && contacts.length > 0 && !selectedContact) {
+      const match = contacts.find(c => c.id === contactId);
+      if (match) {
+        handleSelectContact(match);
+      }
+    }
+  }, [searchParams, contacts]);
 
   const loadContacts = async () => {
     try {
@@ -618,6 +630,15 @@ export const ContactsManager: React.FC = () => {
                             On Kizu
                           </span>
                         ) : null}
+                        {contact.linked_profile && (
+                          <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded ${
+                            contact.linked_profile.account_type === 'collaborator'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {contact.linked_profile.account_type === 'collaborator' ? 'Read Only' : 'Member'}
+                          </span>
+                        )}
                         {contact.notification_sound && contact.notification_sound !== 'default' && (
                           <span className="text-gray-400 flex items-center gap-1">
                             <FontAwesomeIcon icon={getIcon(getSoundById(contact.notification_sound).icon)} className="w-3 h-3" />
@@ -720,7 +741,16 @@ export const ContactsManager: React.FC = () => {
                           )}
                         </div>
                         <div className="flex-1">
-                          <p className="font-medium text-green-800">{selectedContact.linked_profile.full_name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-green-800">{selectedContact.linked_profile.full_name}</p>
+                            <span className={`inline-flex items-center text-xs px-1.5 py-0.5 rounded ${
+                              selectedContact.linked_profile.account_type === 'collaborator'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {selectedContact.linked_profile.account_type === 'collaborator' ? 'Read Only' : 'Member'}
+                            </span>
+                          </div>
                           <p className="text-sm text-green-600">{selectedContact.linked_profile.email}</p>
                         </div>
                         {/* Friendship Status Badge */}

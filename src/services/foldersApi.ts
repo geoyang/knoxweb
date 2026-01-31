@@ -22,6 +22,11 @@ export interface Folder {
   date_modified: string;
   isOwner?: boolean;
   item_count?: number;
+  type_counts?: Record<string, number>;
+  previews?: {
+    album_previews: Array<{ id: string; title: string; keyphoto: string | null; keyphoto_thumbnail: string | null }>;
+    asset_previews: Array<{ id: string; thumbnail: string | null; web_uri: string | null; media_type: string | null }>;
+  };
   child_folder_count?: number;
   shared_via?: Array<{
     circle_id?: string;
@@ -41,7 +46,7 @@ export interface FolderItem {
   date_added: string;
   // Enriched data
   folder?: { id: string; title: string; description?: string; cover_image?: string; depth: number };
-  album?: { id: string; title: string; description?: string; keyphoto?: string };
+  album?: { id: string; title: string; description?: string; keyphoto?: string; keyphoto_thumbnail?: string; asset_count?: number; date_created?: string };
   document?: { id: string; title: string; description?: string; content_type: string; thumbnail_url?: string; file_url?: string; file_mime_type?: string; file_size?: number };
   list?: { id: string; title: string; description?: string; list_type: string; item_count: number };
   asset?: { id: string; path?: string; thumbnail?: string; web_uri?: string; media_type?: string };
@@ -807,11 +812,16 @@ export async function uploadDocumentFile(
   folderId?: string
 ): Promise<{ document: Document }> {
   const accessToken = getAccessToken();
-  if (authError || !session?.user) {
+  if (!accessToken) {
     throw new Error('User not authenticated');
   }
 
-  const userId = session.user.id;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const userId = user.id;
   const timestamp = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
   const filePath = `${userId}/${timestamp}_${safeName}`;
@@ -872,8 +882,19 @@ export function isMediaFile(file: File): boolean {
     'video/quicktime',
     'video/x-msvideo',
     'video/x-matroska',
+    'audio/mpeg',
+    'audio/wav',
+    'audio/ogg',
+    'audio/aac',
+    'audio/flac',
+    'audio/x-m4a',
+    'audio/mp4',
   ];
   return mediaTypes.includes(file.type);
+}
+
+export function isAudioFile(file: File): boolean {
+  return file.type.startsWith('audio/');
 }
 
 /**

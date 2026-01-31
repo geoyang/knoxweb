@@ -4,6 +4,22 @@ import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../../services/adminApi';
 import { supabase } from '../../lib/supabase';
 import { contactsApi } from '../../services/contactsApi';
+import { getFolders, Folder } from '../../services/foldersApi';
+import { chatApi, Conversation } from '../../services/chatApi';
+
+interface CircleAlbum {
+  id: string;
+  title: string;
+  keyphoto: string | null;
+  keyphoto_thumbnail?: string | null;
+  photo_count?: number;
+  album_shares?: {
+    id: string;
+    circle_id: string;
+    role: string;
+    is_active: boolean;
+  }[];
+}
 
 interface CircleMember {
   user_id: string | null;
@@ -61,6 +77,11 @@ export const CirclesManager: React.FC = () => {
   const [editDescription, setEditDescription] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [importingContacts, setImportingContacts] = useState(false);
+  const [allAlbums, setAllAlbums] = useState<CircleAlbum[]>([]);
+  const [showAddAlbumForm, setShowAddAlbumForm] = useState(false);
+  const [sharingAlbum, setSharingAlbum] = useState(false);
+  const [allFolders, setAllFolders] = useState<Folder[]>([]);
+  const [allConversations, setAllConversations] = useState<Conversation[]>([]);
 
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -68,6 +89,9 @@ export const CirclesManager: React.FC = () => {
   useEffect(() => {
     if (user?.id) {
       loadCircles();
+      loadAlbums();
+      loadFolders();
+      loadConversations();
     } else {
       setLoading(false);
     }
@@ -139,6 +163,133 @@ export const CirclesManager: React.FC = () => {
     } catch (err) {
       console.error('Error loading circle users:', err);
       setCircleUsers([]);
+    }
+  };
+
+  const loadAlbums = async () => {
+    try {
+      const result = await adminApi.getAlbums();
+      if (result.success && result.data?.albums) {
+        setAllAlbums(result.data.albums);
+      }
+    } catch (err) {
+      console.error('Error loading albums:', err);
+    }
+  };
+
+  const loadFolders = async () => {
+    try {
+      const result = await getFolders(true);
+      setAllFolders(result.folders || []);
+    } catch (err) {
+      console.error('Error loading folders:', err);
+    }
+  };
+
+  const loadConversations = async () => {
+    try {
+      const result = await chatApi.getConversations();
+      if (result.success && result.data?.conversations) {
+        setAllConversations(result.data.conversations);
+      }
+    } catch (err) {
+      console.error('Error loading conversations:', err);
+    }
+  };
+
+  const getCircleAlbums = (circleId: string) => {
+    return allAlbums.filter(album =>
+      album.album_shares?.some(s => s.circle_id === circleId && s.is_active)
+    );
+  };
+
+  const getCircleFolders = (circleId: string) => {
+    return allFolders.filter(folder =>
+      folder.shared_via?.some(s => s.circle_id === circleId)
+    );
+  };
+
+  const getCircleConversations = (circleId: string) => {
+    return allConversations.filter(c => c.circle_id === circleId);
+  };
+
+  const handleShareAlbumToCircle = async (albumId: string) => {
+    if (!selectedCircle) return;
+    try {
+      setSharingAlbum(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const album = allAlbums.find(a => a.id === albumId);
+      const existingCircleIds = (album?.album_shares || [])
+        .filter(s => s.is_active)
+        .map(s => s.circle_id);
+      const newCircleIds = [...new Set([...existingCircleIds, selectedCircle.id])];
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?action=share`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            album_id: albumId,
+            circle_ids: newCircleIds,
+            role: 'read_only',
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to share album');
+
+      setShowAddAlbumForm(false);
+      await loadAlbums();
+    } catch (err) {
+      console.error('Error sharing album to circle:', err);
+      setError(err instanceof Error ? err.message : 'Failed to share album');
+    } finally {
+      setSharingAlbum(false);
+    }
+  };
+
+  const handleRemoveAlbumFromCircle = async (albumId: string) => {
+    if (!selectedCircle) return;
+    if (!confirm('Remove this album from the circle?')) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const album = allAlbums.find(a => a.id === albumId);
+      const remainingCircleIds = (album?.album_shares || [])
+        .filter(s => s.is_active && s.circle_id !== selectedCircle.id)
+        .map(s => s.circle_id);
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?action=share`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            album_id: albumId,
+            circle_ids: remainingCircleIds,
+            role: 'read_only',
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to remove album');
+
+      await loadAlbums();
+    } catch (err) {
+      console.error('Error removing album from circle:', err);
+      setError(err instanceof Error ? err.message : 'Failed to remove album');
     }
   };
 
@@ -458,8 +609,9 @@ export const CirclesManager: React.FC = () => {
         <h2 className="text-2xl font-bold text-gray-900">Circles Management</h2>
         <button
           onClick={() => setShowNewCircleForm(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors"
+          className="btn-primary flex items-center gap-2"
         >
+          <span>+</span>
           Create New Circle
         </button>
       </div>
@@ -626,6 +778,123 @@ export const CirclesManager: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              {/* Albums Section */}
+              <div className="p-6 border-t">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="font-medium text-gray-900">Albums</h4>
+                  {selectedCircle.owner_id === user?.id && (
+                    <button
+                      onClick={() => setShowAddAlbumForm(true)}
+                      className="btn-primary flex items-center gap-1 text-sm"
+                    >
+                      <span>+</span> Add Album
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {getCircleAlbums(selectedCircle.id).length === 0 ? (
+                    <p className="text-gray-500 text-sm">No albums shared to this circle</p>
+                  ) : (
+                    getCircleAlbums(selectedCircle.id).map(album => (
+                      <div key={album.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded bg-gray-200 overflow-hidden flex-shrink-0">
+                            {album.keyphoto_thumbnail || album.keyphoto ? (
+                              <img
+                                src={album.keyphoto_thumbnail || album.keyphoto || ''}
+                                alt={album.title}
+                                className="w-full h-full object-cover"
+                                crossOrigin="anonymous"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-400 text-lg">
+                                <i className="fi fi-sr-picture"></i>
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{album.title}</p>
+                            {album.photo_count !== undefined && (
+                              <p className="text-xs text-gray-500">{album.photo_count} photo{album.photo_count !== 1 ? 's' : ''}</p>
+                            )}
+                          </div>
+                        </div>
+                        {selectedCircle.owner_id === user?.id && (
+                          <button
+                            onClick={() => handleRemoveAlbumFromCircle(album.id)}
+                            className="text-red-500 hover:text-red-700 text-sm"
+                            title="Remove from circle"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Folders Section */}
+              <div className="p-6 border-t">
+                <h4 className="font-medium text-gray-900 mb-4">Folders</h4>
+                <div className="space-y-2">
+                  {getCircleFolders(selectedCircle.id).length === 0 ? (
+                    <p className="text-gray-500 text-sm">No folders shared to this circle</p>
+                  ) : (
+                    getCircleFolders(selectedCircle.id).map(folder => (
+                      <div
+                        key={folder.id}
+                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                        onClick={() => navigate('/admin/folders')}
+                      >
+                        <div className="w-10 h-10 rounded bg-blue-100 flex items-center justify-center flex-shrink-0">
+                          <i className="fi fi-sr-folder text-blue-500"></i>
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{folder.title}</p>
+                          {folder.item_count !== undefined && (
+                            <p className="text-xs text-gray-500">{folder.item_count} item{folder.item_count !== 1 ? 's' : ''}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Chats Section */}
+              <div className="p-6 border-t">
+                <h4 className="font-medium text-gray-900 mb-4">Chats</h4>
+                <div className="space-y-2">
+                  {getCircleConversations(selectedCircle.id).length === 0 ? (
+                    <p className="text-gray-500 text-sm">No conversations in this circle</p>
+                  ) : (
+                    getCircleConversations(selectedCircle.id).map(conv => (
+                      <div
+                        key={conv.id}
+                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                        onClick={() => navigate('/admin/chat')}
+                      >
+                        <div className="w-10 h-10 rounded bg-green-100 flex items-center justify-center flex-shrink-0">
+                          <i className="fi fi-sr-messages text-green-500"></i>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{conv.title || 'General'}</p>
+                          {conv.last_message_preview && (
+                            <p className="text-xs text-gray-500 truncate">{conv.last_message_preview}</p>
+                          )}
+                        </div>
+                        {conv.unread_count > 0 && (
+                          <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                            {conv.unread_count}
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </>
           ) : (
             <div className="p-6 text-center text-gray-500">
@@ -649,7 +918,7 @@ export const CirclesManager: React.FC = () => {
                   name="name"
                   type="text"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400"
                   placeholder="Family, Friends, etc."
                 />
               </div>
@@ -660,7 +929,7 @@ export const CirclesManager: React.FC = () => {
                 <textarea
                   name="description"
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400"
                   placeholder="Describe what this circle is for..."
                 />
               </div>
@@ -842,6 +1111,63 @@ export const CirclesManager: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Add Album to Circle Modal */}
+      {showAddAlbumForm && selectedCircle && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4">Add Album to {selectedCircle.name}</h3>
+            {(() => {
+              const sharedIds = new Set(getCircleAlbums(selectedCircle.id).map(a => a.id));
+              const available = allAlbums.filter(a => !sharedIds.has(a.id));
+              if (available.length === 0) {
+                return <p className="text-gray-500 text-sm">All albums are already shared to this circle.</p>;
+              }
+              return (
+                <div className="space-y-2">
+                  {available.map(album => (
+                    <button
+                      key={album.id}
+                      onClick={() => handleShareAlbumToCircle(album.id)}
+                      disabled={sharingAlbum}
+                      className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left disabled:opacity-50"
+                    >
+                      <div className="w-10 h-10 rounded bg-gray-200 overflow-hidden flex-shrink-0">
+                        {album.keyphoto_thumbnail || album.keyphoto ? (
+                          <img
+                            src={album.keyphoto_thumbnail || album.keyphoto || ''}
+                            alt={album.title}
+                            className="w-full h-full object-cover"
+                            crossOrigin="anonymous"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-lg">
+                            <i className="fi fi-sr-picture"></i>
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{album.title}</p>
+                        {album.photo_count !== undefined && (
+                          <p className="text-xs text-gray-500">{album.photo_count} photo{album.photo_count !== 1 ? 's' : ''}</p>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+            <div className="mt-4 pt-4 border-t">
+              <button
+                type="button"
+                onClick={() => setShowAddAlbumForm(false)}
+                className="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-md font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

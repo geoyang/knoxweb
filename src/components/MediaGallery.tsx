@@ -53,8 +53,8 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect }) => 
         if (result.data.stats) {
           setStats({
             total: result.data.count || 0,
-            photos: result.data.stats.photos || 0,
-            videos: result.data.stats.videos || 0,
+            photos: result.data.stats.total_images || 0,
+            videos: result.data.stats.total_videos || 0,
           });
         }
         setError(null);
