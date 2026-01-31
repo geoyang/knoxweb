@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { adminApi } from '../services/adminApi';
 import { VideoPlayer } from './VideoPlayer';
 import { ImageUploader } from './admin/ImageUploader';
@@ -21,9 +21,11 @@ interface Asset {
 
 interface MediaGalleryProps {
   onAssetSelect?: (asset: Asset) => void;
+  initialAssetId?: string;
+  onInitialAssetConsumed?: () => void;
 }
 
-export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect }) => {
+export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect, initialAssetId, onInitialAssetConsumed }) => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +42,23 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect }) => 
   const [stats, setStats] = useState<{ total: number; photos: number; videos: number } | null>(null);
   const [showUploader, setShowUploader] = useState(false);
 
+  const initialAssetConsumedRef = useRef(false);
+
   useEffect(() => {
     loadAssets();
   }, [sortBy]);
+
+  // Handle initialAssetId for deep linking
+  useEffect(() => {
+    if (!initialAssetId || initialAssetConsumedRef.current || assets.length === 0) return;
+
+    const asset = assets.find(a => a.id === initialAssetId);
+    if (asset) {
+      setSelectedAsset(asset);
+      initialAssetConsumedRef.current = true;
+      onInitialAssetConsumed?.();
+    }
+  }, [initialAssetId, assets, onInitialAssetConsumed]);
 
   const loadAssets = async () => {
     setLoading(true);

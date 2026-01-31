@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { MemoriesPanel } from '../MemoriesPanel';
 import { memoriesApi, Memory, MemoryInput } from '../../services/memoriesApi';
@@ -455,6 +455,7 @@ const AssetModalWithMemories: React.FC<AssetModalWithMemoriesProps> = ({
 export const AdminAlbumDetail: React.FC = () => {
   const { albumId } = useParams<{ albumId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [album, setAlbum] = useState<Album | null>(null);
   const [circles, setCircles] = useState<Circle[]>([]);
@@ -530,6 +531,18 @@ export const AdminAlbumDetail: React.FC = () => {
 
   useEffect(() => { fetchAlbum(); fetchCircles(); }, [fetchAlbum]);
   useEffect(() => { loadMemoryCounts(); }, [loadMemoryCounts]);
+
+  // Handle assetId search param for deep linking
+  useEffect(() => {
+    const assetId = searchParams.get('assetId');
+    if (!assetId || !album?.album_assets?.length) return;
+
+    const asset = album.album_assets.find(a => a.asset_id === assetId);
+    if (asset) {
+      setSelectedAsset(asset);
+      setSearchParams({}, { replace: true });
+    }
+  }, [album, searchParams, setSearchParams]);
 
   // Drag-drop for uploading to this album
   useEffect(() => {

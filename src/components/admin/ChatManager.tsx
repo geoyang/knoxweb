@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { chatApi, Conversation, Message, MessageContent } from '../../services/chatApi';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -60,6 +61,7 @@ const STICKERS = [
 
 export const ChatManager: React.FC = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -184,6 +186,34 @@ export const ChatManager: React.FC = () => {
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
+
+  // Handle URL search params for deep linking
+  const pendingNavigationRef = useRef<{ conversationId: string; messageId?: string } | null>(null);
+
+  useEffect(() => {
+    const conversationId = searchParams.get('conversationId');
+    if (!conversationId || conversations.length === 0) return;
+
+    const messageId = searchParams.get('messageId');
+    const conv = conversations.find(c => c.id === conversationId);
+    if (conv) {
+      setSelectedConversation(conv);
+      if (messageId) {
+        pendingNavigationRef.current = { conversationId, messageId };
+      }
+      setSearchParams({}, { replace: true });
+    }
+  }, [conversations, searchParams, setSearchParams]);
+
+  // Navigate to message after messages load
+  useEffect(() => {
+    const pending = pendingNavigationRef.current;
+    if (!pending?.messageId || messagesLoading || messages.length === 0) return;
+    if (selectedConversation?.id !== pending.conversationId) return;
+
+    handleNavigateToMessage(pending.messageId);
+    pendingNavigationRef.current = null;
+  }, [messages, messagesLoading, selectedConversation]);
 
   // Fetch messages when conversation is selected
   useEffect(() => {

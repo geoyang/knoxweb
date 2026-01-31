@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { notificationsApi, Notification } from '../../services/notificationsApi';
 
 type Tab = 'all' | 'unread' | 'friend_requests';
@@ -51,6 +52,7 @@ function isFriendRequestNotification(notification: Notification): boolean {
 }
 
 export const NotificationsManager: React.FC = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('all');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
@@ -148,6 +150,49 @@ export const NotificationsManager: React.FC = () => {
     return pendingRequests.find(r => r.requester?.id === actorId || r.requester_id === actorId);
   };
 
+  const handleNotificationClick = (notification: Notification) => {
+    if (isFriendRequestNotification(notification)) return;
+    if (!notification.deep_link_type || !notification.deep_link_id) return;
+
+    if (!notification.is_read) {
+      handleMarkAsRead(notification.id);
+    }
+
+    const { deep_link_type, deep_link_id } = notification;
+    const parts = deep_link_id.split(':');
+
+    switch (deep_link_type) {
+      case 'album': {
+        const albumId = parts[0];
+        const assetId = parts[1];
+        const path = assetId
+          ? `/admin/albums/${albumId}?assetId=${assetId}`
+          : `/admin/albums/${albumId}`;
+        navigate(path);
+        break;
+      }
+      case 'conversation': {
+        const conversationId = parts[0];
+        const messageId = parts[1];
+        const params = new URLSearchParams({ conversationId });
+        if (messageId) params.set('messageId', messageId);
+        navigate(`/admin/chat?${params.toString()}`);
+        break;
+      }
+      case 'memory':
+      case 'asset': {
+        const assetId = parts[0];
+        navigate(`/admin/images?assetId=${assetId}`);
+        break;
+      }
+      case 'circle':
+        navigate('/admin/circles');
+        break;
+      default:
+        break;
+    }
+  };
+
   const filteredNotifications = notifications.filter(n => {
     if (activeTab === 'unread') return !n.is_read;
     if (activeTab === 'friend_requests') return n.notification_type === 'friend_requests';
@@ -219,12 +264,15 @@ export const NotificationsManager: React.FC = () => {
             const isFriendRequest = isFriendRequestNotification(notification);
             const pendingRequest = isFriendRequest ? findPendingRequest(notification.actor?.id) : null;
 
+            const isClickable = !isFriendRequest && notification.deep_link_type && notification.deep_link_id;
+
             return (
               <div
                 key={notification.id}
                 className={`p-4 hover:bg-surface-hover transition-colors ${
                   !notification.is_read ? 'bg-primary-light' : ''
-                }`}
+                } ${isClickable ? 'cursor-pointer' : ''}`}
+                onClick={() => isClickable && handleNotificationClick(notification)}
               >
                 <div className="flex items-start gap-4">
                   {/* Icon */}
@@ -290,7 +338,7 @@ export const NotificationsManager: React.FC = () => {
 
                     {/* Regular notification actions */}
                     {!isFriendRequest && (
-                      <div className="flex items-center gap-3 mt-2">
+                      <div className="flex items-center gap-3 mt-2" onClick={(e) => e.stopPropagation()}>
                         {!notification.is_read && (
                           <button
                             onClick={() => handleMarkAsRead(notification.id)}
