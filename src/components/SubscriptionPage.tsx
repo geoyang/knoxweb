@@ -60,12 +60,8 @@ const handleReturnToApp = (e: React.MouseEvent) => {
   e.preventDefault();
   e.stopPropagation();
 
-  // Check if we're in a mobile WebView (indicated by mobile=true query param)
-  const urlParams = new URLSearchParams(window.location.search);
-  const isMobileWebView = urlParams.get('mobile') === 'true';
-
   // If in mobile WebView, post message to close
-  if (isMobileWebView && (window as any).ReactNativeWebView) {
+  if ((window as any).ReactNativeWebView) {
     (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'KIZU_CLOSE' }));
     return;
   }
