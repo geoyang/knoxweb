@@ -390,18 +390,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const checkUserExists = async (email: string) => {
     try {
-      // DEBUG: Log the Supabase client state before invoking
-      console.log('[checkUserExists] About to call supabase.functions.invoke')
-      console.log('[checkUserExists] supabase.functions URL:', (supabase.functions as any).url)
-      console.log('[checkUserExists] supabase.functions headers:', JSON.stringify((supabase.functions as any).headers))
-      console.log('[checkUserExists] Email:', email.toLowerCase().trim())
+      const functionsUrl = (supabase.functions as any).url
+      const trimmedEmail = email.toLowerCase().trim()
+      console.log('[DEBUG] Functions URL:', functionsUrl)
+      console.log('[DEBUG] Email:', trimmedEmail)
 
-      // Use the Edge Function to check if user exists
+      // Health check: can we reach the Supabase project at all?
+      try {
+        const healthRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/`, { method: 'GET' })
+        console.log('[DEBUG] Health check status:', healthRes.status)
+      } catch (healthErr: any) {
+        console.error('[DEBUG] Health check FAILED:', healthErr.name, healthErr.message)
+      }
+
+      // Manual fetch to same endpoint
+      const manualUrl = `${functionsUrl}/check-user-exists`
+      console.log('[DEBUG] Manual fetch to:', manualUrl)
+      try {
+        const manualRes = await fetch(manualUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ email: trimmedEmail }),
+        })
+        const manualData = await manualRes.json()
+        console.log('[DEBUG] Manual fetch SUCCESS:', manualRes.status, manualData)
+      } catch (manualErr: any) {
+        console.error('[DEBUG] Manual fetch FAILED:', manualErr.name, manualErr.message)
+      }
+
+      // Now try supabase.functions.invoke
+      console.log('[DEBUG] Calling supabase.functions.invoke...')
       const { data: response, error } = await supabase.functions.invoke('check-user-exists', {
-        body: { email: email.toLowerCase().trim() }
+        body: { email: trimmedEmail }
       });
-
-      console.log('[checkUserExists] Response:', response, 'Error:', error)
+      console.log('[DEBUG] invoke result - data:', response, 'error:', error)
+      if (error) {
+        console.error('[DEBUG] Error details:', error.name, error.message, (error as any).context)
+      }
 
       if (error) {
         console.error('Error checking user existence', error);
