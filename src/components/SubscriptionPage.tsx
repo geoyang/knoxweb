@@ -589,7 +589,7 @@ export const SubscriptionPage: React.FC = () => {
           )}
           {isSubscribed && subscription?.current_period_end && (
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Subscription renews {new Date(subscription.current_period_end).toLocaleDateString()}
+              {subscription.has_promo ? 'Expires' : 'Subscription renews'} {new Date(subscription.current_period_end).toLocaleDateString()}
             </p>
           )}
         </div>
@@ -822,7 +822,9 @@ export const SubscriptionPage: React.FC = () => {
                       <span className={`text-xs font-bold px-2 py-1 rounded ${
                         isPerpetual ? 'bg-green-500' : isTrialing ? 'bg-orange-500' : 'bg-indigo-500'
                       } text-white`}>
-                        {isPerpetual ? '∞' : isTrialing ? 'TRIAL' : (subscription?.current_period_end ? `Renews ${new Date(subscription.current_period_end).toLocaleDateString()}` : 'ACTIVE')}
+                        {isPerpetual ? '∞' : isTrialing ? 'TRIAL' : (subscription?.current_period_end
+                          ? `${subscription.has_promo ? 'Expires' : 'Renews'} ${new Date(subscription.current_period_end).toLocaleDateString()}`
+                          : 'ACTIVE')}
                       </span>
                     )}
                   </div>
