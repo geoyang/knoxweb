@@ -390,10 +390,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const checkUserExists = async (email: string) => {
     try {
+      // DEBUG: Log the Supabase client state before invoking
+      console.log('[checkUserExists] About to call supabase.functions.invoke')
+      console.log('[checkUserExists] supabase.functions URL:', (supabase.functions as any).url)
+      console.log('[checkUserExists] supabase.functions headers:', JSON.stringify((supabase.functions as any).headers))
+      console.log('[checkUserExists] Email:', email.toLowerCase().trim())
+
       // Use the Edge Function to check if user exists
       const { data: response, error } = await supabase.functions.invoke('check-user-exists', {
         body: { email: email.toLowerCase().trim() }
       });
+
+      console.log('[checkUserExists] Response:', response, 'Error:', error)
 
       if (error) {
         console.error('Error checking user existence', error);
