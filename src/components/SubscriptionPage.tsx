@@ -194,7 +194,13 @@ export const SubscriptionPage: React.FC = () => {
       console.log('[SubscriptionPage] API response in', (performance.now() - fetchStart).toFixed(0), 'ms');
 
       const data = await response.json();
-      console.log('[SubscriptionPage] Total load time:', (performance.now() - loadStart).toFixed(0), 'ms');
+      console.log('[SubscriptionPage] Total load time:', (performance.now() - loadStart).toFixed(0), 'ms, status:', response.status);
+
+      if (!response.ok) {
+        console.error('[SubscriptionPage] API error:', response.status, data);
+        setError(data.error || data.msg || `Server error (${response.status})`);
+        return;
+      }
 
       if (data.success) {
         setPlans(data.plans || []);
@@ -206,7 +212,7 @@ export const SubscriptionPage: React.FC = () => {
           setSystemDiscount(data.discount);
         }
       } else {
-        setError(data.error || 'Failed to load subscription data');
+        setError(data.error || data.msg || 'Failed to load subscription data');
       }
     } catch (err) {
       console.error('Error loading subscription data:', err);
