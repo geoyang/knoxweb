@@ -4,9 +4,10 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!
 
 // DEBUG: Log what values Vite baked into the build
-console.log('[Supabase Init] URL:', supabaseUrl)
-console.log('[Supabase Init] Anon Key (first 20):', supabaseAnonKey?.substring(0, 20))
-console.log('[Supabase Init] Functions URL will be:', supabaseUrl ? `${supabaseUrl}/functions/v1` : 'UNDEFINED')
+console.log('[Supabase Init] URL:', JSON.stringify(supabaseUrl))
+console.log('[Supabase Init] Anon Key length:', supabaseAnonKey?.length)
+console.log('[Supabase Init] Anon Key full:', JSON.stringify(supabaseAnonKey))
+console.log('[Supabase Init] Anon Key charCodes (first 30):', supabaseAnonKey ? Array.from(supabaseAnonKey.substring(0, 30)).map((c: string) => c.charCodeAt(0)).join(',') : 'N/A')
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   db: {
