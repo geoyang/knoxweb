@@ -32,6 +32,7 @@ const CRAWLER_AGENTS = [
   'Discordbot',
   'Pinterest',
   'Applebot',
+  'iMessageLinkPreviews',
 ];
 
 function isCrawler(userAgent: string | null): boolean {
