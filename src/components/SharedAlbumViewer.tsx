@@ -259,10 +259,10 @@ export const SharedAlbumViewer: React.FC = () => {
         {/* Album Title */}
         <div className="max-w-6xl mx-auto w-full px-4 pt-6 pb-2">
           <h1 className="text-white text-2xl font-bold">{album.title}</h1>
+          <p className="text-white/70 text-sm mt-1">Shared by {owner.name} · {album.assets.length} photo{album.assets.length !== 1 ? 's' : ''}</p>
           {album.description && (
-            <p className="text-white/70 mt-1">{album.description}</p>
+            <p className="text-white/50 mt-1">{album.description}</p>
           )}
-          <p className="text-white/50 text-sm mt-1">{album.assets.length} photo{album.assets.length !== 1 ? 's' : ''}</p>
         </div>
 
         {/* Kizu Account Access */}
