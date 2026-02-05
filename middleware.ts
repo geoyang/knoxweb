@@ -178,10 +178,10 @@ async function handleAlbumShare(token: string, env: EnvConfig) {
   }
 
   return new Response(generateOGHtml({
-    title: album?.title ? `${album.title} - Album by ${ownerName}` : `Album shared by ${ownerName}`,
+    title: album?.title || 'Shared Album',
     description: photoCount > 0
-      ? `${photoCount} photo${photoCount === 1 ? '' : 's'} in this album`
-      : 'View this album on Kizu',
+      ? `Shared by ${ownerName} · ${photoCount} photo${photoCount === 1 ? '' : 's'}`
+      : `Shared by ${ownerName}`,
     imageUrl: thumbnailUrl,
     pageUrl: `${env.webAppUrl}/shared-album/${token}`,
     isVideo: false,

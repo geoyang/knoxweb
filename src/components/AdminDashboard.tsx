@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CirclesManager } from './admin/CirclesManager';
 import { CircleMemberEdit } from './admin/CircleMemberEdit';
+import { AddMember } from './admin/AddMember';
 import { AlbumsManager } from './admin/AlbumsManager';
 import { AdminAlbumDetail } from './admin/AdminAlbumDetail';
 import { ImagesManager } from './admin/ImagesManager';
@@ -26,6 +27,7 @@ import { adminApi } from '../services/adminApi';
 import { getFolders } from '../services/foldersApi';
 import { contactsApi } from '../services/contactsApi';
 import { ImageUploader } from './admin/ImageUploader';
+import { getSelectedEnvironmentKey } from '../lib/environments';
 
 export const AdminDashboard: React.FC = () => {
   const { user, userProfile, signOut, loading, isSuperAdmin } = useAuth();
@@ -296,6 +298,13 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-app">
+      {/* Development Environment Banner */}
+      {getSelectedEnvironmentKey() === 'dev' && (
+        <div className="bg-orange-500 text-white text-center py-1 text-sm font-medium">
+          Development Environment
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-surface shadow-sm border-b border-default">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -591,6 +600,7 @@ export const AdminDashboard: React.FC = () => {
             <Route path="images" element={<ImagesManager />} />
             <Route path="circles" element={<CirclesManager />} />
             <Route path="circles/:circleId/members/:memberId" element={<CircleMemberEdit />} />
+            <Route path="circles/:circleId/add-member" element={<AddMember />} />
             <Route path="invites" element={<InvitesManager />} />
             <Route path="contacts" element={<ContactsManager />} />
             <Route path="import" element={<ImportManager />} />

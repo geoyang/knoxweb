@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface AlbumAsset {
   id: string;
@@ -38,6 +39,9 @@ export const SharedAlbumViewer: React.FC = () => {
   const [accessEmail, setAccessEmail] = useState('');
   const [checkingAccess, setCheckingAccess] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
+  const [showRequestAccess, setShowRequestAccess] = useState(false);
+  const [requestingAccess, setRequestingAccess] = useState(false);
+  const [accessRequested, setAccessRequested] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -51,7 +55,7 @@ export const SharedAlbumViewer: React.FC = () => {
   const loadAlbum = async () => {
     try {
       setState('loading');
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
 
       const response = await fetch(
         `${supabaseUrl}/functions/v1/album-share-api?action=view&token=${token}`,
@@ -59,7 +63,7 @@ export const SharedAlbumViewer: React.FC = () => {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
         }
       );
@@ -90,7 +94,7 @@ export const SharedAlbumViewer: React.FC = () => {
   };
 
   const getServeUrl = (assetId: string, type: 'thumbnail' | 'original') => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseUrl = getSupabaseUrl();
     return `${supabaseUrl}/functions/v1/album-share-api?action=serve&token=${token}&asset_id=${assetId}&type=${type}`;
   };
 
@@ -111,14 +115,14 @@ export const SharedAlbumViewer: React.FC = () => {
     setAccessError(null);
 
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/album-share-api?action=check-access`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
           body: JSON.stringify({ token, email: accessEmail }),
         }
@@ -129,12 +133,48 @@ export const SharedAlbumViewer: React.FC = () => {
       if (result.has_access && result.redirect_url) {
         window.location.href = result.redirect_url;
       } else {
-        setAccessError('No account found with access to this album. You can still view it here.');
+        setShowRequestAccess(true);
+        setAccessError(null);
       }
     } catch {
       setAccessError('Something went wrong. Please try again.');
     } finally {
       setCheckingAccess(false);
+    }
+  };
+
+  const handleRequestAccess = async () => {
+    if (!accessEmail || !token) return;
+
+    setRequestingAccess(true);
+    setAccessError(null);
+
+    try {
+      const supabaseUrl = getSupabaseUrl();
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/album-share-api?action=request-access`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': getSupabaseAnonKey(),
+          },
+          body: JSON.stringify({ token, email: accessEmail }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        setAccessRequested(true);
+        setShowRequestAccess(false);
+      } else {
+        setAccessError(result.error || 'Failed to send access request.');
+      }
+    } catch {
+      setAccessError('Something went wrong. Please try again.');
+    } finally {
+      setRequestingAccess(false);
     }
   };
 
@@ -227,23 +267,45 @@ export const SharedAlbumViewer: React.FC = () => {
 
         {/* Kizu Account Access */}
         <div className="max-w-6xl mx-auto w-full px-4 pt-2 pb-0">
-          <form onSubmit={handleCheckAccess} className="bg-white/5 backdrop-blur-sm rounded-xl p-4 flex flex-col sm:flex-row items-center gap-3">
-            <p className="text-white/70 text-sm whitespace-nowrap">Have a Kizu account?</p>
-            <input
-              type="email"
-              value={accessEmail}
-              onChange={(e) => { setAccessEmail(e.target.value); setAccessError(null); }}
-              placeholder="Enter your email"
-              className="flex-1 w-full sm:w-auto bg-white/10 text-white placeholder-white/40 rounded-lg px-3 py-2 text-sm border border-white/10 focus:border-white/30 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={checkingAccess || !accessEmail}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
-              {checkingAccess ? 'Checking...' : 'Get Full Access'}
-            </button>
-          </form>
+          {accessRequested ? (
+            <div className="bg-green-500/10 backdrop-blur-sm rounded-xl p-4 text-center">
+              <svg className="w-8 h-8 mx-auto text-green-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-white font-medium">Access request sent!</p>
+              <p className="text-white/60 text-sm mt-1">The album owner will receive your request and can add you to a circle.</p>
+            </div>
+          ) : showRequestAccess ? (
+            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 text-center">
+              <p className="text-white/70 text-sm mb-3">You don't have access to this album yet.</p>
+              <button
+                onClick={handleRequestAccess}
+                disabled={requestingAccess}
+                className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium py-2 px-6 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {requestingAccess ? 'Sending...' : 'Request Access to Album'}
+              </button>
+              <p className="text-white/50 text-xs mt-2">The owner will be notified and can grant you access.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleCheckAccess} className="bg-white/5 backdrop-blur-sm rounded-xl p-4 flex flex-col sm:flex-row items-center gap-3">
+              <p className="text-white/70 text-sm whitespace-nowrap">Have a Kizu account?</p>
+              <input
+                type="email"
+                value={accessEmail}
+                onChange={(e) => { setAccessEmail(e.target.value); setAccessError(null); setShowRequestAccess(false); }}
+                placeholder="Enter your email"
+                className="flex-1 w-full sm:w-auto bg-white/10 text-white placeholder-white/40 rounded-lg px-3 py-2 text-sm border border-white/10 focus:border-white/30 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={checkingAccess || !accessEmail}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
+              >
+                {checkingAccess ? 'Checking...' : 'Get Full Access'}
+              </button>
+            </form>
+          )}
           {accessError && (
             <p className="text-white/50 text-xs mt-2 text-center">{accessError}</p>
           )}
