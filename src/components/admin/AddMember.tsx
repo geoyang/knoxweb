@@ -59,7 +59,7 @@ export const AddMember: React.FC = () => {
 
       const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
-        `${supabaseUrl}/functions/v1/admin-circles-api?action=get&id=${circleId}`,
+        `${supabaseUrl}/functions/v1/admin-circles-api?circle_id=${circleId}`,
         {
           headers: {
             'Content-Type': 'application/json',
