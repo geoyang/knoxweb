@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface AssetData {
   id: string;
@@ -70,7 +71,7 @@ export const SharedAssetViewer: React.FC = () => {
   const loadAsset = async () => {
     try {
       setState('loading');
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
 
       const response = await fetch(
         `${supabaseUrl}/functions/v1/asset-share-api?action=view&token=${token}`,
@@ -78,7 +79,7 @@ export const SharedAssetViewer: React.FC = () => {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
         }
       );
@@ -115,7 +116,7 @@ export const SharedAssetViewer: React.FC = () => {
 
     try {
       setSubmitting(true);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
 
       const response = await fetch(
         `${supabaseUrl}/functions/v1/asset-share-api?action=request-access`,
@@ -123,7 +124,7 @@ export const SharedAssetViewer: React.FC = () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
           body: JSON.stringify({
             token,

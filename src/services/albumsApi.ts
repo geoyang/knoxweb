@@ -1,8 +1,8 @@
 import { supabase, getAccessToken } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://quqlovduekdasldqadge.supabase.co';
-const ALBUMS_API_URL = `${SUPABASE_URL}/functions/v1/admin-albums-api`;
-const IMAGES_API_URL = `${SUPABASE_URL}/functions/v1/admin-images-api`;
+const getAlbumsApiUrl = () => `${getSupabaseUrl()}/functions/v1/admin-albums-api`;
+const getImagesApiUrl = () => `${getSupabaseUrl()}/functions/v1/admin-images-api`;
 
 // Structured error for upload limit violations
 export class UploadLimitError extends Error {
@@ -73,12 +73,12 @@ export async function addPhotosToAlbum({ albumId, assets }: AddPhotosParams): Pr
     throw new Error('User not authenticated');
   }
 
-  const response = await fetch(`${ALBUMS_API_URL}?album_id=${albumId}`, {
+  const response = await fetch(`${getAlbumsApiUrl()}?album_id=${albumId}`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      'apikey': getSupabaseAnonKey(),
     },
     body: JSON.stringify({ assets }),
   });
@@ -102,12 +102,12 @@ export async function removePhotoFromAlbum({ albumId, assetId }: RemovePhotoPara
     throw new Error('User not authenticated');
   }
 
-  const response = await fetch(`${ALBUMS_API_URL}?action=remove_photo`, {
+  const response = await fetch(`${getAlbumsApiUrl()}?action=remove_photo`, {
     method: 'DELETE',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      'apikey': getSupabaseAnonKey(),
     },
     body: JSON.stringify({
       album_id: albumId,
@@ -137,12 +137,12 @@ export async function createAssetInLibrary(assetData: AssetData, skipLimitCheck?
 
   const body = skipLimitCheck ? { ...assetData, skip_limit_check: true } : assetData;
 
-  const response = await fetch(IMAGES_API_URL, {
+  const response = await fetch(getImagesApiUrl(), {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      'apikey': getSupabaseAnonKey(),
     },
     body: JSON.stringify(body),
   });

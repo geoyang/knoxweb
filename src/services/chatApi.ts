@@ -1,7 +1,5 @@
 import { supabase, getAccessToken } from '../lib/supabase';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 export interface Participant {
   id: string;
@@ -98,7 +96,7 @@ async function getAuthHeaders(): Promise<Record<string, string> | null> {
   return {
     'Authorization': `Bearer ${accessToken}`,
     'Content-Type': 'application/json',
-    'apikey': SUPABASE_ANON_KEY,
+    'apikey': getSupabaseAnonKey(),
   };
 }
 
@@ -114,7 +112,7 @@ async function callMessagesApi<T>(
     }
 
     const queryParams = new URLSearchParams({ action, ...params });
-    const url = `${SUPABASE_URL}/functions/v1/messages-api?${queryParams}`;
+    const url = `${getSupabaseUrl()}/functions/v1/messages-api?${queryParams}`;
 
     const fetchOptions: RequestInit = {
       method: options.method || 'GET',
@@ -140,38 +138,56 @@ async function callMessagesApi<T>(
 }
 
 export const chatApi = {
-  // Get all conversations, ensuring every circle has a chat
-  getConversations: async (): Promise<ApiResponse<{ conversations: Conversation[] }>> => {
+  // Get conversation count only (fast)
+  getConversationCount: async (): Promise<ApiResponse<{ count: number }>> => {
+    return callMessagesApi('conversations', { counts_only: 'true' });
+  },
+
+  // Get all conversations with minimal data (lite mode - no participants)
+  getConversations: async (options?: { lite?: boolean; ensureCircleChats?: boolean }): Promise<ApiResponse<{ conversations: Conversation[] }>> => {
     try {
       const headers = await getAuthHeaders();
       if (!headers) {
         return { success: false, error: 'Not authenticated' };
       }
 
-      // First, get user's circles
-      const circlesResponse = await fetch(`${SUPABASE_URL}/functions/v1/admin-circles-api`, {
-        method: 'GET',
-        headers,
-      });
+      // Only ensure circle chats exist if explicitly requested (expensive operation)
+      if (options?.ensureCircleChats) {
+        // First, get user's circles
+        const circlesResponse = await fetch(`${getSupabaseUrl()}/functions/v1/admin-circles-api`, {
+          method: 'GET',
+          headers,
+        });
 
-      let userCircles: { id: string; name: string }[] = [];
-      if (circlesResponse.ok) {
-        const circlesData = await circlesResponse.json();
-        userCircles = circlesData.circles || [];
+        let userCircles: { id: string; name: string }[] = [];
+        if (circlesResponse.ok) {
+          const circlesData = await circlesResponse.json();
+          userCircles = circlesData.circles || [];
+        }
+
+        // Ensure each circle has a conversation
+        for (const circle of userCircles) {
+          await callMessagesApi('get_circle_chat', { circle_id: circle.id });
+        }
       }
 
-      // Ensure each circle has a conversation
-      for (const circle of userCircles) {
-        await callMessagesApi('get_circle_chat', { circle_id: circle.id });
+      // Get conversations (lite mode by default for faster loading)
+      const params: Record<string, string> = {};
+      if (options?.lite !== false) {
+        params.lite = 'true';
       }
 
-      // Now get all conversations
-      const result = await callMessagesApi<{ conversations: Conversation[] }>('conversations');
+      const result = await callMessagesApi<{ conversations: Conversation[] }>('conversations', params);
       return result;
     } catch (error) {
       console.error('Error getting conversations:', error);
       return { success: false, error: 'Failed to get conversations' };
     }
+  },
+
+  // Get full conversation details with participants (called when selecting a conversation)
+  getConversationDetails: async (conversationId: string): Promise<ApiResponse<{ conversation: Conversation }>> => {
+    return callMessagesApi('conversation_details', { conversation_id: conversationId });
   },
 
   // Get messages for a conversation
@@ -324,7 +340,7 @@ export const chatApi = {
 
       const params = new URLSearchParams({ action: 'global', query });
       const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/chat-search-api?${params}`,
+        `${getSupabaseUrl()}/functions/v1/chat-search-api?${params}`,
         { headers }
       );
       const data = await response.json();
@@ -350,7 +366,7 @@ export const chatApi = {
         query,
       });
       const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/chat-search-api?${params}`,
+        `${getSupabaseUrl()}/functions/v1/chat-search-api?${params}`,
         { headers }
       );
       const data = await response.json();

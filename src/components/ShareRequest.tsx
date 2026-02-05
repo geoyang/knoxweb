@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface ShareRequestData {
   id: string;
@@ -49,7 +50,7 @@ export const ShareRequest: React.FC = () => {
   const loadShareRequest = async () => {
     try {
       setLoading(true);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
 
       const response = await fetch(
         `${supabaseUrl}/functions/v1/share-api?action=view&token=${token}`,
@@ -57,7 +58,7 @@ export const ShareRequest: React.FC = () => {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
         }
       );
@@ -93,7 +94,7 @@ export const ShareRequest: React.FC = () => {
 
     try {
       setResponding(true);
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
 
       const apiResponse = await fetch(
         `${supabaseUrl}/functions/v1/share-api?action=respond`,
@@ -101,7 +102,7 @@ export const ShareRequest: React.FC = () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
           body: JSON.stringify({ token, response }),
         }

@@ -5,6 +5,7 @@ import { PhotoPicker } from './PhotoPicker';
 import { ImageUploader } from './ImageUploader';
 import { adminApi } from '../../services/adminApi';
 import { supabase } from '../../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 import { MemoriesPanel } from '../MemoriesPanel';
 import { memoriesApi } from '../../services/memoriesApi';
 import { AlbumPhotoGrid, AlbumAsset, ContextMenuItem, getThumbnailUrl, isWebAccessibleUrl, isHeicUrl, getDisplayUrl } from '../AlbumPhotoGrid';
@@ -272,7 +273,7 @@ export const AlbumsManager: React.FC = () => {
 
       // Call edge function to handle sharing
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?action=share`,
+        `${getSupabaseUrl()}/functions/v1/admin-albums-api?action=share`,
         {
           method: 'POST',
           headers: {
@@ -321,7 +322,7 @@ export const AlbumsManager: React.FC = () => {
 
       // Call edge function to update sharing
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?action=share`,
+        `${getSupabaseUrl()}/functions/v1/admin-albums-api?action=share`,
         {
           method: 'POST',
           headers: {
@@ -468,7 +469,7 @@ export const AlbumsManager: React.FC = () => {
       if (!asset) throw new Error('Asset not found');
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?album_id=${selectedAlbum.id}&action=remove_photo`,
+        `${getSupabaseUrl()}/functions/v1/admin-albums-api?album_id=${selectedAlbum.id}&action=remove_photo`,
         {
           method: 'DELETE',
           headers: {

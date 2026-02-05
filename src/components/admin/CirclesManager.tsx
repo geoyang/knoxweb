@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../../services/adminApi';
 import { supabase } from '../../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 import { contactsApi } from '../../services/contactsApi';
 import { getFolders, Folder } from '../../services/foldersApi';
 import { chatApi, Conversation } from '../../services/chatApi';
@@ -227,7 +228,7 @@ export const CirclesManager: React.FC = () => {
       const newCircleIds = [...new Set([...existingCircleIds, selectedCircle.id])];
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?action=share`,
+        `${getSupabaseUrl()}/functions/v1/admin-albums-api?action=share`,
         {
           method: 'POST',
           headers: {
@@ -268,7 +269,7 @@ export const CirclesManager: React.FC = () => {
         .map(s => s.circle_id);
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?action=share`,
+        `${getSupabaseUrl()}/functions/v1/admin-albums-api?action=share`,
         {
           method: 'POST',
           headers: {

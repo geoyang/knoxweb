@@ -6,6 +6,7 @@ import { friendsApi } from '../../services/friendsApi';
 import { chatApi } from '../../services/chatApi';
 import { aiApi } from '../../services/aiApi';
 import { supabase } from '../../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 import { NOTIFICATION_SOUNDS, getSoundById, SOUND_CATEGORIES } from '../../config/notificationSounds';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { library } from '@fortawesome/fontawesome-svg-core';
@@ -47,8 +48,13 @@ export const ContactsManager: React.FC = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalContacts, setTotalContacts] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const PAGE_SIZE = 50;
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [saving, setSaving] = useState(false);
@@ -135,7 +141,7 @@ export const ContactsManager: React.FC = () => {
 
   useEffect(() => {
     if (user?.id) {
-      loadContacts();
+      loadContacts(1, true);
     } else {
       setLoading(false);
     }
@@ -152,12 +158,25 @@ export const ContactsManager: React.FC = () => {
     }
   }, [searchParams, contacts]);
 
-  const loadContacts = async () => {
+  const loadContacts = async (page: number = 1, reset: boolean = true) => {
     try {
-      setLoading(true);
+      if (reset) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
       setError(null);
-      const result = await contactsApi.getContacts(searchQuery || undefined, 1, 1000);
-      setContacts(result.contacts);
+      const result = await contactsApi.getContacts(searchQuery || undefined, page, PAGE_SIZE);
+
+      if (reset) {
+        setContacts(result.contacts);
+      } else {
+        setContacts(prev => [...prev, ...result.contacts]);
+      }
+
+      setTotalContacts(result.pagination.total);
+      setHasMore(page < result.pagination.totalPages);
+      setCurrentPage(page);
 
       // Load friend IDs for contacts with linked profiles
       loadFriendIds(result.contacts);
@@ -166,6 +185,13 @@ export const ContactsManager: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Failed to load contacts');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      loadContacts(currentPage + 1, false);
     }
   };
 
@@ -176,13 +202,13 @@ export const ContactsManager: React.FC = () => {
       if (!session?.access_token) return;
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/friends-api?action=list`,
+        `${getSupabaseUrl()}/functions/v1/friends-api?action=list`,
         {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
         }
       );
@@ -228,7 +254,8 @@ export const ContactsManager: React.FC = () => {
   useEffect(() => {
     const debounceTimer = setTimeout(() => {
       if (user?.id) {
-        loadContacts();
+        setCurrentPage(1);
+        loadContacts(1, true);
       }
     }, 300);
     return () => clearTimeout(debounceTimer);
@@ -368,7 +395,7 @@ export const ContactsManager: React.FC = () => {
       if (result) {
         stopSound();
         setShowEditModal(false);
-        await loadContacts();
+        await loadContacts(1, true);
         if (editingContact && selectedContact?.id === editingContact.id) {
           setSelectedContact(result);
         }
@@ -391,7 +418,7 @@ export const ContactsManager: React.FC = () => {
     try {
       const success = await contactsApi.deleteContact(contact.id);
       if (success) {
-        await loadContacts();
+        await loadContacts(1, true);
         if (selectedContact?.id === contact.id) {
           setSelectedContact(null);
         }
@@ -571,7 +598,9 @@ export const ContactsManager: React.FC = () => {
         {/* Contacts List */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b">
-            <h3 className="text-lg font-semibold">Your Contacts ({contacts.length})</h3>
+            <h3 className="text-lg font-semibold">
+              Your Contacts {totalContacts > 0 ? `(${contacts.length} of ${totalContacts})` : `(${contacts.length})`}
+            </h3>
           </div>
           <div className="divide-y max-h-[600px] overflow-y-auto">
             {contacts.length === 0 ? (
@@ -670,6 +699,25 @@ export const ContactsManager: React.FC = () => {
               ))
             )}
           </div>
+          {/* Load More Button */}
+          {hasMore && !searchQuery && (
+            <div className="p-4 border-t">
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50 text-sm"
+              >
+                {loadingMore ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin"></div>
+                    Loading...
+                  </span>
+                ) : (
+                  'Load More'
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Contact Details */}

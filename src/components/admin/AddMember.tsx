@@ -18,6 +18,7 @@ export const AddMember: React.FC = () => {
 
   const email = searchParams.get('email') || '';
   const defaultRole = searchParams.get('role') || 'viewer';
+  const albumName = searchParams.get('album') || '';
 
   const [circle, setCircle] = useState<Circle | null>(null);
   const [selectedRole, setSelectedRole] = useState(defaultRole);
@@ -111,7 +112,7 @@ export const AddMember: React.FC = () => {
 
       const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
-        `${supabaseUrl}/functions/v1/admin-circles-api?action=invite`,
+        `${supabaseUrl}/functions/v1/admin-circles-api?circle_id=${circle.id}`,
         {
           method: 'POST',
           headers: {
@@ -120,12 +121,11 @@ export const AddMember: React.FC = () => {
             'apikey': getSupabaseAnonKey(),
           },
           body: JSON.stringify({
-            circle_id: circle.id,
-            invites: [{
-              email: email.toLowerCase(),
-              role: selectedRole === 'viewer' ? 'read_only' : selectedRole,
-              name: name || undefined,
-            }],
+            email: email.toLowerCase(),
+            role: selectedRole === 'viewer' ? 'read_only' : selectedRole,
+            full_name: name || undefined,
+            direct_add: true,
+            album_name: albumName || undefined,
           }),
         }
       );
@@ -186,9 +186,10 @@ export const AddMember: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">Invitation Sent!</h1>
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">Member Added!</h1>
           <p className="text-gray-600 mb-6">
-            An invitation has been sent to <strong>{email}</strong> to join <strong>{circle?.name}</strong> as a {selectedRole}.
+            <strong>{email}</strong> has been added to <strong>{circle?.name}</strong> as a {selectedRole}.
+            {albumName && <> They now have access to the album "<strong>{albumName}</strong>".</>}
           </p>
           <button
             onClick={() => navigate('/admin/circles')}

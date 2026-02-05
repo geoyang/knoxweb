@@ -1,4 +1,5 @@
 import { supabase, getAccessToken } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -69,14 +70,14 @@ class ModerationApiService {
       }
 
       const method = options.method || 'POST';
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
 
       const fetchOptions: RequestInit = {
         method,
         headers: {
           ...authHeaders,
           'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'apikey': getSupabaseAnonKey(),
         },
       };
 

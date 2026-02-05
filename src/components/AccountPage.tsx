@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface SubscriptionInfo {
   plan_name: string;
@@ -25,7 +26,7 @@ export const AccountPage: React.FC = () => {
         if (!session?.access_token) return;
 
         const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/subscription-api?action=get_subscription`,
+          `${getSupabaseUrl()}/functions/v1/subscription-api?action=get_subscription`,
           {
             headers: {
               'Authorization': `Bearer ${session.access_token}`,
@@ -59,7 +60,7 @@ export const AccountPage: React.FC = () => {
       }
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-account`,
+        `${getSupabaseUrl()}/functions/v1/delete-account`,
         {
           method: 'POST',
           headers: {

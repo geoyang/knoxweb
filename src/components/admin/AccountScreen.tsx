@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { adminApi } from '../../services/adminApi';
+import { getSelectedEnvironmentKey, setEnvironment, ENVIRONMENTS, getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 
 interface UserStats {
   albums: number;
@@ -61,7 +62,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
       }
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-account`,
+        `${getSupabaseUrl()}/functions/v1/delete-account`,
         {
           method: 'POST',
           headers: {
@@ -133,13 +134,13 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
         if (!session?.access_token) throw new Error('Not authenticated');
 
         const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/profiles-api`,
+          `${getSupabaseUrl()}/functions/v1/profiles-api`,
           {
             method: 'PUT',
             headers: {
               'Authorization': `Bearer ${session.access_token}`,
               'Content-Type': 'application/json',
-              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+              'apikey': getSupabaseAnonKey(),
             },
             body: JSON.stringify(updates),
           }
@@ -600,10 +601,32 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
                     <span className="text-sm text-gray-500">Kizu Web v1.0.0</span>
                   </div>
                   <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
-                    <span className="text-sm text-gray-600">Environment</span>
-                    <span className="text-sm text-gray-500">
-                      {import.meta.env.MODE === 'development' ? 'Development' : 'Production'}
-                    </span>
+                    <div>
+                      <span className="text-sm text-gray-600 block">Backend Environment</span>
+                      <span className="text-xs text-gray-400">
+                        {ENVIRONMENTS[getSelectedEnvironmentKey()].supabaseUrl.split('//')[1]?.split('.')[0]}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-medium ${getSelectedEnvironmentKey() === 'dev' ? 'text-orange-600' : 'text-gray-400'}`}>
+                        Dev
+                      </span>
+                      <button
+                        onClick={() => setEnvironment(getSelectedEnvironmentKey() === 'dev' ? 'prod' : 'dev')}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          getSelectedEnvironmentKey() === 'prod' ? 'bg-green-600' : 'bg-orange-500'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            getSelectedEnvironmentKey() === 'prod' ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                      <span className={`text-xs font-medium ${getSelectedEnvironmentKey() === 'prod' ? 'text-green-600' : 'text-gray-400'}`}>
+                        Prod
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}

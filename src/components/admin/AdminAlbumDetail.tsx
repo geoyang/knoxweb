@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 import { MemoriesPanel } from '../MemoriesPanel';
 import { memoriesApi, Memory, MemoryInput } from '../../services/memoriesApi';
 import { MemoryInputBar } from '../MemoryInputBar';
@@ -494,7 +495,7 @@ export const AdminAlbumDetail: React.FC = () => {
       if (!session) { navigate('/login'); return; }
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?album_id=${albumId}`,
+        `${getSupabaseUrl()}/functions/v1/admin-albums-api?album_id=${albumId}`,
         { headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' } }
       );
       const data = await response.json();
@@ -515,7 +516,7 @@ export const AdminAlbumDetail: React.FC = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-circles-api`,
+        `${getSupabaseUrl()}/functions/v1/admin-circles-api`,
         { headers: { 'Authorization': `Bearer ${session.access_token}` }, method: 'GET' }
       );
       const data = await response.json();
@@ -604,7 +605,7 @@ export const AdminAlbumDetail: React.FC = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/admin-albums-api`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ album_id: album.id, title: editedTitle.trim() })
@@ -621,7 +622,7 @@ export const AdminAlbumDetail: React.FC = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?action=share`, {
+      await fetch(`${getSupabaseUrl()}/functions/v1/admin-albums-api?action=share`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ album_id: album.id, circle_ids: [shareCircleId], role: shareRole })
@@ -640,7 +641,7 @@ export const AdminAlbumDetail: React.FC = () => {
       if (!session) return;
 
       const remainingCircleIds = album.album_shares?.filter(s => s.id !== shareId && s.is_active).map(s => s.circle_id) || [];
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?action=share`, {
+      await fetch(`${getSupabaseUrl()}/functions/v1/admin-albums-api?action=share`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ album_id: album.id, circle_ids: remainingCircleIds, role: 'read_only' })
@@ -654,7 +655,7 @@ export const AdminAlbumDetail: React.FC = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?album_id=${album.id}&action=remove_photo`, {
+      await fetch(`${getSupabaseUrl()}/functions/v1/admin-albums-api?album_id=${album.id}&action=remove_photo`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ asset_id: assetId })
@@ -668,7 +669,7 @@ export const AdminAlbumDetail: React.FC = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api`, {
+      await fetch(`${getSupabaseUrl()}/functions/v1/admin-albums-api`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ album_id: album.id, keyphoto: assetId })
@@ -688,7 +689,7 @@ export const AdminAlbumDetail: React.FC = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api`,
+        `${getSupabaseUrl()}/functions/v1/admin-albums-api`,
         { headers: { 'Authorization': `Bearer ${session.access_token}` } }
       );
       const data = await response.json();
@@ -737,7 +738,7 @@ export const AdminAlbumDetail: React.FC = () => {
       if (!session) return;
 
       for (const assetId of selectedAssetIds) {
-        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?album_id=${album?.id}&action=remove_photo`, {
+        await fetch(`${getSupabaseUrl()}/functions/v1/admin-albums-api?album_id=${album?.id}&action=remove_photo`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ asset_id: assetId })
@@ -779,7 +780,7 @@ export const AdminAlbumDetail: React.FC = () => {
 
       // Create new album if needed
       if (targetAlbumId === 'new' && newAlbumTitle.trim()) {
-        const createResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api`, {
+        const createResponse = await fetch(`${getSupabaseUrl()}/functions/v1/admin-albums-api`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: newAlbumTitle.trim() })
@@ -791,7 +792,7 @@ export const AdminAlbumDetail: React.FC = () => {
 
       // Add photos to destination album
       const assetIds = Array.from(selectedAssetIds);
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?action=add_photos`, {
+      await fetch(`${getSupabaseUrl()}/functions/v1/admin-albums-api?action=add_photos`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ album_id: destinationAlbumId, asset_ids: assetIds })
@@ -800,7 +801,7 @@ export const AdminAlbumDetail: React.FC = () => {
       // If moving, remove from current album
       if (showCopyMoveModal === 'move') {
         for (const assetId of selectedAssetIds) {
-          await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?album_id=${album?.id}&action=remove_photo`, {
+          await fetch(`${getSupabaseUrl()}/functions/v1/admin-albums-api?album_id=${album?.id}&action=remove_photo`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ asset_id: assetId })

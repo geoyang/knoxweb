@@ -4,13 +4,14 @@ import type { Memory } from '../services/memoriesApi';
 import { MemoryInputBar } from './MemoryInputBar';
 import { ReactionBar } from './ReactionBar';
 import { supabase } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 // Public memories API helper (no auth required, uses invite ID for access)
 const publicMemoriesApi = {
   async getMemories(inviteId: string, assetId: string): Promise<{ success: boolean; memories?: Memory[]; error?: string }> {
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = getSupabaseUrl();
+      const supabaseAnonKey = getSupabaseAnonKey();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/public-memories?invite_id=${inviteId}&asset_id=${assetId}`,
         {
@@ -34,8 +35,8 @@ const publicMemoriesApi = {
 
   async getMemoryCount(inviteId: string, assetId: string): Promise<number> {
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = getSupabaseUrl();
+      const supabaseAnonKey = getSupabaseAnonKey();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/public-memories?invite_id=${inviteId}&asset_id=${assetId}&count=true`,
         {
@@ -389,8 +390,8 @@ export const AlbumViewer: React.FC = () => {
 
     try {
       // Call the edge function to securely fetch album data
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = getSupabaseUrl();
+      const supabaseAnonKey = getSupabaseAnonKey();
 
       const response = await fetch(
         `${supabaseUrl}/functions/v1/public-album-view?inviteId=${inviteId}`,
@@ -488,8 +489,8 @@ export const AlbumViewer: React.FC = () => {
     setRegistering(true);
 
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = getSupabaseUrl();
+      const supabaseAnonKey = getSupabaseAnonKey();
 
       const response = await fetch(
         `${supabaseUrl}/functions/v1/create-circle-account`,
@@ -978,8 +979,8 @@ export const AlbumDetailView: React.FC = () => {
       if (!inviteId) return;
 
       try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const supabaseUrl = getSupabaseUrl();
+        const supabaseAnonKey = getSupabaseAnonKey();
         const response = await fetch(
           `${supabaseUrl}/functions/v1/public-album-view?inviteId=${inviteId}`,
           {

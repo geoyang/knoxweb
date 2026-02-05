@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 import { adminApi } from '../services/adminApi';
 import { useAuth } from '../context/AuthContext';
 import { MediaGallery } from './MediaGallery';
@@ -132,13 +133,13 @@ export const Dashboard: React.FC = () => {
       // Load user profile via API
       try {
         const profileResponse = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/profiles-api`,
+          `${getSupabaseUrl()}/functions/v1/profiles-api`,
           {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${session.access_token}`,
               'Content-Type': 'application/json',
-              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+              'apikey': getSupabaseAnonKey(),
             },
           }
         );
@@ -182,7 +183,8 @@ export const Dashboard: React.FC = () => {
       setCircles(processedCircles);
 
       // Load albums using the admin API (handles RLS properly via service role)
-      const albumsResult = await adminApi.getAlbums();
+      // Use lite mode to skip loading full album_assets - we only need counts
+      const albumsResult = await adminApi.getAlbums({ lite: true });
 
       if (albumsResult.success && albumsResult.data) {
         const processedAlbums: Album[] = [];
@@ -207,7 +209,7 @@ export const Dashboard: React.FC = () => {
             description: album.description,
             keyphoto: album.keyphoto,
             keyphoto_thumbnail: album.keyphoto_thumbnail,
-            photo_count: album.album_assets?.length || 0,
+            photo_count: album.asset_count || album.album_assets?.length || 0,
             circle_id: circleId,
             circle_name: circleName,
             isOwner: album.isOwner,

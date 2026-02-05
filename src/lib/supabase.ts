@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
+import { getCurrentEnvironment } from './environments'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!
-
+// Get environment config (allows runtime switching between dev/prod)
+const env = getCurrentEnvironment()
+const supabaseUrl = env.supabaseUrl
+const supabaseAnonKey = env.supabaseAnonKey
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   db: {

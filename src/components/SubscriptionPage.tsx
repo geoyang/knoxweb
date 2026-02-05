@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface Plan {
   id: string;
@@ -54,7 +55,7 @@ interface PromoResult {
   is_perpetual?: boolean;
 }
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_URL = getSupabaseUrl();
 
 const handleReturnToApp = (e: React.MouseEvent) => {
   e.preventDefault();
@@ -181,7 +182,7 @@ export const SubscriptionPage: React.FC = () => {
       const headers = {
         Authorization: `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        apikey: getSupabaseAnonKey(),
       };
 
       // Single API call for all page data

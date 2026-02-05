@@ -16,12 +16,14 @@ export interface AlbumAsset {
   asset_id: string;
   asset_uri: string;
   web_uri?: string | null;
+  web_video_url?: string | null;
   thumbnail_uri?: string | null;
   asset_type: 'image' | 'video' | 'photo';
   display_order?: number;
   date_added?: string;
   path?: string | null;
   thumbnail?: string | null;
+  transcoding_status?: 'pending' | 'processing' | 'completed' | 'failed' | null;
   // Metadata fields
   created_at?: string;
   width?: number;
@@ -100,6 +102,10 @@ const getThumbnailUrl = (asset: AlbumAsset): string | null => {
 };
 
 const getDisplayUrl = (asset: AlbumAsset): string | null => {
+  // For videos, prefer the transcoded web_video_url if available
+  if (asset.asset_type === 'video' && asset.web_video_url && isWebAccessibleUrl(asset.web_video_url)) {
+    return asset.web_video_url;
+  }
   // For full-size display: web_uri > asset_uri > thumbnail
   if (asset.web_uri && isWebAccessibleUrl(asset.web_uri) && !isHeicUrl(asset.web_uri)) {
     return asset.web_uri;

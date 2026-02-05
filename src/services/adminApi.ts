@@ -1,4 +1,5 @@
 import { supabase, getAccessToken } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -36,7 +37,7 @@ class AdminApiService {
       }
 
       const method = options.method || 'POST';
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
 
       // Use fetch directly to support different HTTP methods
       const fetchOptions: RequestInit = {
@@ -44,7 +45,7 @@ class AdminApiService {
         headers: {
           ...authHeaders,
           'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'apikey': getSupabaseAnonKey(),
           ...(options.headers || {}),
         },
       };
@@ -102,8 +103,9 @@ class AdminApiService {
   }
 
   // Albums API
-  async getAlbums(): Promise<ApiResponse<{ albums: any[], count: number, stats?: { owned: number, shared: number } }>> {
-    return this.makeApiCall('admin-albums-api', {
+  async getAlbums(options?: { lite?: boolean }): Promise<ApiResponse<{ albums: any[], count: number, stats?: { owned: number, shared: number } }>> {
+    const params = options?.lite ? '?lite=true' : '';
+    return this.makeApiCall(`admin-albums-api${params}`, {
       method: 'GET'
     });
   }
@@ -139,12 +141,24 @@ class AdminApiService {
   }
 
   // Images API
-  async getImages(filterType: string = 'all', sortBy: string = 'date_added'): Promise<ApiResponse<{
+  async getImages(
+    filterType: string = 'all',
+    sortBy: string = 'date_added',
+    page: number = 1,
+    limit: number = 50
+  ): Promise<ApiResponse<{
     assets: any[];
     stats: any;
     count: number;
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasMore: boolean;
+    };
   }>> {
-    return this.makeApiCall(`admin-images-api?filter_type=${filterType}&sort_by=${sortBy}`, {
+    return this.makeApiCall(`admin-images-api?filter_type=${filterType}&sort_by=${sortBy}&page=${page}&limit=${limit}`, {
       method: 'GET'
     });
   }
