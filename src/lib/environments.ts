@@ -27,9 +27,19 @@ const STORAGE_KEY = 'kizu-environment';
 
 /**
  * Get the currently selected environment key
- * Auto-detects based on hostname for dev vs prod
+ * Manual override (localStorage) takes priority, then auto-detects based on hostname
  */
 export function getSelectedEnvironmentKey(): string {
+  // Check localStorage first for manual override
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored && ENVIRONMENTS[stored]) {
+      return stored;
+    }
+  } catch {
+    // localStorage not available
+  }
+
   // Auto-detect environment based on hostname
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
@@ -43,15 +53,6 @@ export function getSelectedEnvironmentKey(): string {
     }
   }
 
-  // Fall back to localStorage for manual override
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && ENVIRONMENTS[stored]) {
-      return stored;
-    }
-  } catch {
-    // localStorage not available
-  }
   // Default to prod environment (most users are on production)
   return 'prod';
 }

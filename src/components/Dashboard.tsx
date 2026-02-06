@@ -5,8 +5,9 @@ import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 import { adminApi } from '../services/adminApi';
 import { useAuth } from '../context/AuthContext';
 import { MediaGallery } from './MediaGallery';
+import { MomentsGallery } from './MomentsGallery';
 
-type TabType = 'home' | 'media';
+type TabType = 'home' | 'media' | 'moments';
 
 interface Circle {
   id: string;
@@ -468,12 +469,29 @@ export const Dashboard: React.FC = () => {
                 Media
               </span>
             </button>
+            <button
+              onClick={() => setActiveTab('moments')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'moments'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+                Moments
+              </span>
+            </button>
           </nav>
         </div>
 
         {/* Tab Content */}
         {activeTab === 'media' ? (
           <MediaGallery />
+        ) : activeTab === 'moments' ? (
+          <MomentsGallery />
         ) : (
           <>
         {/* Circles Section */}

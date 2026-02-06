@@ -19,6 +19,7 @@ interface Album {
   user_id: string;
   date_created: string;
   date_modified: string;
+  asset_count?: number;
   isOwner?: boolean;
   shared_via?: {
     circle_id: string;
@@ -105,26 +106,49 @@ export const AlbumsManager: React.FC = () => {
     }
   }, [user?.id]);
 
-  // Load memory counts when album is selected
+  // Load full album detail (with assets) when album is selected
   useEffect(() => {
-    const loadMemoryCounts = async () => {
-      if (!selectedAlbum || !selectedAlbum.album_assets || selectedAlbum.album_assets.length === 0) return;
-
-      console.log('Album assets:', selectedAlbum.album_assets);
-      const assetIds = selectedAlbum.album_assets.map(a => a.asset_id).filter(Boolean);
-      console.log('Looking up memory counts for asset IDs:', assetIds);
-      if (assetIds.length === 0) {
-        console.log('No valid asset IDs found');
+    const loadAlbumDetail = async () => {
+      if (!selectedAlbum) return;
+      // Already has assets loaded — just load memory counts
+      if (selectedAlbum.album_assets && selectedAlbum.album_assets.length > 0) {
+        const assetIds = selectedAlbum.album_assets.map(a => a.asset_id).filter(Boolean);
+        if (assetIds.length > 0) {
+          const counts = await memoriesApi.getMemoryCounts(assetIds);
+          setMemoryCounts(counts);
+        }
         return;
       }
-
-      const counts = await memoriesApi.getMemoryCounts(assetIds);
-      console.log('Memory counts:', counts);
-      setMemoryCounts(counts);
+      // Fetch full album detail with assets
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        const response = await fetch(
+          `${getSupabaseUrl()}/functions/v1/admin-albums-api?album_id=${selectedAlbum.id}`,
+          { headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' } }
+        );
+        const data = await response.json();
+        if (!response.ok) return;
+        setSelectedAlbum(prev => prev ? {
+          ...prev,
+          album_assets: data.assets || [],
+          asset_count: data.assets?.length || prev.asset_count,
+        } : null);
+        // Load memory counts for the fetched assets
+        if (data.assets?.length > 0) {
+          const assetIds = data.assets.map((a: any) => a.asset_id).filter(Boolean);
+          if (assetIds.length > 0) {
+            const counts = await memoriesApi.getMemoryCounts(assetIds);
+            setMemoryCounts(counts);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading album detail:', err);
+      }
     };
 
-    loadMemoryCounts();
-  }, [selectedAlbum]);
+    loadAlbumDetail();
+  }, [selectedAlbum?.id]);
 
   const loadAlbums = async (): Promise<Album[]> => {
     if (!user?.id) {
@@ -172,7 +196,7 @@ export const AlbumsManager: React.FC = () => {
           keyphoto: album.keyphoto,
           hasKeyphoto: hasKeyphoto(album.keyphoto),
           displayImage: displayImage,
-          assetCount: album.album_assets?.length || 0,
+          assetCount: album.asset_count || album.album_assets?.length || 0,
           assets: album.album_assets?.slice(0, 2) // Log first 2 assets for debugging
         });
       });
@@ -416,31 +440,46 @@ export const AlbumsManager: React.FC = () => {
     setFailedImages(prev => new Set([...prev, albumId]));
   };
 
+  // Refresh selected album detail (fetches full assets)
+  const refreshSelectedAlbum = async (albumId: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const response = await fetch(
+        `${getSupabaseUrl()}/functions/v1/admin-albums-api?album_id=${albumId}`,
+        { headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' } }
+      );
+      const data = await response.json();
+      if (!response.ok) return;
+      setSelectedAlbum(prev => prev ? {
+        ...prev,
+        album_assets: data.assets || [],
+        asset_count: data.assets?.length || prev.asset_count,
+      } : null);
+    } catch (err) {
+      console.error('Error refreshing album detail:', err);
+    }
+  };
+
   const handlePhotosAdded = async (count: number) => {
     console.log(`Added ${count} photos to album`);
     setShowPhotoPicker(false);
-    // Reload albums to get updated asset counts
-    const freshAlbums = await loadAlbums();
-    // If we have a selected album, refresh it to show new photos
+    // Reload albums list for updated counts
+    await loadAlbums();
+    // Refresh selected album detail to show new photos
     if (selectedAlbum) {
-      const updatedAlbum = freshAlbums.find(album => album.id === selectedAlbum.id);
-      if (updatedAlbum) {
-        setSelectedAlbum(updatedAlbum);
-      }
+      await refreshSelectedAlbum(selectedAlbum.id);
     }
   };
 
   const handleImagesUploaded = async (count: number) => {
     console.log(`Uploaded ${count} new images to album`);
     setShowImageUploader(false);
-    // Reload albums to get updated asset counts
-    const freshAlbums = await loadAlbums();
-    // If we have a selected album, refresh it to show new photos
+    // Reload albums list for updated counts
+    await loadAlbums();
+    // Refresh selected album detail to show new photos
     if (selectedAlbum) {
-      const updatedAlbum = freshAlbums.find(album => album.id === selectedAlbum.id);
-      if (updatedAlbum) {
-        setSelectedAlbum(updatedAlbum);
-      }
+      await refreshSelectedAlbum(selectedAlbum.id);
     }
   };
 
@@ -744,7 +783,7 @@ export const AlbumsManager: React.FC = () => {
                   )}
                 </div>
                 <p className="text-xs text-theme-muted">
-                  {album.album_assets?.length || 0} photos • {new Date(album.date_created).toLocaleDateString()}
+                  {album.asset_count || album.album_assets?.length || 0} photos • {new Date(album.date_created).toLocaleDateString()}
                 </p>
                 {album.isOwner === false && album.shared_via && album.shared_via.length > 0 && (
                   <p className="text-[10px] text-theme-accent mt-0.5 truncate">
@@ -848,7 +887,7 @@ export const AlbumsManager: React.FC = () => {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-primary">
-                    {album.album_assets?.length || 0}
+                    {album.asset_count || album.album_assets?.length || 0}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {album.isOwner ? (
@@ -1075,7 +1114,7 @@ export const AlbumsManager: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-4">
                   <h4 className="font-semibold text-theme-primary">
-                    Photos ({selectedAlbum.album_assets?.length || 0})
+                    Photos ({selectedAlbum.asset_count || selectedAlbum.album_assets?.length || 0})
                   </h4>
                   {/* View mode toggle */}
                   <div className="toggle-group flex">
