@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 import { useAuth } from '../../context/AuthContext';
 import { addPhotosToAlbum } from '../../services/albumsApi';
 import { adminApi } from '../../services/adminApi';
@@ -29,11 +30,17 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
   const [availableAssets, setAvailableAssets] = useState<Asset[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'photo' | 'video'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'type'>('date');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalAssets, setTotalAssets] = useState(0);
+  const [existingAssetIds, setExistingAssetIds] = useState<Set<string>>(new Set());
+  const PAGE_SIZE = 50;
 
   const { user } = useAuth();
 
@@ -44,23 +51,59 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
 
   useEffect(() => {
     if (user?.id) {
-      loadAvailableAssets();
+      // Load existing album assets first, then load available assets
+      loadExistingAlbumAssets().then(existingIds => {
+        loadAvailableAssets(1, true, existingIds);
+      });
     }
   }, [user?.id, targetAlbumId]);
 
-  const loadAvailableAssets = async () => {
+  // Load existing album assets once on mount
+  const loadExistingAlbumAssets = async () => {
     try {
-      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const albumResponse = await fetch(
+        `${getSupabaseUrl()}/functions/v1/admin-albums-api?album_id=${targetAlbumId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'apikey': getSupabaseAnonKey(),
+          },
+        }
+      );
+      const albumData = await albumResponse.json();
+      const ids = new Set<string>(
+        (albumData.album?.album_assets || []).map((a: any) => a.asset_id)
+      );
+      setExistingAssetIds(ids);
+      return ids;
+    } catch (err) {
+      console.error('Error loading album assets:', err);
+      return new Set<string>();
+    }
+  };
+
+  const loadAvailableAssets = async (page: number = 1, reset: boolean = true, existingIds?: Set<string>) => {
+    try {
+      if (reset) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
       setError(null);
 
-      // Get all assets via admin-images-api
-      const imagesResult = await adminApi.getImages('all', 'date_added');
+      // Get assets via admin-images-api with pagination
+      const imagesResult = await adminApi.getImages('all', 'date_added', page, PAGE_SIZE);
       if (!imagesResult.success || !imagesResult.data) {
         throw new Error(imagesResult.error || 'Failed to load images');
       }
 
       // Map API response to Asset interface
-      const assets: Asset[] = (imagesResult.data.assets || []).map((a: any) => ({
+      const newAssets: Asset[] = (imagesResult.data.assets || []).map((a: any) => ({
         id: a.id,
         path: a.path,
         thumbnail: a.thumbnail,
@@ -69,37 +112,37 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
         created_at: a.created_at,
         user_id: a.user_id,
       }));
-      setAllAssets(assets);
 
-      // Get album details to find assets already in the target album
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
+      // Use provided existingIds or current state
+      const idsToExclude = existingIds || existingAssetIds;
 
-      const albumResponse = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?album_id=${targetAlbumId}`,
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-        }
-      );
-      const albumData = await albumResponse.json();
-      const existingAssetIds = new Set(
-        (albumData.album?.album_assets || []).map((a: any) => a.asset_id)
-      );
+      if (reset) {
+        setAllAssets(newAssets);
+        // Filter out assets that are already in the target album
+        const available = newAssets.filter(asset => !idsToExclude.has(asset.id));
+        setAvailableAssets(available);
+      } else {
+        setAllAssets(prev => [...prev, ...newAssets]);
+        const available = newAssets.filter(asset => !idsToExclude.has(asset.id));
+        setAvailableAssets(prev => [...prev, ...available]);
+      }
 
-      // Filter out assets that are already in the target album
-      const available = assets.filter(asset => !existingAssetIds.has(asset.id));
-      setAvailableAssets(available);
+      setTotalAssets(imagesResult.data.pagination?.total || 0);
+      setHasMore(imagesResult.data.pagination?.hasMore || false);
+      setCurrentPage(page);
 
     } catch (err) {
       console.error('Error loading assets:', err);
       setError(err instanceof Error ? err.message : 'Failed to load assets');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      loadAvailableAssets(currentPage + 1, false);
     }
   };
 
@@ -231,7 +274,7 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Add Photos to Album</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Select from your photo library ({filteredAssets.length} available)
+              Select from your photo library ({filteredAssets.length} shown{hasMore ? `, ${totalAssets} total` : ''})
             </p>
           </div>
           <button
@@ -377,6 +420,26 @@ export const PhotoPicker: React.FC<PhotoPickerProps> = ({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Load More Button */}
+          {hasMore && (
+            <div className="p-4 pt-0">
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50 text-sm"
+              >
+                {loadingMore ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin"></div>
+                    Loading...
+                  </span>
+                ) : (
+                  `Load More (${availableAssets.length} of ${totalAssets})`
+                )}
+              </button>
             </div>
           )}
         </div>

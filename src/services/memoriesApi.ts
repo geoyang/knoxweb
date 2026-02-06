@@ -1,4 +1,5 @@
 import { supabase, getAccessToken } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -50,7 +51,7 @@ class MemoriesApiService {
 
       return {
         'Authorization': `Bearer ${accessToken}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        'apikey': getSupabaseAnonKey(),
       };
     } catch (error) {
       console.error('Error getting auth headers:', error);
@@ -73,7 +74,7 @@ class MemoriesApiService {
       }
 
       const method = options.method || 'GET';
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
 
       const fetchOptions: RequestInit = {
         method,

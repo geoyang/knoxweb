@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 export const DebugSupabase: React.FC = () => {
   const [status, setStatus] = useState<string>('Testing...');
@@ -9,8 +10,8 @@ export const DebugSupabase: React.FC = () => {
     const testConnection = async () => {
       try {
         // Test 1: Check environment variables
-        const url = import.meta.env.VITE_SUPABASE_URL;
-        const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const url = getSupabaseUrl();
+        const key = getSupabaseAnonKey();
         
         console.log('=== Supabase Debug Test Starting ===');
         console.log('Environment variables:');

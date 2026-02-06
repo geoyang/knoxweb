@@ -11,12 +11,14 @@ interface Asset {
   filename: string;
   asset_uri: string;
   web_uri?: string;
+  web_video_url?: string;
   thumbnail_uri?: string;
   asset_type: string;
   media_type?: string;
   created_at: string;
   location_name?: string;
   tags?: Array<{ type: string; value: string }>;
+  transcoding_status?: 'pending' | 'processing' | 'completed' | 'failed' | null;
 }
 
 interface MediaGalleryProps {
@@ -28,6 +30,7 @@ interface MediaGalleryProps {
 export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect, initialAssetId, onInitialAssetConsumed }) => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('date_added');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -41,11 +44,17 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect, initi
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const [stats, setStats] = useState<{ total: number; photos: number; videos: number } | null>(null);
   const [showUploader, setShowUploader] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const PAGE_SIZE = 50;
 
   const initialAssetConsumedRef = useRef(false);
 
   useEffect(() => {
-    loadAssets();
+    // Reset to page 1 when sort changes
+    setCurrentPage(1);
+    setAssets([]);
+    loadAssets(1, true);
   }, [sortBy]);
 
   // Handle initialAssetId for deep linking
@@ -60,12 +69,20 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect, initi
     }
   }, [initialAssetId, assets, onInitialAssetConsumed]);
 
-  const loadAssets = async () => {
-    setLoading(true);
+  const loadAssets = async (page: number = 1, reset: boolean = false) => {
+    if (reset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
     try {
-      const result = await adminApi.getImages('all', sortBy);
+      const result = await adminApi.getImages('all', sortBy, page, PAGE_SIZE);
       if (result.success && result.data) {
-        setAssets(result.data.assets || []);
+        if (reset) {
+          setAssets(result.data.assets || []);
+        } else {
+          setAssets(prev => [...prev, ...(result.data?.assets || [])]);
+        }
         if (result.data.stats) {
           setStats({
             total: result.data.count || 0,
@@ -73,6 +90,8 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect, initi
             videos: result.data.stats.total_videos || 0,
           });
         }
+        setHasMore(result.data.pagination?.hasMore || false);
+        setCurrentPage(page);
         setError(null);
       } else {
         setError(result.error || 'Failed to load media');
@@ -81,6 +100,13 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect, initi
       setError('Failed to load media');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      loadAssets(currentPage + 1, false);
     }
   };
 
@@ -156,7 +182,7 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect, initi
     }
 
     if (successCount > 0) {
-      loadAssets();
+      loadAssets(1, true);
       exitSelectionMode();
     }
     alert(`Deleted ${successCount} of ${assetIds.length} items`);
@@ -201,7 +227,7 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect, initi
       <div className="bg-red-50 rounded-xl p-6 text-center">
         <p className="text-red-600 mb-3">{error}</p>
         <button
-          onClick={loadAssets}
+          onClick={() => loadAssets(1, true)}
           className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm"
         >
           Retry
@@ -338,7 +364,7 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect, initi
 
             {/* Refresh */}
             <button
-              onClick={loadAssets}
+              onClick={() => loadAssets(1, true)}
               className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
               title="Refresh"
             >
@@ -562,6 +588,26 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect, initi
         </div>
       )}
 
+      {/* Load More Button */}
+      {hasMore && !searchQuery && (
+        <div className="p-4 border-t border-gray-200">
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+          >
+            {loadingMore ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin"></div>
+                Loading...
+              </span>
+            ) : (
+              `Load More (${assets.length} of ${stats?.total || 0})`
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Media Viewer Modal */}
       {selectedAsset && (
         <MediaViewerModal
@@ -580,7 +626,7 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({ onAssetSelect, initi
           onClose={() => setShowUploader(false)}
           onImagesUploaded={(count) => {
             if (count > 0) {
-              loadAssets();
+              loadAssets(1, true);
             }
           }}
         />
@@ -599,7 +645,10 @@ const MediaViewerModal: React.FC<MediaViewerModalProps> = ({ asset, onClose, onD
   const isVideo = asset.media_type === 'video' || asset.asset_type === 'video' ||
     (asset.filename?.toLowerCase() || '').match(/\.(mp4|mov|avi|mkv|webm|m4v)$/);
 
-  const mediaUrl = asset.web_uri || asset.asset_uri;
+  // For videos, prefer the transcoded web_video_url if available
+  const mediaUrl = isVideo
+    ? (asset.web_video_url || asset.web_uri || asset.asset_uri)
+    : (asset.web_uri || asset.asset_uri);
   const isWebAccessible = mediaUrl?.startsWith('http://') || mediaUrl?.startsWith('https://');
 
   return (

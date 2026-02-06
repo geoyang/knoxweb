@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface Plan {
   id: string;
@@ -54,18 +55,14 @@ interface PromoResult {
   is_perpetual?: boolean;
 }
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_URL = getSupabaseUrl();
 
 const handleReturnToApp = (e: React.MouseEvent) => {
   e.preventDefault();
   e.stopPropagation();
 
-  // Check if we're in a mobile WebView (indicated by mobile=true query param)
-  const urlParams = new URLSearchParams(window.location.search);
-  const isMobileWebView = urlParams.get('mobile') === 'true';
-
   // If in mobile WebView, post message to close
-  if (isMobileWebView && (window as any).ReactNativeWebView) {
+  if ((window as any).ReactNativeWebView) {
     (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'KIZU_CLOSE' }));
     return;
   }
@@ -185,7 +182,7 @@ export const SubscriptionPage: React.FC = () => {
       const headers = {
         Authorization: `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        apikey: getSupabaseAnonKey(),
       };
 
       // Single API call for all page data
@@ -194,7 +191,13 @@ export const SubscriptionPage: React.FC = () => {
       console.log('[SubscriptionPage] API response in', (performance.now() - fetchStart).toFixed(0), 'ms');
 
       const data = await response.json();
-      console.log('[SubscriptionPage] Total load time:', (performance.now() - loadStart).toFixed(0), 'ms');
+      console.log('[SubscriptionPage] Total load time:', (performance.now() - loadStart).toFixed(0), 'ms, status:', response.status);
+
+      if (!response.ok) {
+        console.error('[SubscriptionPage] API error:', response.status, data);
+        setError(data.error || data.msg || `Server error (${response.status})`);
+        return;
+      }
 
       if (data.success) {
         setPlans(data.plans || []);
@@ -206,7 +209,7 @@ export const SubscriptionPage: React.FC = () => {
           setSystemDiscount(data.discount);
         }
       } else {
-        setError(data.error || 'Failed to load subscription data');
+        setError(data.error || data.msg || 'Failed to load subscription data');
       }
     } catch (err) {
       console.error('Error loading subscription data:', err);
@@ -589,7 +592,7 @@ export const SubscriptionPage: React.FC = () => {
           )}
           {isSubscribed && subscription?.current_period_end && (
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Subscription renews {new Date(subscription.current_period_end).toLocaleDateString()}
+              {subscription.has_promo ? 'Expires' : 'Subscription renews'} {new Date(subscription.current_period_end).toLocaleDateString()}
             </p>
           )}
         </div>
@@ -822,7 +825,9 @@ export const SubscriptionPage: React.FC = () => {
                       <span className={`text-xs font-bold px-2 py-1 rounded ${
                         isPerpetual ? 'bg-green-500' : isTrialing ? 'bg-orange-500' : 'bg-indigo-500'
                       } text-white`}>
-                        {isPerpetual ? '∞' : isTrialing ? 'TRIAL' : (subscription?.current_period_end ? `Renews ${new Date(subscription.current_period_end).toLocaleDateString()}` : 'ACTIVE')}
+                        {isPerpetual ? '∞' : isTrialing ? 'TRIAL' : (subscription?.current_period_end
+                          ? `${subscription.has_promo ? 'Expires' : 'Renews'} ${new Date(subscription.current_period_end).toLocaleDateString()}`
+                          : 'ACTIVE')}
                       </span>
                     )}
                   </div>

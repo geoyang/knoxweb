@@ -1,4 +1,5 @@
 import { supabase, getAccessToken } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -36,7 +37,7 @@ class AdminApiService {
       }
 
       const method = options.method || 'POST';
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
 
       // Use fetch directly to support different HTTP methods
       const fetchOptions: RequestInit = {
@@ -44,7 +45,7 @@ class AdminApiService {
         headers: {
           ...authHeaders,
           'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'apikey': getSupabaseAnonKey(),
           ...(options.headers || {}),
         },
       };
@@ -102,8 +103,9 @@ class AdminApiService {
   }
 
   // Albums API
-  async getAlbums(): Promise<ApiResponse<{ albums: any[], count: number, stats?: { owned: number, shared: number } }>> {
-    return this.makeApiCall('admin-albums-api', {
+  async getAlbums(options?: { lite?: boolean }): Promise<ApiResponse<{ albums: any[], count: number, stats?: { owned: number, shared: number } }>> {
+    const params = options?.lite ? '?lite=true' : '';
+    return this.makeApiCall(`admin-albums-api${params}`, {
       method: 'GET'
     });
   }
@@ -139,12 +141,24 @@ class AdminApiService {
   }
 
   // Images API
-  async getImages(filterType: string = 'all', sortBy: string = 'date_added'): Promise<ApiResponse<{
+  async getImages(
+    filterType: string = 'all',
+    sortBy: string = 'date_added',
+    page: number = 1,
+    limit: number = 50
+  ): Promise<ApiResponse<{
     assets: any[];
     stats: any;
     count: number;
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasMore: boolean;
+    };
   }>> {
-    return this.makeApiCall(`admin-images-api?filter_type=${filterType}&sort_by=${sortBy}`, {
+    return this.makeApiCall(`admin-images-api?filter_type=${filterType}&sort_by=${sortBy}&page=${page}&limit=${limit}`, {
       method: 'GET'
     });
   }
@@ -190,6 +204,17 @@ class AdminApiService {
     });
   }
 
+  async addUserToCircle(circleId: string, data: {
+    email: string;
+    role: string;
+    full_name?: string;
+  }): Promise<ApiResponse<{ invitation: any; emailSent?: boolean }>> {
+    return this.makeApiCall(`admin-circles-api?circle_id=${circleId}`, {
+      method: 'POST',
+      body: JSON.stringify({ ...data, direct_add: true })
+    });
+  }
+
   async updateCircle(circleData: {
     circle_id: string;
     name?: string;
@@ -205,6 +230,27 @@ class AdminApiService {
     return this.makeApiCall('admin-circles-api', {
       method: 'DELETE',
       body: JSON.stringify({ circle_id: circleId })
+    });
+  }
+
+  async updateUserProfile(userId: string, data: { full_name?: string }): Promise<ApiResponse<{ user: any }>> {
+    return this.makeApiCall('admin-users-api', {
+      method: 'PUT',
+      body: JSON.stringify({ user_id: userId, ...data })
+    });
+  }
+
+  async updateMemberRole(memberId: string, role: string): Promise<ApiResponse<{ member: any }>> {
+    return this.makeApiCall('admin-circles-api', {
+      method: 'PATCH',
+      body: JSON.stringify({ member_id: memberId, role })
+    });
+  }
+
+  async removeMember(memberId: string): Promise<ApiResponse<{ message: string }>> {
+    return this.makeApiCall('admin-circles-api', {
+      method: 'DELETE',
+      body: JSON.stringify({ member_id: memberId })
     });
   }
 

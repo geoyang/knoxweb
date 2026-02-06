@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface VerificationResult {
   success: boolean;
@@ -37,8 +38,8 @@ export const VerifyRegistration: React.FC = () => {
       }
 
       try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const supabaseUrl = getSupabaseUrl();
+        const supabaseAnonKey = getSupabaseAnonKey();
 
         const response = await fetch(
           `${supabaseUrl}/functions/v1/verify-registration?token=${token}&invite=${inviteId}`,

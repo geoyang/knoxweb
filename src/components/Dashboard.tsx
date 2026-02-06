@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 import { adminApi } from '../services/adminApi';
 import { useAuth } from '../context/AuthContext';
 import { MediaGallery } from './MediaGallery';
+import { MomentsGallery } from './MomentsGallery';
 
-type TabType = 'home' | 'media';
+type TabType = 'home' | 'media' | 'moments';
 
 interface Circle {
   id: string;
@@ -132,13 +134,13 @@ export const Dashboard: React.FC = () => {
       // Load user profile via API
       try {
         const profileResponse = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/profiles-api`,
+          `${getSupabaseUrl()}/functions/v1/profiles-api`,
           {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${session.access_token}`,
               'Content-Type': 'application/json',
-              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+              'apikey': getSupabaseAnonKey(),
             },
           }
         );
@@ -182,7 +184,8 @@ export const Dashboard: React.FC = () => {
       setCircles(processedCircles);
 
       // Load albums using the admin API (handles RLS properly via service role)
-      const albumsResult = await adminApi.getAlbums();
+      // Use lite mode to skip loading full album_assets - we only need counts
+      const albumsResult = await adminApi.getAlbums({ lite: true });
 
       if (albumsResult.success && albumsResult.data) {
         const processedAlbums: Album[] = [];
@@ -207,7 +210,7 @@ export const Dashboard: React.FC = () => {
             description: album.description,
             keyphoto: album.keyphoto,
             keyphoto_thumbnail: album.keyphoto_thumbnail,
-            photo_count: album.album_assets?.length || 0,
+            photo_count: album.asset_count || album.album_assets?.length || 0,
             circle_id: circleId,
             circle_name: circleName,
             isOwner: album.isOwner,
@@ -466,12 +469,29 @@ export const Dashboard: React.FC = () => {
                 Media
               </span>
             </button>
+            <button
+              onClick={() => setActiveTab('moments')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'moments'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+                Moments
+              </span>
+            </button>
           </nav>
         </div>
 
         {/* Tab Content */}
         {activeTab === 'media' ? (
           <MediaGallery />
+        ) : activeTab === 'moments' ? (
+          <MomentsGallery />
         ) : (
           <>
         {/* Circles Section */}

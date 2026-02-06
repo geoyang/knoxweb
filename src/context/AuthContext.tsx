@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, getAccessToken } from '../lib/supabase';
 import { TokenManager } from '../utils/tokenManager';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface UserProfile {
   id: string;
@@ -17,7 +18,7 @@ interface AuthContextType {
   loading: boolean;
   isSuperAdmin: boolean;
   signInWithMagicLink: (email: string) => Promise<{ error: any }>;
-  signInWithCode: (email: string) => Promise<{ error: any; code?: string }>;
+  signInWithCode: (email: string) => Promise<{ error: any; code?: string; deliveryChannel?: string }>;
   verifyCode: (email: string, code: string, fullName?: string) => Promise<{ error: any; success?: boolean; profile?: UserProfile | null }>;
   checkUserExists: (email: string) => Promise<{ exists: boolean; error?: any }>;
   signUp: (email: string, fullName?: string) => Promise<{ error: any }>;
@@ -62,13 +63,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/profiles-api`,
+        `${getSupabaseUrl()}/functions/v1/profiles-api`,
         {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
           signal: controller.signal,
         }
@@ -239,7 +240,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signInWithMagicLink = async (email: string) => {
     try {
       console.log('Sending magic link to email:', email);
-      console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
+      console.log('Supabase URL:', getSupabaseUrl());
       
       const { data, error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
@@ -284,12 +285,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('Verification code sent successfully');
 
+      const channel = data?.delivery_channel || 'email';
+
       // In development, return the code if provided for testing
       if (import.meta.env.DEV && data?.dev_code) {
-        return { error: null, code: data.dev_code };
+        return { error: null, code: data.dev_code, deliveryChannel: channel };
       }
 
-      return { error: null };
+      return { error: null, deliveryChannel: channel };
     } catch (err) {
       console.error('Verification code error', err);
       return { error: err };
@@ -465,7 +468,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('🔒 SIGN OUT: Local state cleared');
 
     // Force clear any Supabase session from localStorage as backup
-    const storageKey = `sb-${import.meta.env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0]}-auth-token`;
+    const storageKey = `sb-${getSupabaseUrl()?.split('//')[1]?.split('.')[0]}-auth-token`;
     console.log('🔒 SIGN OUT: Clearing localStorage key:', storageKey);
     localStorage.removeItem(storageKey);
 

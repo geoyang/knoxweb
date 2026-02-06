@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 import { ThemeToggle } from './ui/ThemeToggle';
 
 export const Signup: React.FC = () => {
@@ -54,12 +55,12 @@ export const Signup: React.FC = () => {
     try {
       // Fetch invite details via API (doesn't require auth)
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/view-circle-api?invite_id=${inviteId}`,
+        `${getSupabaseUrl()}/functions/v1/view-circle-api?invite_id=${inviteId}`,
         {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
         }
       );
@@ -117,8 +118,8 @@ export const Signup: React.FC = () => {
         controller.abort();
       }, 30000);
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = getSupabaseUrl();
+      const supabaseAnonKey = getSupabaseAnonKey();
 
       addLog('Calling edge function...');
 

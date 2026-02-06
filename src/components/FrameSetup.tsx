@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface InviteData {
   circleName: string;
@@ -37,8 +38,8 @@ export const FrameSetup: React.FC = () => {
 
     try {
       // Use edge function to get invitation data
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = getSupabaseUrl();
+      const supabaseAnonKey = getSupabaseAnonKey();
 
       const response = await fetch(
         `${supabaseUrl}/functions/v1/picture-frame-invite-api?token=${token}`,
@@ -91,8 +92,8 @@ export const FrameSetup: React.FC = () => {
     setError(null);
 
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = getSupabaseUrl();
+      const supabaseAnonKey = getSupabaseAnonKey();
       // Use activate action - no verification code needed for picture frames
       const response = await fetch(
         `${supabaseUrl}/functions/v1/picture-frame-verify-api?action=activate`,

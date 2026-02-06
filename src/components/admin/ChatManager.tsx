@@ -100,10 +100,13 @@ export const ChatManager: React.FC = () => {
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isSearchNavigating = useRef(false);
 
-  // Fetch conversations
-  const fetchConversations = useCallback(async () => {
+  // Fetch conversations (lite mode for fast initial load)
+  const fetchConversations = useCallback(async (ensureCircleChats: boolean = false) => {
     try {
-      const result = await chatApi.getConversations();
+      const result = await chatApi.getConversations({
+        lite: true,
+        ensureCircleChats // Only ensure circle chats on first load
+      });
       if (result.success && result.data) {
         setConversations(result.data.conversations);
       } else {
@@ -182,10 +185,10 @@ export const ChatManager: React.FC = () => {
     }
   }, [selectedConversation, markMessagesAsRead]);
 
-  // Initial fetch
+  // Initial fetch - ensure circle chats exist on first load
   useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
+    fetchConversations(true); // ensureCircleChats=true on initial load
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle URL search params for deep linking
   const pendingNavigationRef = useRef<{ conversationId: string; messageId?: string } | null>(null);
@@ -641,7 +644,7 @@ export const ChatManager: React.FC = () => {
     return (
       <div className="bg-error-bg border border-error text-error p-4 rounded-lg">
         {error}
-        <button onClick={fetchConversations} className="ml-4 text-error underline">
+        <button onClick={() => fetchConversations(false)} className="ml-4 text-error underline">
           Retry
         </button>
       </div>

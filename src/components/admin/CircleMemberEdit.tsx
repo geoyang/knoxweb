@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 
 interface CircleMember {
   id: string;
@@ -72,7 +71,7 @@ export const CircleMemberEdit: React.FC = () => {
 
       // Fetch member data via edge function
       const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/admin-circles-api?circle_id=${circleId}&member_id=${memberId}`,
+        `${getSupabaseUrl()}/functions/v1/admin-circles-api?circle_id=${circleId}&member_id=${memberId}`,
         {
           method: 'GET',
           headers: {
@@ -119,7 +118,7 @@ export const CircleMemberEdit: React.FC = () => {
 
       // Update role via edge function (PATCH method)
       const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/admin-circles-api`,
+        `${getSupabaseUrl()}/functions/v1/admin-circles-api`,
         {
           method: 'PATCH',
           headers: {

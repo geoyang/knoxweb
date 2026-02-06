@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { aiApi } from '../../../services/aiApi';
 import { adminApi } from '../../../services/adminApi';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../../../lib/environments';
 import { supabase } from '../../../lib/supabase';
 import { AI_CONFIG } from './config';
 import { OperationSelector, ProgressBar } from './components';
@@ -203,12 +204,12 @@ export const AlbumProcessingTab: React.FC = () => {
 
         // Call edge function with album_id to get the specific album's assets
         const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?album_id=${selectedAlbumId}`,
+          `${getSupabaseUrl()}/functions/v1/admin-albums-api?album_id=${selectedAlbumId}`,
           {
             headers: {
               'Authorization': `Bearer ${session.access_token}`,
               'Content-Type': 'application/json',
-              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+              'apikey': getSupabaseAnonKey(),
             }
           }
         );

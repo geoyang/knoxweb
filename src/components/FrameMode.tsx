@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface FrameAsset {
   id: string;
@@ -106,8 +107,8 @@ export const FrameMode: React.FC = () => {
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const slideshowTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
 
   // Initialize frame mode - check auth session or token
   useEffect(() => {

@@ -4,6 +4,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { DebugSupabase } from './DebugSupabase';
 import { TokenManager } from '../utils/tokenManager';
 import { ThemeToggle } from './ui/ThemeToggle';
+import { getSelectedEnvironmentKey, setEnvironment, ENVIRONMENTS } from '../lib/environments';
 
 const REMEMBER_EMAIL_KEY = 'knox_remember_email';
 const SAVED_EMAIL_KEY = 'knox_saved_email';
@@ -18,9 +19,12 @@ export const Login: React.FC = () => {
   const [codeSent, setCodeSent] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [devCode, setDevCode] = useState<string | null>(null);
+  const [deliveryChannel, setDeliveryChannel] = useState<'email' | 'sms'>('email');
   const [rememberEmail, setRememberEmail] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
+  const [showEnvSelector, setShowEnvSelector] = useState(false);
+  const [selectedEnv, setSelectedEnv] = useState(getSelectedEnvironmentKey());
 
   const { user, loading: authLoading, signInWithMagicLink, signInWithCode, verifyCode, checkUserExists, signUp } = useAuth();
   const navigate = useNavigate();
@@ -130,12 +134,15 @@ export const Login: React.FC = () => {
       return;
     }
 
-    const { error, code } = await signInWithCode(email);
+    const { error, code, deliveryChannel: channel } = await signInWithCode(email);
     if (error) {
       setError(error.message);
     } else {
       saveEmailIfRemembered();
       setCodeSent(true);
+      if (channel === 'sms') {
+        setDeliveryChannel('sms');
+      }
       if (import.meta.env.DEV && code) {
         setDevCode(code);
       }
@@ -175,6 +182,7 @@ export const Login: React.FC = () => {
     setCodeSent(false);
     setVerificationCode('');
     setDevCode(null);
+    setDeliveryChannel('email');
     setEmail('');
     setError(null);
     setIsSignUp(false);
@@ -211,8 +219,73 @@ export const Login: React.FC = () => {
     resetForm();
   };
 
+  // Handle environment change
+  const handleEnvChange = (envKey: string) => {
+    setSelectedEnv(envKey);
+    if (envKey !== getSelectedEnvironmentKey()) {
+      setEnvironment(envKey);
+    }
+  };
+
+  const currentEnv = getSelectedEnvironmentKey();
+
   return (
-    <div className="min-h-screen auth-gradient flex items-center justify-center p-4 relative">
+    <div className="min-h-screen auth-gradient flex flex-col">
+      {/* Development Environment Banner */}
+      {currentEnv === 'dev' && (
+        <div className="bg-orange-500 text-white text-center py-1 text-sm font-medium">
+          Development Environment
+        </div>
+      )}
+
+      <div className="flex-1 flex items-center justify-center p-4 relative">
+      {/* Hidden key icon for dev/prod switch */}
+      <button
+        onClick={() => setShowEnvSelector(!showEnvSelector)}
+        className="absolute top-4 left-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-30 hover:opacity-100 transition-opacity"
+        title="Environment Settings"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clipRule="evenodd" />
+        </svg>
+      </button>
+
+      {/* Environment selector dropdown */}
+      {showEnvSelector && (
+        <div className="absolute top-14 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-3 z-50 min-w-[200px]">
+          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
+            Backend Environment
+          </div>
+          <div className="space-y-1">
+            {Object.entries(ENVIRONMENTS).map(([key, env]) => (
+              <button
+                key={key}
+                onClick={() => handleEnvChange(key)}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors ${
+                  selectedEnv === key
+                    ? key === 'dev'
+                      ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+                      : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <span className="font-medium">{env.name}</span>
+                {selectedEnv === key && (
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <div className="text-xs text-gray-400 dark:text-gray-500 truncate">
+              {ENVIRONMENTS[selectedEnv].supabaseUrl.split('//')[1]?.split('.')[0]}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Theme toggle in corner */}
       <div className="absolute top-4 right-4">
         <ThemeToggle size="sm" />
@@ -230,7 +303,9 @@ export const Login: React.FC = () => {
               : emailSent
               ? 'Check your email for the magic link'
               : codeSent
-              ? `Enter the 4-digit code sent to ${email}`
+              ? deliveryChannel === 'sms'
+                ? 'Enter the 4-digit code sent to your phone'
+                : `Enter the 4-digit code sent to ${email}`
               : 'Passwordless Authentication'
             }
           </p>
@@ -388,7 +463,11 @@ export const Login: React.FC = () => {
                 <div className="text-2xl mr-2">🔢</div>
                 <div>
                   <p className="font-medium">Code sent!</p>
-                  <p className="text-sm">Enter the 4-digit code sent to {email}</p>
+                  <p className="text-sm">
+                    {deliveryChannel === 'sms'
+                      ? 'Enter the 4-digit code sent to your phone via SMS'
+                      : `Enter the 4-digit code sent to ${email}`}
+                  </p>
                   {import.meta.env.DEV && devCode && (
                     <p className="dev-banner mt-2">
                       Dev Code: <strong>{devCode}</strong>
@@ -485,6 +564,15 @@ export const Login: React.FC = () => {
             </p>
           )}
         </div>
+      </div>
+
+      {/* Click outside to close env selector */}
+      {showEnvSelector && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setShowEnvSelector(false)}
+        />
+      )}
       </div>
     </div>
   );

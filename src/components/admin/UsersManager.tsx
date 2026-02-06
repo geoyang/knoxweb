@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 import { useAuth } from '../../context/AuthContext';
+import { adminApi } from '../../services/adminApi';
 
 interface User {
   id: string;
@@ -39,18 +41,133 @@ export const UsersManager: React.FC = () => {
 
   const { user: currentUser } = useAuth();
 
+  // Modal editing state
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
+  const [editingMembershipId, setEditingMembershipId] = useState<string | null>(null);
+  const [editMembershipRole, setEditMembershipRole] = useState('');
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [modalLoading, setModalLoading] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+
+  // Add to Circle state
+  const [showAddToCircle, setShowAddToCircle] = useState(false);
+  const [allCircles, setAllCircles] = useState<{ id: string; name: string; owner_name: string }[]>([]);
+  const [addCircleId, setAddCircleId] = useState('');
+  const [addCircleRole, setAddCircleRole] = useState('contributor');
+  const [addingToCircle, setAddingToCircle] = useState(false);
+
   useEffect(() => {
     if (currentUser?.id) {
       loadUsers();
-      loadStats();
     } else {
       setLoading(false);
     }
   }, [currentUser?.id]);
 
-  const loadUsers = async () => {
+  // Sync selectedUser when users list refreshes
+  useEffect(() => {
+    if (selectedUser) {
+      const updated = users.find(u => u.id === selectedUser.id);
+      if (updated) {
+        setSelectedUser(updated);
+      } else {
+        setSelectedUser(null);
+      }
+    }
+  }, [users]);
+
+  const resetModalState = () => {
+    setEditingName(false);
+    setEditNameValue('');
+    setEditingMembershipId(null);
+    setEditMembershipRole('');
+    setConfirmRemoveId(null);
+    setModalLoading(null);
+    setModalError(null);
+    setShowAddToCircle(false);
+    setAddCircleId('');
+    setAddCircleRole('contributor');
+  };
+
+  const handleOpenAddToCircle = async () => {
+    setShowAddToCircle(true);
+    setModalError(null);
+    const result = await adminApi.getCircles();
+    if (result.success && result.data?.circles) {
+      setAllCircles(result.data.circles.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        owner_name: c.owner?.full_name || c.owner?.email || 'Unknown',
+      })));
+    } else {
+      setModalError(result.error || 'Failed to load circles');
+    }
+  };
+
+  const handleAddToCircle = async () => {
+    if (!selectedUser || !addCircleId) return;
+    setAddingToCircle(true);
+    setModalError(null);
+    const result = await adminApi.addUserToCircle(addCircleId, {
+      email: selectedUser.email || '',
+      role: addCircleRole,
+      full_name: selectedUser.full_name || undefined,
+    });
+    if (!result.success) {
+      setModalError(result.error || 'Failed to add user to circle');
+    } else {
+      setShowAddToCircle(false);
+      setAddCircleId('');
+      setAddCircleRole('contributor');
+      loadUsers(true);
+    }
+    setAddingToCircle(false);
+  };
+
+  const handleSaveName = async () => {
+    if (!selectedUser) return;
+    setModalLoading('name');
+    setModalError(null);
+    const result = await adminApi.updateUserProfile(selectedUser.id, { full_name: editNameValue });
+    if (!result.success) {
+      setModalError(result.error || 'Failed to update name');
+    } else {
+      setEditingName(false);
+      loadUsers(true);
+    }
+    setModalLoading(null);
+  };
+
+  const handleSaveMembershipRole = async (membershipId: string) => {
+    setModalLoading(membershipId);
+    setModalError(null);
+    const result = await adminApi.updateMemberRole(membershipId, editMembershipRole);
+    if (!result.success) {
+      setModalError(result.error || 'Failed to update role');
+    } else {
+      setEditingMembershipId(null);
+      loadUsers(true);
+    }
+    setModalLoading(null);
+  };
+
+  const handleRemoveMembership = async (membershipId: string) => {
+    setModalLoading(membershipId);
+    setModalError(null);
+    const result = await adminApi.removeMember(membershipId);
+    if (!result.success) {
+      setModalError(result.error || 'Failed to remove member');
+    } else {
+      setConfirmRemoveId(null);
+      loadUsers(true);
+    }
+    setModalLoading(null);
+  };
+
+  const loadUsers = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       // Get session for API call
       const { data: { session } } = await supabase.auth.getSession();
@@ -60,13 +177,13 @@ export const UsersManager: React.FC = () => {
 
       // Fetch users via admin-users-api
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users-api`,
+        `${getSupabaseUrl()}/functions/v1/admin-users-api`,
         {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
         }
       );
@@ -90,6 +207,7 @@ export const UsersManager: React.FC = () => {
       }));
 
       setUsers(combinedUsers);
+      updateStats(combinedUsers);
       setError(null);
     } catch (err) {
       console.error('Error loading users:', err);
@@ -99,28 +217,17 @@ export const UsersManager: React.FC = () => {
     }
   };
 
-  const loadStats = async () => {
-    try {
-      const { data: authUsers, error } = await supabase.auth.admin.listUsers();
-      if (error) throw error;
+  const updateStats = (userList: User[]) => {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-      const now = new Date();
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-      const totalUsers = authUsers.users.length;
-      const activeUsers = authUsers.users.filter(u => u.last_sign_in_at).length;
-      const recentUsers = authUsers.users.filter(u => 
+    setStats({
+      total_users: userList.length,
+      active_users: userList.filter(u => u.last_sign_in_at).length,
+      users_last_30_days: userList.filter(u =>
         u.created_at && new Date(u.created_at) > thirtyDaysAgo
-      ).length;
-
-      setStats({
-        total_users: totalUsers,
-        active_users: activeUsers,
-        users_last_30_days: recentUsers,
-      });
-    } catch (err) {
-      console.error('Error loading stats:', err);
-    }
+      ).length,
+    });
   };
 
 
@@ -252,14 +359,11 @@ export const UsersManager: React.FC = () => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {sortedUsers.map(user => (
-              <tr key={user.id} className="hover:bg-gray-50">
+              <tr key={user.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedUser(user)}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-full overflow-hidden">
@@ -317,16 +421,6 @@ export const UsersManager: React.FC = () => {
                     Active
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => setSelectedUser(user)}
-                      className="text-blue-600 hover:text-blue-800"
-                    >
-                      View
-                    </button>
-                  </div>
-                </td>
               </tr>
             ))}
           </tbody>
@@ -355,9 +449,37 @@ export const UsersManager: React.FC = () => {
                   </div>
                 </div>
                 <div className="ml-4">
-                  <h3 className="text-xl font-bold text-gray-900">
-                    {selectedUser.full_name || 'Unnamed User'}
-                  </h3>
+                  {editingName ? (
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={editNameValue}
+                        onChange={(e) => setEditNameValue(e.target.value)}
+                        className="text-lg font-bold border border-gray-300 rounded px-2 py-1"
+                        disabled={modalLoading === 'name'}
+                        autoFocus
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setEditingName(false); }}
+                      />
+                      <button onClick={handleSaveName} disabled={modalLoading === 'name'} className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50">
+                        {modalLoading === 'name' ? '...' : 'Save'}
+                      </button>
+                      <button onClick={() => setEditingName(false)} disabled={modalLoading === 'name'} className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800">
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-xl font-bold text-gray-900">
+                        {selectedUser.full_name || 'Unnamed User'}
+                      </h3>
+                      <button
+                        onClick={() => { setEditNameValue(selectedUser.full_name || ''); setEditingName(true); setModalError(null); }}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  )}
                   <p className="text-gray-600">{selectedUser.email}</p>
                   <div className="flex items-center space-x-2 mt-1">
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -372,12 +494,16 @@ export const UsersManager: React.FC = () => {
                 </div>
               </div>
               <button
-                onClick={() => setSelectedUser(null)}
+                onClick={() => { setSelectedUser(null); resetModalState(); }}
                 className="text-gray-400 hover:text-gray-600 text-2xl"
               >
                 ×
               </button>
             </div>
+
+            {modalError && (
+              <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded mb-4">{modalError}</div>
+            )}
 
             <div className="space-y-6">
               {/* Basic Info */}
@@ -391,7 +517,7 @@ export const UsersManager: React.FC = () => {
                   <div>
                     <span className="text-gray-500">Last Sign In:</span>
                     <span className="ml-2">
-                      {selectedUser.last_sign_in_at 
+                      {selectedUser.last_sign_in_at
                         ? new Date(selectedUser.last_sign_in_at).toLocaleDateString()
                         : 'Never'
                       }
@@ -415,22 +541,154 @@ export const UsersManager: React.FC = () => {
                   <div className="space-y-2">
                     {selectedUser.circle_memberships.map(membership => (
                       <div key={membership.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <span className="font-medium">{membership.circles.name}</span>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium">{membership.circles?.name || 'Unknown'}</span>
+                          {membership.circles?.owner_name && (
+                            <span className="text-xs text-gray-500 ml-2">by {membership.circles.owner_name}</span>
+                          )}
                         </div>
                         <div className="flex items-center space-x-2">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(membership.role)}`}>
-                            {membership.role.replace('_', ' ')}
-                          </span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(membership.status)}`}>
-                            {membership.status}
-                          </span>
+                          {editingMembershipId === membership.id ? (
+                            <>
+                              <select
+                                value={editMembershipRole}
+                                onChange={(e) => setEditMembershipRole(e.target.value)}
+                                className="text-xs border border-gray-300 rounded px-2 py-1"
+                                disabled={modalLoading === membership.id}
+                              >
+                                {['read_only', 'contributor', 'editor', 'admin'].map(r => (
+                                  <option key={r} value={r}>{r.replace('_', ' ')}</option>
+                                ))}
+                              </select>
+                              <button
+                                onClick={() => handleSaveMembershipRole(membership.id)}
+                                disabled={modalLoading === membership.id || editMembershipRole === membership.role}
+                                className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50"
+                              >
+                                {modalLoading === membership.id ? '...' : 'Save'}
+                              </button>
+                              <button
+                                onClick={() => setEditingMembershipId(null)}
+                                disabled={modalLoading === membership.id}
+                                className="text-xs text-gray-600 hover:text-gray-800"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : confirmRemoveId === membership.id ? (
+                            <>
+                              <span className="text-xs text-red-600 font-medium">Remove from circle?</span>
+                              <button
+                                onClick={() => handleRemoveMembership(membership.id)}
+                                disabled={modalLoading === membership.id}
+                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
+                              >
+                                {modalLoading === membership.id ? '...' : 'Yes'}
+                              </button>
+                              <button
+                                onClick={() => setConfirmRemoveId(null)}
+                                disabled={modalLoading === membership.id}
+                                className="text-xs text-gray-600 hover:text-gray-800"
+                              >
+                                No
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(membership.role)}`}>
+                                {membership.role.replace('_', ' ')}
+                              </span>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(membership.status)}`}>
+                                {membership.status}
+                              </span>
+                              <button
+                                onClick={() => { setEditingMembershipId(membership.id); setEditMembershipRole(membership.role); setModalError(null); }}
+                                className="px-2 py-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => { setConfirmRemoveId(membership.id); setModalError(null); }}
+                                className="px-2 py-1 text-xs text-red-600 hover:text-red-800 font-medium"
+                              >
+                                Remove
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
+
+              {/* Add to Circle */}
+              <div>
+                {!showAddToCircle ? (
+                  <button
+                    onClick={handleOpenAddToCircle}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                  >
+                    Add to Circle
+                  </button>
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                    <h4 className="font-semibold text-gray-900 text-sm">Add to Circle</h4>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <select
+                        value={addCircleId}
+                        onChange={(e) => setAddCircleId(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={addingToCircle}
+                      >
+                        <option value="">Select a circle...</option>
+                        {Object.entries(
+                          allCircles
+                            .filter(c => !selectedUser?.circle_memberships?.some(m => m.circles?.id === c.id))
+                            .reduce<Record<string, typeof allCircles>>((groups, c) => {
+                              (groups[c.owner_name] = groups[c.owner_name] || []).push(c);
+                              return groups;
+                            }, {})
+                        )
+                          .sort(([a], [b]) => a.localeCompare(b))
+                          .map(([ownerName, circles]) => (
+                            <optgroup key={ownerName} label={ownerName}>
+                              {circles.map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                              ))}
+                            </optgroup>
+                          ))}
+                      </select>
+                      <select
+                        value={addCircleRole}
+                        onChange={(e) => setAddCircleRole(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={addingToCircle}
+                      >
+                        {['read_only', 'contributor', 'editor', 'admin'].map(r => (
+                          <option key={r} value={r}>{r.replace('_', ' ')}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={handleAddToCircle}
+                        disabled={addingToCircle || !addCircleId}
+                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {addingToCircle ? 'Adding...' : 'Add'}
+                      </button>
+                      <button
+                        onClick={() => setShowAddToCircle(false)}
+                        disabled={addingToCircle}
+                        className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

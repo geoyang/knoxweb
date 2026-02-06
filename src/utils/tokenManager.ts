@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 export interface UserTokenSettings {
   token_expiry_days: number;
@@ -16,7 +17,7 @@ export class TokenManager {
     return {
       'Authorization': `Bearer ${session.access_token}`,
       'Content-Type': 'application/json',
-      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      'apikey': getSupabaseAnonKey(),
     };
   }
 
@@ -32,7 +33,7 @@ export class TokenManager {
       }
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/user-token-settings-api`,
+        `${getSupabaseUrl()}/functions/v1/user-token-settings-api`,
         { method: 'GET', headers }
       );
 
@@ -64,7 +65,7 @@ export class TokenManager {
       }
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/user-token-settings-api`,
+        `${getSupabaseUrl()}/functions/v1/user-token-settings-api`,
         {
           method: 'PUT',
           headers,

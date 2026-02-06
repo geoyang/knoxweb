@@ -14,6 +14,7 @@ import { FrameSetup } from './components/FrameSetup';
 import { FrameMode } from './components/FrameMode';
 import { ShareRequest } from './components/ShareRequest';
 import { SharedAssetViewer } from './components/SharedAssetViewer';
+import { SharedAlbumViewer } from './components/SharedAlbumViewer';
 import { SubscriptionPage } from './components/SubscriptionPage';
 import { AccountPage } from './components/AccountPage';
 
@@ -39,6 +40,9 @@ function App() {
 
         {/* Shared asset viewer route */}
         <Route path="/asset/:token" element={<SharedAssetViewer />} />
+
+        {/* Shared album viewer route */}
+        <Route path="/shared-album/:token" element={<SharedAlbumViewer />} />
 
         {/* Subscription management route */}
         <Route path="/subscription" element={<SubscriptionPage />} />

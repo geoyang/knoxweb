@@ -1,4 +1,5 @@
 import { getAccessToken } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -31,7 +32,7 @@ class NotificationsApiService {
     if (!accessToken) return null;
     return {
       'Authorization': `Bearer ${accessToken}`,
-      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      'apikey': getSupabaseAnonKey(),
     };
   }
 
@@ -45,7 +46,7 @@ class NotificationsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/notifications-api?page=${page}&limit=${limit}`,
         {
@@ -74,7 +75,7 @@ class NotificationsApiService {
       const authHeaders = this.getAuthHeaders();
       if (!authHeaders) return 0;
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/notifications-api?unread_count=true`,
         {
@@ -100,7 +101,7 @@ class NotificationsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/notifications-api/mark-read`,
         {
@@ -127,7 +128,7 @@ class NotificationsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/notifications-api/mark-all-read`,
         {
@@ -153,7 +154,7 @@ class NotificationsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/notifications-api?notification_id=${notificationId}`,
         {
@@ -180,7 +181,7 @@ class NotificationsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/friends-api?action=respond`,
         {
@@ -207,7 +208,7 @@ class NotificationsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/friends-api?action=respond`,
         {
@@ -235,7 +236,7 @@ class NotificationsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/friends-api?action=requests&type=received`,
         {

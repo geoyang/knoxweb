@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import heic2any from 'heic2any';
 import exifr from 'exifr';
 import { supabase } from '../../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { addPhotosToAlbum, createAssetInLibrary, UploadLimitError } from '../../services/albumsApi';
@@ -348,6 +349,13 @@ const isHeicFile = (file: File): boolean => {
     file.type === 'image/heic' || file.type === 'image/heif';
 };
 
+// Check if file is a video by extension (fallback when MIME type is not recognized)
+const isVideoFile = (file: File): boolean => {
+  const name = file.name.toLowerCase();
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.wmv', '.flv'];
+  return videoExtensions.some(ext => name.endsWith(ext)) || file.type.startsWith('video/');
+};
+
 // Convert HEIC to JPEG with better error handling
 const convertHeicToJpeg = async (file: File): Promise<Blob> => {
   console.log('Converting HEIC to JPEG:', file.name, 'size:', Math.round(file.size / 1024), 'KB');
@@ -615,7 +623,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     }
 
     // Manual URL construction as workaround for URL duplication bug
-    const manualUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/assets/${data.path}`;
+    const manualUrl = `${getSupabaseUrl()}/storage/v1/object/public/assets/${data.path}`;
     // Use storage id if available, otherwise generate a UUID
     const objectId = data.id || generateUUID();
     console.log('Uploaded to:', manualUrl, 'objectId:', objectId, '(from storage:', !!data.id, ')');
@@ -631,8 +639,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       // Check if it's a HEIC file by extension (type might be wrong/empty)
       const isHeic = isHeicFile(file);
 
+      // Check if it's a video file by extension (type might be wrong/empty for .avi, etc.)
+      const isVideo = isVideoFile(file);
+
       // Validate file type - allow image, video, audio, and HEIC
-      if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/') && !isHeic) {
+      if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/') && !isHeic && !isVideo) {
         console.log('Skipping unsupported file:', file.name, file.type);
         continue;
       }
@@ -787,14 +798,14 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       ));
 
       const isHeic = isHeicFile(fileObj.file);
-      const isImage = fileObj.file.type.startsWith('image/') || isHeic;
+      const isVideo = isVideoFile(fileObj.file);
+      const isImage = (fileObj.file.type.startsWith('image/') || isHeic) && !isVideo;
       const isAudio = fileObj.file.type.startsWith('audio/');
       const timestamp = Date.now();
 
       // Step 0: Extract metadata before uploading (EXIF for images, video metadata for videos)
       let exifMetadata: ExifMetadata | null = null;
-      const isVideoFile = fileObj.file.type.startsWith('video/');
-      if (isVideoFile) {
+      if (isVideo) {
         console.log('Extracting video metadata from:', fileObj.file.name);
         exifMetadata = await extractVideoMetadata(fileObj.file);
         console.log('Video metadata:', exifMetadata);
@@ -808,7 +819,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       console.log('Uploading original file:', fileObj.file.name);
       console.log('File type:', fileObj.file.type);
       console.log('File size:', Math.round(fileObj.file.size / 1024 / 1024 * 100) / 100, 'MB');
-      console.log('Is video:', isVideoFile);
+      console.log('Is video:', isVideo);
       setUploadedFilesTracked(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, progress: 10 } : f
       ));
@@ -848,7 +859,6 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       // Step 3: Generate base64 thumbnail
       let thumbnailData: string | null = null;
-      const isVideo = fileObj.file.type.startsWith('video/');
 
       setUploadedFilesTracked(prev => prev.map(f =>
         f.id === fileObj.id ? { ...f, progress: 50 } : f
@@ -886,7 +896,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         ? exifMetadata.createdAt.toISOString()
         : new Date().toISOString();
       const uploadedAt = new Date().toISOString();
-      const mediaType = fileObj.file.type.startsWith('video/') ? 'video' : isAudio ? 'audio' : 'photo';
+      const mediaType = isVideo ? 'video' : isAudio ? 'audio' : 'photo';
 
       // Build asset data with all metadata (used for both album and library-only uploads)
       const assetData: Record<string, unknown> = {
@@ -1186,7 +1196,14 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                 {uploadedFiles.map(fileObj => (
                   <div key={fileObj.id} className="relative group">
                     <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                      {fileObj.preview ? (
+                      {isVideoFile(fileObj.file) ? (
+                        <video
+                          src={fileObj.preview}
+                          className="w-full h-full object-cover"
+                          muted
+                          playsInline
+                        />
+                      ) : fileObj.preview ? (
                         <img
                           src={fileObj.preview}
                           alt="Preview"

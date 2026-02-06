@@ -1,4 +1,5 @@
 import { supabase, getAccessToken } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -62,7 +63,7 @@ class FriendsApiService {
       }
 
       const method = options.method || 'POST';
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
 
       let url = `${supabaseUrl}/functions/v1/friends-api?action=${action}`;
       if (options.userId) {
@@ -74,7 +75,7 @@ class FriendsApiService {
         headers: {
           ...authHeaders,
           'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'apikey': getSupabaseAnonKey(),
         },
       };
 
@@ -125,7 +126,7 @@ class FriendsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/friends-api?action=check&user_id=${profileId}`,
         {
@@ -133,7 +134,7 @@ class FriendsApiService {
           headers: {
             ...authHeaders,
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
         }
       );
@@ -166,7 +167,7 @@ class FriendsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/friends-api?action=send`,
         {
@@ -174,7 +175,7 @@ class FriendsApiService {
           headers: {
             ...authHeaders,
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
           body: JSON.stringify({ recipient_id: recipientId, message }),
         }
@@ -195,7 +196,7 @@ class FriendsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/friends-api?action=accept`,
         {
@@ -203,7 +204,7 @@ class FriendsApiService {
           headers: {
             ...authHeaders,
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
           body: JSON.stringify({ request_id: requestId }),
         }
@@ -224,7 +225,7 @@ class FriendsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/friends-api?action=decline`,
         {
@@ -232,7 +233,7 @@ class FriendsApiService {
           headers: {
             ...authHeaders,
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
           body: JSON.stringify({ request_id: requestId }),
         }
@@ -253,7 +254,7 @@ class FriendsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/friends-api?action=cancel`,
         {
@@ -261,7 +262,7 @@ class FriendsApiService {
           headers: {
             ...authHeaders,
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
           body: JSON.stringify({ request_id: requestId }),
         }
@@ -282,7 +283,7 @@ class FriendsApiService {
         return { success: false, error: 'Authentication required' };
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getSupabaseUrl();
       const response = await fetch(
         `${supabaseUrl}/functions/v1/friends-api?action=unfriend`,
         {
@@ -290,7 +291,7 @@ class FriendsApiService {
           headers: {
             ...authHeaders,
             'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'apikey': getSupabaseAnonKey(),
           },
           body: JSON.stringify({ friend_id: friendId }),
         }

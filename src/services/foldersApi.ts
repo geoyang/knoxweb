@@ -1,10 +1,10 @@
 import { supabase, getAccessToken } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://quqlovduekdasldqadge.supabase.co';
-const FOLDERS_API_URL = `${SUPABASE_URL}/functions/v1/admin-folders-api`;
-const DOCUMENTS_API_URL = `${SUPABASE_URL}/functions/v1/admin-documents-api`;
-const LISTS_API_URL = `${SUPABASE_URL}/functions/v1/admin-lists-api`;
-const EVENTS_API_URL = `${SUPABASE_URL}/functions/v1/admin-events-api`;
+const getFoldersApiUrl = () => `${getSupabaseUrl()}/functions/v1/admin-folders-api`;
+const getDocumentsApiUrl = () => `${getSupabaseUrl()}/functions/v1/admin-documents-api`;
+const getListsApiUrl = () => `${getSupabaseUrl()}/functions/v1/admin-lists-api`;
+const getEventsApiUrl = () => `${getSupabaseUrl()}/functions/v1/admin-events-api`;
 
 // Types
 export interface Folder {
@@ -174,7 +174,7 @@ export async function getFolders(showAll: boolean = false): Promise<{
   stats: { owned: number; shared: number };
 }> {
   const headers = await getAuthHeaders();
-  const url = showAll ? `${FOLDERS_API_URL}?show_all=true` : FOLDERS_API_URL;
+  const url = showAll ? `${getFoldersApiUrl()}?show_all=true` : getFoldersApiUrl();
   const response = await fetch(url, { method: 'GET', headers });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to fetch folders');
@@ -192,7 +192,7 @@ export async function getFolderDetail(folderId: string): Promise<{
   isOwner: boolean;
 }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${FOLDERS_API_URL}?folder_id=${folderId}`, { method: 'GET', headers });
+  const response = await fetch(`${getFoldersApiUrl()}?folder_id=${folderId}`, { method: 'GET', headers });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to fetch folder details');
   return data;
@@ -205,7 +205,7 @@ export async function getFolderAncestry(folderId: string): Promise<{
   ancestry: Array<{ id: string; title: string; depth: number }>;
 }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${FOLDERS_API_URL}?folder_id=${folderId}&action=ancestry`, { method: 'GET', headers });
+  const response = await fetch(`${getFoldersApiUrl()}?folder_id=${folderId}&action=ancestry`, { method: 'GET', headers });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to fetch folder ancestry');
   return data;
@@ -221,7 +221,7 @@ export async function createFolder(params: {
   cover_image?: string;
 }): Promise<{ folder: Folder }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(FOLDERS_API_URL, {
+  const response = await fetch(getFoldersApiUrl(), {
     method: 'POST',
     headers,
     body: JSON.stringify(params),
@@ -242,7 +242,7 @@ export async function updateFolder(params: {
   parent_folder_id?: string;
 }): Promise<{ folder: Folder }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(FOLDERS_API_URL, {
+  const response = await fetch(getFoldersApiUrl(), {
     method: 'PUT',
     headers,
     body: JSON.stringify(params),
@@ -257,7 +257,7 @@ export async function updateFolder(params: {
  */
 export async function deleteFolder(folderId: string): Promise<void> {
   const headers = await getAuthHeaders();
-  const response = await fetch(FOLDERS_API_URL, {
+  const response = await fetch(getFoldersApiUrl(), {
     method: 'DELETE',
     headers,
     body: JSON.stringify({ folder_id: folderId }),
@@ -275,7 +275,7 @@ export async function addItemToFolder(params: {
   item_id: string;
 }): Promise<{ item: FolderItem }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${FOLDERS_API_URL}?action=add_item`, {
+  const response = await fetch(`${getFoldersApiUrl()}?action=add_item`, {
     method: 'POST',
     headers,
     body: JSON.stringify(params),
@@ -294,7 +294,7 @@ export async function removeItemFromFolder(params: {
   item_type?: string;
 }): Promise<void> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${FOLDERS_API_URL}?action=remove_item`, {
+  const response = await fetch(`${getFoldersApiUrl()}?action=remove_item`, {
     method: 'DELETE',
     headers,
     body: JSON.stringify(params),
@@ -313,7 +313,7 @@ export async function shareFolderWithCircles(params: {
   inherit_to_children?: boolean;
 }): Promise<{ added: number; removed: number }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${FOLDERS_API_URL}?action=share`, {
+  const response = await fetch(`${getFoldersApiUrl()}?action=share`, {
     method: 'POST',
     headers,
     body: JSON.stringify(params),
@@ -333,7 +333,7 @@ export async function shareFolderWithUser(params: {
   inherit_to_children?: boolean;
 }): Promise<{ share: FolderShare }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${FOLDERS_API_URL}?action=share_user`, {
+  const response = await fetch(`${getFoldersApiUrl()}?action=share_user`, {
     method: 'POST',
     headers,
     body: JSON.stringify(params),
@@ -350,7 +350,7 @@ export async function shareFolderWithUser(params: {
  */
 export async function getDocuments(): Promise<{ documents: Document[]; count: number }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(DOCUMENTS_API_URL, { method: 'GET', headers });
+  const response = await fetch(getDocumentsApiUrl(), { method: 'GET', headers });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to fetch documents');
   return data;
@@ -365,7 +365,7 @@ export async function getDocument(documentId: string): Promise<{
   folders: Array<{ id: string; title: string }>;
 }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${DOCUMENTS_API_URL}?document_id=${documentId}`, { method: 'GET', headers });
+  const response = await fetch(`${getDocumentsApiUrl()}?document_id=${documentId}`, { method: 'GET', headers });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to fetch document');
   return data;
@@ -386,7 +386,7 @@ export async function createDocument(params: {
   folder_id?: string;
 }): Promise<{ document: Document }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(DOCUMENTS_API_URL, {
+  const response = await fetch(getDocumentsApiUrl(), {
     method: 'POST',
     headers,
     body: JSON.stringify(params),
@@ -410,7 +410,7 @@ export async function updateDocument(params: {
   thumbnail_url?: string;
 }): Promise<{ document: Document }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(DOCUMENTS_API_URL, {
+  const response = await fetch(getDocumentsApiUrl(), {
     method: 'PUT',
     headers,
     body: JSON.stringify(params),
@@ -425,7 +425,7 @@ export async function updateDocument(params: {
  */
 export async function deleteDocument(documentId: string): Promise<void> {
   const headers = await getAuthHeaders();
-  const response = await fetch(DOCUMENTS_API_URL, {
+  const response = await fetch(getDocumentsApiUrl(), {
     method: 'DELETE',
     headers,
     body: JSON.stringify({ document_id: documentId }),
@@ -441,7 +441,7 @@ export async function deleteDocument(documentId: string): Promise<void> {
  */
 export async function getLists(): Promise<{ lists: List[]; count: number }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(LISTS_API_URL, { method: 'GET', headers });
+  const response = await fetch(getListsApiUrl(), { method: 'GET', headers });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to fetch lists');
   return data;
@@ -458,7 +458,7 @@ export async function getList(listId: string): Promise<{
   folders: Array<{ id: string; title: string }>;
 }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${LISTS_API_URL}?list_id=${listId}`, { method: 'GET', headers });
+  const response = await fetch(`${getListsApiUrl()}?list_id=${listId}`, { method: 'GET', headers });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to fetch list');
   return data;
@@ -475,7 +475,7 @@ export async function createList(params: {
   initial_items?: string[];
 }): Promise<{ list: List }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(LISTS_API_URL, {
+  const response = await fetch(getListsApiUrl(), {
     method: 'POST',
     headers,
     body: JSON.stringify(params),
@@ -495,7 +495,7 @@ export async function updateList(params: {
   list_type?: string;
 }): Promise<{ list: List }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(LISTS_API_URL, {
+  const response = await fetch(getListsApiUrl(), {
     method: 'PUT',
     headers,
     body: JSON.stringify(params),
@@ -510,7 +510,7 @@ export async function updateList(params: {
  */
 export async function deleteList(listId: string): Promise<void> {
   const headers = await getAuthHeaders();
-  const response = await fetch(LISTS_API_URL, {
+  const response = await fetch(getListsApiUrl(), {
     method: 'DELETE',
     headers,
     body: JSON.stringify({ list_id: listId }),
@@ -529,7 +529,7 @@ export async function addListItem(params: {
   assigned_to?: string;
 }): Promise<{ item: ListItem }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${LISTS_API_URL}?action=add_item`, {
+  const response = await fetch(`${getListsApiUrl()}?action=add_item`, {
     method: 'POST',
     headers,
     body: JSON.stringify(params),
@@ -544,7 +544,7 @@ export async function addListItem(params: {
  */
 export async function toggleListItem(itemId: string, isCompleted: boolean): Promise<{ item: ListItem }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${LISTS_API_URL}?action=toggle_item`, {
+  const response = await fetch(`${getListsApiUrl()}?action=toggle_item`, {
     method: 'PUT',
     headers,
     body: JSON.stringify({ item_id: itemId, is_completed: isCompleted }),
@@ -564,7 +564,7 @@ export async function updateListItem(params: {
   assigned_to?: string;
 }): Promise<{ item: ListItem }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${LISTS_API_URL}?action=update_item`, {
+  const response = await fetch(`${getListsApiUrl()}?action=update_item`, {
     method: 'PUT',
     headers,
     body: JSON.stringify(params),
@@ -579,7 +579,7 @@ export async function updateListItem(params: {
  */
 export async function reorderListItems(listId: string, itemOrder: string[]): Promise<void> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${LISTS_API_URL}?action=reorder`, {
+  const response = await fetch(`${getListsApiUrl()}?action=reorder`, {
     method: 'PUT',
     headers,
     body: JSON.stringify({ list_id: listId, item_order: itemOrder }),
@@ -593,7 +593,7 @@ export async function reorderListItems(listId: string, itemOrder: string[]): Pro
  */
 export async function removeListItem(itemId: string): Promise<void> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${LISTS_API_URL}?action=remove_item`, {
+  const response = await fetch(`${getListsApiUrl()}?action=remove_item`, {
     method: 'DELETE',
     headers,
     body: JSON.stringify({ item_id: itemId }),
@@ -609,7 +609,7 @@ export async function removeListItem(itemId: string): Promise<void> {
  */
 export async function getEvents(): Promise<{ events: LiveEvent[]; count: number }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(EVENTS_API_URL, { method: 'GET', headers });
+  const response = await fetch(getEventsApiUrl(), { method: 'GET', headers });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to fetch events');
   return data;
@@ -628,7 +628,7 @@ export async function getEvent(eventId: string): Promise<{
   stats: { total_uploads: number; pending: number; approved: number; rejected: number };
 }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${EVENTS_API_URL}?event_id=${eventId}`, { method: 'GET', headers });
+  const response = await fetch(`${getEventsApiUrl()}?event_id=${eventId}`, { method: 'GET', headers });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Failed to fetch event');
   return data;
@@ -640,7 +640,7 @@ export async function getEvent(eventId: string): Promise<{
 export async function getEventByCode(uploadCode: string): Promise<{
   event: LiveEvent & { can_upload: boolean };
 }> {
-  const response = await fetch(`${EVENTS_API_URL}?upload_code=${uploadCode}`, { method: 'GET' });
+  const response = await fetch(`${getEventsApiUrl()}?upload_code=${uploadCode}`, { method: 'GET' });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Event not found');
   return data;
@@ -668,7 +668,7 @@ export async function createEvent(params: {
   folder_id?: string;
 }): Promise<{ event: LiveEvent }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(EVENTS_API_URL, {
+  const response = await fetch(getEventsApiUrl(), {
     method: 'POST',
     headers,
     body: JSON.stringify(params),
@@ -700,7 +700,7 @@ export async function updateEvent(params: {
   target_album_id?: string;
 }): Promise<{ event: LiveEvent }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(EVENTS_API_URL, {
+  const response = await fetch(getEventsApiUrl(), {
     method: 'PUT',
     headers,
     body: JSON.stringify(params),
@@ -715,7 +715,7 @@ export async function updateEvent(params: {
  */
 export async function startEvent(eventId: string): Promise<{ event: LiveEvent }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${EVENTS_API_URL}?action=start`, {
+  const response = await fetch(`${getEventsApiUrl()}?action=start`, {
     method: 'PUT',
     headers,
     body: JSON.stringify({ event_id: eventId }),
@@ -730,7 +730,7 @@ export async function startEvent(eventId: string): Promise<{ event: LiveEvent }>
  */
 export async function endEvent(eventId: string): Promise<{ event: LiveEvent }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${EVENTS_API_URL}?action=end`, {
+  const response = await fetch(`${getEventsApiUrl()}?action=end`, {
     method: 'PUT',
     headers,
     body: JSON.stringify({ event_id: eventId }),
@@ -745,7 +745,7 @@ export async function endEvent(eventId: string): Promise<{ event: LiveEvent }> {
  */
 export async function deleteEvent(eventId: string): Promise<void> {
   const headers = await getAuthHeaders();
-  const response = await fetch(EVENTS_API_URL, {
+  const response = await fetch(getEventsApiUrl(), {
     method: 'DELETE',
     headers,
     body: JSON.stringify({ event_id: eventId }),
@@ -759,7 +759,7 @@ export async function deleteEvent(eventId: string): Promise<void> {
  */
 export async function uploadToEvent(eventId: string, assetId: string): Promise<{ upload: LiveEventUpload }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${EVENTS_API_URL}?action=upload`, {
+  const response = await fetch(`${getEventsApiUrl()}?action=upload`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ event_id: eventId, asset_id: assetId }),
@@ -777,7 +777,7 @@ export async function guestUploadToEvent(params: {
   asset_id: string;
   guest_name?: string;
 }): Promise<{ upload: LiveEventUpload; message: string }> {
-  const response = await fetch(`${EVENTS_API_URL}?action=guest_upload`, {
+  const response = await fetch(`${getEventsApiUrl()}?action=guest_upload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
@@ -792,7 +792,7 @@ export async function guestUploadToEvent(params: {
  */
 export async function reviewUpload(uploadId: string, action: 'approve' | 'reject'): Promise<{ upload: LiveEventUpload }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${EVENTS_API_URL}?action=review`, {
+  const response = await fetch(`${getEventsApiUrl()}?action=review`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ upload_id: uploadId, action }),

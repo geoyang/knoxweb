@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { aiApi } from '../../../services/aiApi';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../../../lib/environments';
 
 interface ReindexStats {
   totalAssets: number;
@@ -34,10 +35,10 @@ export const ReindexTab: React.FC = () => {
     const fetchCount = async () => {
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/assets?select=id`,
+          `${getSupabaseUrl()}/rest/v1/assets?select=id`,
           {
             headers: {
-              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+              'apikey': getSupabaseAnonKey(),
               'Prefer': 'count=exact',
               'Range': '0-0',
             },

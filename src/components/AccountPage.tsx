@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
+import { PhoneVerificationFlow } from './PhoneVerificationFlow';
 
 interface SubscriptionInfo {
   plan_name: string;
@@ -15,6 +17,10 @@ export const AccountPage: React.FC = () => {
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [loadingSubscription, setLoadingSubscription] = useState(true);
+  const [showPhoneVerification, setShowPhoneVerification] = useState(false);
+  const [phoneInfo, setPhoneInfo] = useState<{ phone: string | null; verified: boolean; method: string }>({
+    phone: null, verified: false, method: 'email',
+  });
 
   useEffect(() => {
     const fetchSubscription = async () => {
@@ -25,7 +31,7 @@ export const AccountPage: React.FC = () => {
         if (!session?.access_token) return;
 
         const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/subscription-api?action=get_subscription`,
+          `${getSupabaseUrl()}/functions/v1/subscription-api?action=get_subscription`,
           {
             headers: {
               'Authorization': `Bearer ${session.access_token}`,
@@ -47,8 +53,57 @@ export const AccountPage: React.FC = () => {
       }
     };
 
+    const fetchPhoneInfo = async () => {
+      if (!user) return;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+
+        const response = await fetch(
+          `${getSupabaseUrl()}/functions/v1/profiles-api`,
+          {
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'apikey': getSupabaseAnonKey(),
+            },
+          }
+        );
+        const data = await response.json();
+        if (data.success && data.profile) {
+          setPhoneInfo({
+            phone: data.profile.phone || null,
+            verified: data.profile.phone_verified || false,
+            method: data.profile.preferred_verification_method || 'email',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch phone info:', error);
+      }
+    };
+
     fetchSubscription();
+    fetchPhoneInfo();
   }, [user]);
+
+  const updatePreferredMethod = async (method: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      await fetch(`${getSupabaseUrl()}/functions/v1/profiles-api`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'apikey': getSupabaseAnonKey(),
+        },
+        body: JSON.stringify({ preferred_verification_method: method }),
+      });
+      setPhoneInfo(prev => ({ ...prev, method }));
+    } catch (error) {
+      console.error('Failed to update preference:', error);
+    }
+  };
 
   const handleDeleteAccount = async () => {
     setDeletingAccount(true);
@@ -59,7 +114,7 @@ export const AccountPage: React.FC = () => {
       }
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-account`,
+        `${getSupabaseUrl()}/functions/v1/delete-account`,
         {
           method: 'POST',
           headers: {
@@ -177,6 +232,79 @@ export const AccountPage: React.FC = () => {
                   →
                 </span>
               </Link>
+            )}
+          </div>
+
+          {/* Phone & SMS Verification */}
+          <div className="p-6 border-b">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              Phone Verification
+            </h3>
+
+            {showPhoneVerification ? (
+              <PhoneVerificationFlow
+                initialPhone={phoneInfo.phone || ''}
+                onVerified={(verifiedPhone) => {
+                  setPhoneInfo({ phone: verifiedPhone, verified: true, method: 'sms' });
+                  setShowPhoneVerification(false);
+                  updatePreferredMethod('sms');
+                }}
+                onCancel={() => setShowPhoneVerification(false)}
+              />
+            ) : phoneInfo.verified && phoneInfo.phone ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
+                  <span className="text-green-600 text-lg">✓</span>
+                  <div>
+                    <p className="text-sm font-medium text-green-800">Phone verified</p>
+                    <p className="text-xs text-green-600">***{phoneInfo.phone.slice(-4)}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Login Code Delivery
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => updatePreferredMethod('email')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        phoneInfo.method === 'email'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      📧 Email
+                    </button>
+                    <button
+                      onClick={() => updatePreferredMethod('sms')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        phoneInfo.method === 'sms'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      📱 SMS
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {phoneInfo.method === 'sms'
+                      ? 'Login codes will be sent to your phone via SMS'
+                      : 'Login codes will be sent to your email'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowPhoneVerification(true)}
+                className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors group"
+              >
+                <div>
+                  <p className="font-semibold text-gray-900">Add Phone Number</p>
+                  <p className="text-sm text-gray-500">Receive login codes via SMS</p>
+                </div>
+                <span className="text-blue-600 group-hover:translate-x-1 transition-transform">→</span>
+              </button>
             )}
           </div>
 

@@ -1,6 +1,5 @@
 import { supabase, getAccessToken } from '../lib/supabase';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 // Types
 export interface ImportService {
@@ -133,7 +132,7 @@ async function getAuthHeaders(): Promise<Record<string, string> | null> {
     return {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      'apikey': getSupabaseAnonKey(),
     };
   } catch {
     return null;
@@ -147,7 +146,7 @@ export const importServicesApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-services-api`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-services-api`, {
         method: 'GET',
         headers,
       });
@@ -171,7 +170,7 @@ export const importSourcesApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-sources-api`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-sources-api`, {
         method: 'GET',
         headers,
       });
@@ -194,7 +193,7 @@ export const importSourcesApi = {
 
       const redirectUri = `${window.location.origin}/auth/callback`;
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-sources-api?action=connect`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-sources-api?action=connect`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ service_key: serviceKey, redirect_uri: redirectUri }),
@@ -216,7 +215,7 @@ export const importSourcesApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-sources-api?action=disconnect`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-sources-api?action=disconnect`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ source_id: sourceId }),
@@ -238,7 +237,7 @@ export const importSourcesApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-sources-api?action=check-new&source_id=${sourceId}`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-sources-api?action=check-new&source_id=${sourceId}`, {
         method: 'GET',
         headers,
       });
@@ -259,7 +258,7 @@ export const importSourcesApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-sources-api?action=albums&source_id=${sourceId}`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-sources-api?action=albums&source_id=${sourceId}`, {
         method: 'GET',
         headers,
       });
@@ -283,7 +282,7 @@ export const importJobsApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-api?action=list`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-api?action=list`, {
         method: 'GET',
         headers,
       });
@@ -307,7 +306,7 @@ export const importJobsApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-api?action=estimate`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-api?action=estimate`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -344,7 +343,7 @@ export const importJobsApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-api?action=start`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-api?action=start`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -371,7 +370,7 @@ export const importJobsApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-api?action=status&job_id=${jobId}`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-api?action=status&job_id=${jobId}`, {
         method: 'GET',
         headers,
       });
@@ -392,7 +391,7 @@ export const importJobsApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-api?action=pause`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-api?action=pause`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ job_id: jobId }),
@@ -410,7 +409,7 @@ export const importJobsApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-api?action=resume`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-api?action=resume`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ job_id: jobId }),
@@ -428,7 +427,7 @@ export const importJobsApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-api?action=cancel`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-api?action=cancel`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ job_id: jobId }),
@@ -446,7 +445,7 @@ export const importJobsApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/import-api?action=rollback`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/import-api?action=rollback`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ job_id: jobId }),
@@ -471,7 +470,7 @@ export const dedupApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/dedup-api`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/dedup-api`, {
         method: 'GET',
         headers,
       });
@@ -495,7 +494,7 @@ export const dedupApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/dedup-api?action=scan`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/dedup-api?action=scan`, {
         method: 'POST',
         headers,
         body: JSON.stringify(options || {}),
@@ -517,7 +516,7 @@ export const dedupApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/dedup-api?action=status&job_id=${jobId}`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/dedup-api?action=status&job_id=${jobId}`, {
         method: 'GET',
         headers,
       });
@@ -549,7 +548,7 @@ export const dedupApi = {
       if (options?.limit) params.append('limit', options.limit.toString());
       if (options?.offset) params.append('offset', options.offset.toString());
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/dedup-api?${params}`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/dedup-api?${params}`, {
         method: 'GET',
         headers,
       });
@@ -570,7 +569,7 @@ export const dedupApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/dedup-api?action=resolve`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/dedup-api?action=resolve`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -596,7 +595,7 @@ export const dedupApi = {
       const headers = await getAuthHeaders();
       if (!headers) return { success: false, error: 'Not authenticated' };
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/dedup-api?action=cancel`, {
+      const response = await fetch(`${getSupabaseUrl()}/functions/v1/dedup-api?action=cancel`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ job_id: jobId }),

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 
 interface PermissionRequestDialogProps {
   isOpen: boolean;
@@ -70,7 +71,7 @@ export const PermissionRequestDialog: React.FC<PermissionRequestDialogProps> = (
       }
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-albums-api?action=request_permission`,
+        `${getSupabaseUrl()}/functions/v1/admin-albums-api?action=request_permission`,
         {
           method: 'POST',
           headers: {

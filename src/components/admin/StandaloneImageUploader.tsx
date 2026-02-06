@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
+import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 import { useAuth } from '../../context/AuthContext';
 import { addPhotosToAlbum } from '../../services/albumsApi';
 import { adminApi } from '../../services/adminApi';
@@ -18,6 +19,13 @@ interface UploadedFile {
   url?: string;
   error?: string;
 }
+
+// Check if file is a video by extension (fallback when MIME type is not recognized)
+const isVideoFile = (file: File): boolean => {
+  const name = file.name.toLowerCase();
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.wmv', '.flv'];
+  return videoExtensions.some(ext => name.endsWith(ext)) || file.type.startsWith('video/');
+};
 
 export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = ({
   onImagesUploaded,
@@ -248,7 +256,7 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
 
     // Generate and upload thumbnail for images and videos
     let thumbnailUrl = '';
-    const isVideo = file.type.startsWith('video/');
+    const isVideo = isVideoFile(file);
 
     try {
       let thumbnailBlob: Blob;
@@ -270,7 +278,7 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
         .upload(thumbnailFileName, thumbnailBlob);
 
       if (!thumbError && thumbData) {
-        thumbnailUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/assets/${thumbData.path}`;
+        thumbnailUrl = `${getSupabaseUrl()}/storage/v1/object/public/assets/${thumbData.path}`;
       }
     } catch (thumbError) {
       console.warn('Failed to create thumbnail:', thumbError);
@@ -281,7 +289,7 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
       .getPublicUrl(data.path);
 
     // Manual URL construction as workaround for URL duplication bug
-    const originalUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/assets/${data.path}`;
+    const originalUrl = `${getSupabaseUrl()}/storage/v1/object/public/assets/${data.path}`;
     
     console.log('Supabase upload successful:', {
       uploadPath: data.path,
@@ -316,8 +324,8 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
   // Handle file selection
   const handleFileSelect = useCallback((files: FileList) => {
     const newFiles: UploadedFile[] = Array.from(files).map(file => {
-      // Validate file type
-      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+      // Validate file type - check extension for videos (browser may not recognize .avi, etc.)
+      if (!file.type.startsWith('image/') && !isVideoFile(file)) {
         return null;
       }
       
@@ -449,7 +457,7 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
       ));
 
       // Use edge function to create asset and add to album (with needsCreation)
-      const mediaType = fileObj.file.type.startsWith('video/') ? 'video' : 'photo';
+      const mediaType = isVideoFile(fileObj.file) ? 'video' : 'photo';
       await addPhotosToAlbum({
         albumId,
         assets: [{
@@ -694,11 +702,20 @@ export const StandaloneImageUploader: React.FC<StandaloneImageUploaderProps> = (
                 {uploadedFiles.map(fileObj => (
                   <div key={fileObj.id} className="relative group">
                     <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                      <img
-                        src={fileObj.preview}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
+                      {isVideoFile(fileObj.file) ? (
+                        <video
+                          src={fileObj.preview}
+                          className="w-full h-full object-cover"
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        <img
+                          src={fileObj.preview}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      )}
                       
                       {/* Status Overlay */}
                       <div className={`absolute inset-0 flex items-center justify-center ${
