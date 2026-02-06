@@ -204,6 +204,17 @@ class AdminApiService {
     });
   }
 
+  async addUserToCircle(circleId: string, data: {
+    email: string;
+    role: string;
+    full_name?: string;
+  }): Promise<ApiResponse<{ invitation: any; emailSent?: boolean }>> {
+    return this.makeApiCall(`admin-circles-api?circle_id=${circleId}`, {
+      method: 'POST',
+      body: JSON.stringify({ ...data, direct_add: true })
+    });
+  }
+
   async updateCircle(circleData: {
     circle_id: string;
     name?: string;
@@ -219,6 +230,27 @@ class AdminApiService {
     return this.makeApiCall('admin-circles-api', {
       method: 'DELETE',
       body: JSON.stringify({ circle_id: circleId })
+    });
+  }
+
+  async updateUserProfile(userId: string, data: { full_name?: string }): Promise<ApiResponse<{ user: any }>> {
+    return this.makeApiCall('admin-users-api', {
+      method: 'PUT',
+      body: JSON.stringify({ user_id: userId, ...data })
+    });
+  }
+
+  async updateMemberRole(memberId: string, role: string): Promise<ApiResponse<{ member: any }>> {
+    return this.makeApiCall('admin-circles-api', {
+      method: 'PATCH',
+      body: JSON.stringify({ member_id: memberId, role })
+    });
+  }
+
+  async removeMember(memberId: string): Promise<ApiResponse<{ message: string }>> {
+    return this.makeApiCall('admin-circles-api', {
+      method: 'DELETE',
+      body: JSON.stringify({ member_id: memberId })
     });
   }
 

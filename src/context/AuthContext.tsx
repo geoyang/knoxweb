@@ -18,7 +18,7 @@ interface AuthContextType {
   loading: boolean;
   isSuperAdmin: boolean;
   signInWithMagicLink: (email: string) => Promise<{ error: any }>;
-  signInWithCode: (email: string) => Promise<{ error: any; code?: string }>;
+  signInWithCode: (email: string) => Promise<{ error: any; code?: string; deliveryChannel?: string }>;
   verifyCode: (email: string, code: string, fullName?: string) => Promise<{ error: any; success?: boolean; profile?: UserProfile | null }>;
   checkUserExists: (email: string) => Promise<{ exists: boolean; error?: any }>;
   signUp: (email: string, fullName?: string) => Promise<{ error: any }>;
@@ -285,12 +285,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('Verification code sent successfully');
 
+      const channel = data?.delivery_channel || 'email';
+
       // In development, return the code if provided for testing
       if (import.meta.env.DEV && data?.dev_code) {
-        return { error: null, code: data.dev_code };
+        return { error: null, code: data.dev_code, deliveryChannel: channel };
       }
 
-      return { error: null };
+      return { error: null, deliveryChannel: channel };
     } catch (err) {
       console.error('Verification code error', err);
       return { error: err };

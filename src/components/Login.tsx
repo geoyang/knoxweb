@@ -19,6 +19,7 @@ export const Login: React.FC = () => {
   const [codeSent, setCodeSent] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [devCode, setDevCode] = useState<string | null>(null);
+  const [deliveryChannel, setDeliveryChannel] = useState<'email' | 'sms'>('email');
   const [rememberEmail, setRememberEmail] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
@@ -133,12 +134,15 @@ export const Login: React.FC = () => {
       return;
     }
 
-    const { error, code } = await signInWithCode(email);
+    const { error, code, deliveryChannel: channel } = await signInWithCode(email);
     if (error) {
       setError(error.message);
     } else {
       saveEmailIfRemembered();
       setCodeSent(true);
+      if (channel === 'sms') {
+        setDeliveryChannel('sms');
+      }
       if (import.meta.env.DEV && code) {
         setDevCode(code);
       }
@@ -178,6 +182,7 @@ export const Login: React.FC = () => {
     setCodeSent(false);
     setVerificationCode('');
     setDevCode(null);
+    setDeliveryChannel('email');
     setEmail('');
     setError(null);
     setIsSignUp(false);
@@ -298,7 +303,9 @@ export const Login: React.FC = () => {
               : emailSent
               ? 'Check your email for the magic link'
               : codeSent
-              ? `Enter the 4-digit code sent to ${email}`
+              ? deliveryChannel === 'sms'
+                ? 'Enter the 4-digit code sent to your phone'
+                : `Enter the 4-digit code sent to ${email}`
               : 'Passwordless Authentication'
             }
           </p>
@@ -456,7 +463,11 @@ export const Login: React.FC = () => {
                 <div className="text-2xl mr-2">🔢</div>
                 <div>
                   <p className="font-medium">Code sent!</p>
-                  <p className="text-sm">Enter the 4-digit code sent to {email}</p>
+                  <p className="text-sm">
+                    {deliveryChannel === 'sms'
+                      ? 'Enter the 4-digit code sent to your phone via SMS'
+                      : `Enter the 4-digit code sent to ${email}`}
+                  </p>
                   {import.meta.env.DEV && devCode && (
                     <p className="dev-banner mt-2">
                       Dev Code: <strong>{devCode}</strong>

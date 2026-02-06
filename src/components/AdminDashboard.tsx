@@ -21,6 +21,7 @@ import { ImportManager } from './admin/ImportManager';
 import { NotificationsManager } from './admin/NotificationsManager';
 import { notificationsApi } from '../services/notificationsApi';
 import { AIProcessingManager } from './admin/ai';
+import { MomentsGallery } from './MomentsGallery';
 import { ThemeToggle } from './ui/ThemeToggle';
 import { chatApi } from '../services/chatApi';
 import { adminApi } from '../services/adminApi';
@@ -516,6 +517,19 @@ export const AdminDashboard: React.FC = () => {
                   AI Processing
                 </Link>
               </li>
+              <li>
+                <Link
+                  to="/admin/moments"
+                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                    location.pathname.includes('/admin/moments')
+                      ? 'bg-primary-light text-theme-accent font-medium'
+                      : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
+                  }`}
+                >
+                  <i className="fi fi-sr-sparkles mr-3 text-lg"></i>
+                  Moments
+                </Link>
+              </li>
               {isSuperAdmin && (
                 <>
                   <li>
@@ -605,6 +619,7 @@ export const AdminDashboard: React.FC = () => {
             <Route path="contacts" element={<ContactsManager />} />
             <Route path="import" element={<ImportManager />} />
             <Route path="ai-processing" element={<AIProcessingManager />} />
+            <Route path="moments" element={<MomentsGallery />} />
             <Route path="chat" element={<ChatManager />} />
             <Route
               path="users"
