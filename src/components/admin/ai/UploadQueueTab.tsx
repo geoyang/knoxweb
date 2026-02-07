@@ -16,6 +16,7 @@ interface AIResult {
   faces?: { success: boolean; count: number; stored?: boolean; faces: Array<{ index: number; confidence: number }> };
   ocr?: { success: boolean; has_text?: boolean; text?: string };
   describe?: { success: boolean; description?: string };
+  restore?: { success: boolean; restored_asset_id?: string; web_uri?: string; processing_time_ms?: number; error?: string };
   _meta?: {
     worker_id: string;
     ai_version: string;
@@ -115,6 +116,7 @@ const OPERATION_LABELS: Record<string, { short: string; icon: string }> = {
   objects: { short: 'Objects', icon: '📦' },
   ocr: { short: 'OCR', icon: '📝' },
   describe: { short: 'Captions', icon: '💬' },
+  restore: { short: 'Restore', icon: '✨' },
 };
 
 const OperationsBadges: React.FC<{ operations?: string[] }> = ({ operations }) => {
@@ -160,6 +162,10 @@ const formatResultsSummary = (result: AIResult | null): string => {
 
   if (result.describe?.description) {
     parts.push('captioned');
+  }
+
+  if (result.restore?.success) {
+    parts.push('restored');
   }
 
   return parts.length > 0 ? parts.join(' · ') : 'processed';
@@ -227,6 +233,27 @@ const AIResultsDetail: React.FC<{ result: AIResult; job: UploadQueueJob }> = ({ 
         <div className="upload-queue__result-section">
           <span className="upload-queue__result-icon">💬</span>
           <span>{result.describe.description.slice(0, 100)}{result.describe.description.length > 100 ? '...' : ''}</span>
+        </div>
+      )}
+
+      {result.restore?.success && (
+        <div className="upload-queue__result-section">
+          <span className="upload-queue__result-icon">✨</span>
+          <span>
+            Restored ({result.restore.processing_time_ms ? `${(result.restore.processing_time_ms / 1000).toFixed(1)}s` : '-'})
+            {result.restore.web_uri && (
+              <a href={result.restore.web_uri} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 8, color: '#f59e0b' }}>
+                View
+              </a>
+            )}
+          </span>
+        </div>
+      )}
+
+      {result.restore && !result.restore.success && result.restore.error && (
+        <div className="upload-queue__result-section">
+          <span className="upload-queue__result-icon">❌</span>
+          <span style={{ color: '#ef4444' }}>Restore failed: {result.restore.error}</span>
         </div>
       )}
     </div>
