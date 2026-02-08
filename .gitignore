@@ -24,3 +24,7 @@ yarn-error.log*
 .vercel
 .env
 .env*.local
+.env.development
+
+# production build
+/dist

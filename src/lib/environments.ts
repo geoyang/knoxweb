@@ -9,17 +9,17 @@ export interface EnvironmentConfig {
   supabaseAnonKey: string;
 }
 
-// Environment configurations
+// Environment configurations - loaded from env vars
 export const ENVIRONMENTS: Record<string, EnvironmentConfig> = {
   dev: {
     name: 'Development',
-    supabaseUrl: 'https://cbuclvdrdqetfwecphhw.supabase.co',
-    supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNidWNsdmRyZHFldGZ3ZWNwaGh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5NzA0ODYsImV4cCI6MjA4NTU0NjQ4Nn0.9ZDmuL3juAiOUyLGkRxk0rKrZzYx3TLNRC62NFlJ3J4',
+    supabaseUrl: import.meta.env.VITE_DEV_SUPABASE_URL || '',
+    supabaseAnonKey: import.meta.env.VITE_DEV_SUPABASE_ANON_KEY || '',
   },
   prod: {
     name: 'Production',
-    supabaseUrl: 'https://quqlovduekdasldqadge.supabase.co',
-    supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1cWxvdmR1ZWtkYXNsZHFhZGdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NzQ5MjgsImV4cCI6MjA4MTE1MDkyOH0.bePrytQ_iJtzBjjkguFSCBrIpgzZlhBeOrbmsmzo5x4',
+    supabaseUrl: import.meta.env.VITE_PROD_SUPABASE_URL || '',
+    supabaseAnonKey: import.meta.env.VITE_PROD_SUPABASE_ANON_KEY || '',
   },
 };
 
