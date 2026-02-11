@@ -215,9 +215,8 @@ class AIApiService {
   }
 
   // Clear all clustering data
-  async clearClustering(clearThumbnails: boolean = false): Promise<AIApiResponse<{ status: string; message: string }>> {
-    const params = clearThumbnails ? '?clear_thumbnails=true' : '';
-    return this.request(`/api/v1/faces/clear-clustering${params}`, {
+  async clearClustering(): Promise<AIApiResponse<{ status: string; message: string }>> {
+    return this.request('/api/v1/faces/clear-clustering', {
       method: 'POST',
     });
   }
@@ -229,13 +228,6 @@ class AIApiService {
     total: number;
   }>> {
     return this.request(`/api/v1/faces/contact/${contactId}/images?limit=${limit}`);
-  }
-
-  // Backfill face thumbnails for existing embeddings
-  async backfillFaceThumbnails(): Promise<AIApiResponse<{ job_id: string; status: string }>> {
-    return this.request('/api/v1/faces/backfill-thumbnails', {
-      method: 'POST',
-    });
   }
 
   // Search by text query

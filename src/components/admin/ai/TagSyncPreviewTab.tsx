@@ -32,7 +32,6 @@ interface AIDetection {
   face_id: string;
   bounding_box: BoundingBox;
   cluster_id?: string;
-  thumbnail_url?: string;
 }
 
 interface TagMatch {
@@ -527,9 +526,6 @@ export const TagSyncPreviewTab: React.FC = () => {
                               {manualTag?.contact_name || 'Unknown'}
                             </a>
                             <span className="iou-score">IoU: {(match.iou_score * 100).toFixed(0)}%</span>
-                            {aiDet?.thumbnail_url && (
-                              <img src={aiDet.thumbnail_url} alt="Face" className="face-thumb" />
-                            )}
                             <span className={`status-badge ${match.status}`}>{match.status}</span>
                           </div>
                         );

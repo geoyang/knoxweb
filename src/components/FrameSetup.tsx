@@ -236,14 +236,16 @@ export const FrameSetup: React.FC = () => {
 
           <div className="text-gray-400 text-sm">— or use a mobile device —</div>
 
-          <a
-            href="https://play.google.com/store/apps/details?id=com.knox.mediavault"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block w-full bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
-          >
-            Download from Play Store
-          </a>
+          <div className="flex gap-3 items-center justify-center">
+            <a href="https://apps.apple.com/app/kizu/id6738030817" target="_blank" rel="noopener noreferrer">
+              <img src="https://www.kizu.online/app-store-badge.png"
+                   alt="Download on the App Store" height="44" />
+            </a>
+            <a href="https://play.google.com/store/apps/details?id=com.knox.mediavault" target="_blank" rel="noopener noreferrer">
+              <img src="https://www.kizu.online/google-play-badge.png"
+                   alt="Get it on Google Play" height="44" />
+            </a>
+          </div>
 
           {deepLink && (
             <a
