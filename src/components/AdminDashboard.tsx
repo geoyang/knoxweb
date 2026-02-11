@@ -10,6 +10,7 @@ import { ImagesManager } from './admin/ImagesManager';
 import { UsersManager } from './admin/UsersManager';
 import { InvitesManager } from './admin/InvitesManager';
 import { ContactsManager } from './admin/ContactsManager';
+import { LinksManager } from './admin/LinksManager';
 import { ChatManager } from './admin/ChatManager';
 import { AccountScreen } from './admin/AccountScreen';
 import { FoldersManager } from './admin/FoldersManager';
@@ -465,6 +466,19 @@ export const AdminDashboard: React.FC = () => {
               </li>
               <li>
                 <Link
+                  to="/admin/links"
+                  className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                    location.pathname.includes('/admin/links')
+                      ? 'bg-primary-light text-theme-accent font-medium'
+                      : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
+                  }`}
+                >
+                  <i className="fi fi-sr-link-alt mr-3 text-lg"></i>
+                  Links
+                </Link>
+              </li>
+              <li>
+                <Link
                   to="/admin/contacts"
                   className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                     location.pathname.includes('/admin/contacts')
@@ -616,6 +630,7 @@ export const AdminDashboard: React.FC = () => {
             <Route path="circles/:circleId/members/:memberId" element={<CircleMemberEdit />} />
             <Route path="circles/:circleId/add-member" element={<AddMember />} />
             <Route path="invites" element={<InvitesManager />} />
+            <Route path="links" element={<LinksManager userId={user.id} userName={userProfile?.full_name} />} />
             <Route path="contacts" element={<ContactsManager />} />
             <Route path="import" element={<ImportManager />} />
             <Route path="ai-processing" element={<AIProcessingManager />} />

@@ -18,6 +18,7 @@ import { SharedAssetViewer } from './components/SharedAssetViewer';
 import { SharedAlbumViewer } from './components/SharedAlbumViewer';
 import { SubscriptionPage } from './components/SubscriptionPage';
 import { AccountPage } from './components/AccountPage';
+import { FacebookImport } from './components/FacebookImport';
 
 function App() {
   return (
@@ -56,6 +57,9 @@ function App() {
 
         {/* Registration verification route */}
         <Route path="/verify" element={<VerifyRegistration />} />
+
+        {/* Facebook import route */}
+        <Route path="/import/facebook" element={<FacebookImport />} />
 
         {/* User dashboard (for circle members) */}
         <Route path="/dashboard" element={<Dashboard />} />
