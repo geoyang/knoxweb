@@ -482,9 +482,16 @@ export const ChatManager: React.FC = () => {
 
   // Get avatar for conversation
   const getConversationAvatar = (conversation: Conversation) => {
-    if (conversation.type === 'dm' && conversation.participants) {
-      const otherParticipant = conversation.participants.find(p => p.user_id !== user?.id);
-      return otherParticipant?.profile?.avatar_url;
+    if (conversation.type === 'dm') {
+      // Lite mode: use dm_avatar_url from server
+      if ((conversation as any).dm_avatar_url) {
+        return (conversation as any).dm_avatar_url;
+      }
+      // Full mode: use participant profile
+      if (conversation.participants) {
+        const otherParticipant = conversation.participants.find(p => p.user_id !== user?.id);
+        return otherParticipant?.profile?.avatar_url;
+      }
     }
     return null;
   };

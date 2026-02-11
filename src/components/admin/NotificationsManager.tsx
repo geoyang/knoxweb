@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notificationsApi, Notification } from '../../services/notificationsApi';
+import { linksApi } from '../../services/linksApi';
 
-type Tab = 'all' | 'unread' | 'friend_requests';
+type Tab = 'all' | 'unread' | 'link_requests';
 
 // Helper to format relative time
 function formatRelativeTime(dateString: string): string {
@@ -44,10 +45,10 @@ function getNotificationStyle(type: string): { icon: string; bgColor: string; ic
   }
 }
 
-// Check if notification is an actionable friend request
-function isFriendRequestNotification(notification: Notification): boolean {
-  return notification.notification_type === 'friend_requests' &&
-    notification.title?.toLowerCase().includes('friend request') &&
+// Check if notification is an actionable link request
+function isLinkRequestNotification(notification: Notification): boolean {
+  return (notification.notification_type === 'friend_requests' || notification.notification_type === 'link_requests') &&
+    (notification.title?.toLowerCase().includes('request') || notification.title?.toLowerCase().includes('connect')) &&
     !notification.title?.toLowerCase().includes('accepted');
 }
 
@@ -66,10 +67,10 @@ export const NotificationsManager: React.FC = () => {
     setError(null);
 
     try {
-      const [notifResult, countResult, requestsResult] = await Promise.all([
+      const [notifResult, countResult, linksResult] = await Promise.all([
         notificationsApi.getNotifications(1, 50),
         notificationsApi.getUnreadCount(),
-        notificationsApi.getPendingFriendRequests(),
+        linksApi.getLinks('pending'),
       ]);
 
       if (notifResult.success && notifResult.data) {
@@ -78,8 +79,10 @@ export const NotificationsManager: React.FC = () => {
 
       setUnreadCount(countResult);
 
-      if (requestsResult.success && requestsResult.data) {
-        setPendingRequests(requestsResult.data.requests || []);
+      if (linksResult.success && linksResult.data) {
+        // Only show incoming requests (not ones we sent)
+        const incoming = (linksResult.data.links || []).filter(l => !l.is_requester);
+        setPendingRequests(incoming);
       }
     } catch (err) {
       setError('Failed to load notifications');
@@ -112,12 +115,12 @@ export const NotificationsManager: React.FC = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  const handleAcceptRequest = async (requestId: string, notificationId?: string) => {
-    setProcessingId(requestId);
+  const handleAcceptRequest = async (linkId: string, notificationId?: string) => {
+    setProcessingId(linkId);
     try {
-      const result = await notificationsApi.acceptFriendRequest(requestId);
+      const result = await linksApi.accept(linkId);
       if (result.success) {
-        setPendingRequests(prev => prev.filter(r => r.id !== requestId));
+        setPendingRequests(prev => prev.filter(r => r.id !== linkId));
         if (notificationId) {
           handleMarkAsRead(notificationId);
         }
@@ -128,12 +131,12 @@ export const NotificationsManager: React.FC = () => {
     }
   };
 
-  const handleDeclineRequest = async (requestId: string, notificationId?: string) => {
-    setProcessingId(requestId);
+  const handleDeclineRequest = async (linkId: string, notificationId?: string) => {
+    setProcessingId(linkId);
     try {
-      const result = await notificationsApi.declineFriendRequest(requestId);
+      const result = await linksApi.decline(linkId);
       if (result.success) {
-        setPendingRequests(prev => prev.filter(r => r.id !== requestId));
+        setPendingRequests(prev => prev.filter(r => r.id !== linkId));
         if (notificationId) {
           handleDelete(notificationId);
         }
@@ -144,14 +147,14 @@ export const NotificationsManager: React.FC = () => {
     }
   };
 
-  // Find pending request for a notification's actor
+  // Find pending link request for a notification's actor
   const findPendingRequest = (actorId?: string) => {
     if (!actorId) return null;
-    return pendingRequests.find(r => r.requester?.id === actorId || r.requester_id === actorId);
+    return pendingRequests.find(r => r.other_user?.id === actorId);
   };
 
   const handleNotificationClick = (notification: Notification) => {
-    if (isFriendRequestNotification(notification)) return;
+    if (isLinkRequestNotification(notification)) return;
     if (!notification.deep_link_type || !notification.deep_link_id) return;
 
     if (!notification.is_read) {
@@ -171,7 +174,8 @@ export const NotificationsManager: React.FC = () => {
         navigate(path);
         break;
       }
-      case 'conversation': {
+      case 'conversation':
+      case 'link_conversation': {
         const conversationId = parts[0];
         const messageId = parts[1];
         const params = new URLSearchParams({ conversationId });
@@ -195,7 +199,7 @@ export const NotificationsManager: React.FC = () => {
 
   const filteredNotifications = notifications.filter(n => {
     if (activeTab === 'unread') return !n.is_read;
-    if (activeTab === 'friend_requests') return n.notification_type === 'friend_requests';
+    if (activeTab === 'link_requests') return n.notification_type === 'friend_requests' || n.notification_type === 'link_requests';
     return true;
   });
 
@@ -227,7 +231,7 @@ export const NotificationsManager: React.FC = () => {
       {/* Tabs */}
       <div className="border-b border-default">
         <div className="flex space-x-8">
-          {(['all', 'unread', 'friend_requests'] as Tab[]).map(tab => (
+          {(['all', 'unread', 'link_requests'] as Tab[]).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -239,7 +243,7 @@ export const NotificationsManager: React.FC = () => {
             >
               {tab === 'all' && 'All'}
               {tab === 'unread' && `Unread (${unreadCount})`}
-              {tab === 'friend_requests' && `Friend Requests (${pendingRequests.length})`}
+              {tab === 'link_requests' && `Link Requests (${pendingRequests.length})`}
             </button>
           ))}
         </div>
@@ -261,10 +265,10 @@ export const NotificationsManager: React.FC = () => {
         <div className="bg-surface rounded-lg shadow divide-y divide-default">
           {filteredNotifications.map(notification => {
             const style = getNotificationStyle(notification.notification_type);
-            const isFriendRequest = isFriendRequestNotification(notification);
-            const pendingRequest = isFriendRequest ? findPendingRequest(notification.actor?.id) : null;
+            const isLinkRequest = isLinkRequestNotification(notification);
+            const pendingRequest = isLinkRequest ? findPendingRequest(notification.actor?.id) : null;
 
-            const isClickable = !isFriendRequest && notification.deep_link_type && notification.deep_link_id;
+            const isClickable = !isLinkRequest && notification.deep_link_type && notification.deep_link_id;
 
             return (
               <div
@@ -311,8 +315,8 @@ export const NotificationsManager: React.FC = () => {
                       </span>
                     </div>
 
-                    {/* Friend Request Actions */}
-                    {isFriendRequest && pendingRequest && (
+                    {/* Link Request Actions */}
+                    {isLinkRequest && pendingRequest && (
                       <div className="flex items-center gap-2 mt-3">
                         {processingId === pendingRequest.id ? (
                           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-emerald-600"></div>
@@ -337,7 +341,7 @@ export const NotificationsManager: React.FC = () => {
                     )}
 
                     {/* Regular notification actions */}
-                    {!isFriendRequest && (
+                    {!isLinkRequest && (
                       <div className="flex items-center gap-3 mt-2" onClick={(e) => e.stopPropagation()}>
                         {!notification.is_read && (
                           <button

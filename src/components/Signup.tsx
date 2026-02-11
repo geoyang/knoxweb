@@ -18,6 +18,7 @@ export const Signup: React.FC = () => {
   const [accountCreated, setAccountCreated] = useState(false);
   const [sessionTokens, setSessionTokens] = useState<{ accessToken: string; refreshToken: string } | null>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [appOpenFailed, setAppOpenFailed] = useState(false);
 
   const addLog = (msg: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -40,7 +41,12 @@ export const Signup: React.FC = () => {
   };
 
   const isMobile = isMobileDevice();
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isAndroid = /android/i.test(navigator.userAgent);
   const userAgent = navigator.userAgent;
+
+  const APP_STORE_URL = 'https://apps.apple.com/us/app/kizu-mobile/id6757609621';
+  const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.evolve.kizu.mobile';
 
   // Load invite details if we have an invite ID
   useEffect(() => {
@@ -191,9 +197,28 @@ export const Signup: React.FC = () => {
     const urlSafeTokens = base64Tokens.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     const appLink = `kizu://auth-session/${urlSafeTokens}`;
 
-    addLog(`Opening app with deep link...`);
-    console.log('🔑 SIGNUP: Opening mobile app with deep link:', appLink.substring(0, 60) + '...');
+    addLog('Attempting to open app via deep link...');
+
+    // If the app opens, the page loses visibility. Track that.
+    let appOpened = false;
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        appOpened = true;
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    // Try the deep link
     window.location.href = appLink;
+
+    // After 1.5s, if page is still visible, app didn't open
+    setTimeout(() => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      if (!appOpened) {
+        addLog('App did not open, showing download options');
+        setAppOpenFailed(true);
+      }
+    }, 1500);
   };
 
   // Handle continuing to web dashboard
@@ -288,11 +313,31 @@ export const Signup: React.FC = () => {
                   onClick={handleOpenMobileApp}
                   className="w-full btn-primary py-4 text-lg font-semibold"
                 >
-                  Open Kizu Mobile App
+                  Open in Kizu App
                 </button>
-                <p className="text-sm text-theme-secondary">
-                  Make sure you have the Kizu app installed on your device.
-                </p>
+
+                {appOpenFailed && (
+                  <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <p className="text-sm text-theme-secondary font-medium">
+                      Don't have the app yet? Download it:
+                    </p>
+                    <div className="flex gap-3 items-center justify-center">
+                      {(isIOS || (!isIOS && !isAndroid)) && (
+                        <a href={APP_STORE_URL} target="_blank" rel="noopener noreferrer">
+                          <img src="https://www.kizu.online/app-store-badge.png"
+                               alt="Download on the App Store" height="44" />
+                        </a>
+                      )}
+                      {(isAndroid || (!isIOS && !isAndroid)) && (
+                        <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+                          <img src="https://www.kizu.online/google-play-badge.png"
+                               alt="Get it on Google Play" height="44" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                   <button
                     onClick={handleContinueToWeb}

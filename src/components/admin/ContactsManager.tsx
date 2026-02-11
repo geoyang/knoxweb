@@ -2,11 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { contactsApi, Contact, ContactInput, RELATIONSHIP_TYPES, RELATIONSHIP_COLORS } from '../../services/contactsApi';
-import { friendsApi } from '../../services/friendsApi';
+import { linksApi } from '../../services/linksApi';
 import { chatApi } from '../../services/chatApi';
 import { aiApi } from '../../services/aiApi';
-import { supabase } from '../../lib/supabase';
-import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 import { NOTIFICATION_SOUNDS, getSoundById, SOUND_CATEGORIES } from '../../config/notificationSounds';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { library } from '@fortawesome/fontawesome-svg-core';
@@ -61,13 +59,14 @@ export const ContactsManager: React.FC = () => {
   const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
   const [contactImages, setContactImages] = useState<{ asset_id: string; thumbnail_url: string }[]>([]);
   const [loadingImages, setLoadingImages] = useState(false);
-  const [friendshipStatus, setFriendshipStatus] = useState<{
-    isFriend: boolean;
-    pendingRequest: { id: string; isIncoming: boolean } | null;
+  const [linkStatus, setLinkStatus] = useState<{
+    link: any | null;
+    status: string | null;
+    is_requester: boolean;
   } | null>(null);
-  const [friendshipLoading, setFriendshipLoading] = useState(false);
-  const [friendshipActionLoading, setFriendshipActionLoading] = useState(false);
-  const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkActionLoading, setLinkActionLoading] = useState(false);
+  const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
   const [dmLoading, setDmLoading] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -178,8 +177,8 @@ export const ContactsManager: React.FC = () => {
       setHasMore(page < result.pagination.totalPages);
       setCurrentPage(page);
 
-      // Load friend IDs for contacts with linked profiles
-      loadFriendIds(result.contacts);
+      // Load linked profile IDs
+      loadLinkedIds();
     } catch (err) {
       console.error('Error loading contacts:', err);
       setError(err instanceof Error ? err.message : 'Failed to load contacts');
@@ -195,37 +194,18 @@ export const ContactsManager: React.FC = () => {
     }
   };
 
-  // Load friend IDs via friends-api
-  const loadFriendIds = async (_contactsList: Contact[]) => {
+  // Load linked profile IDs via links-api
+  const loadLinkedIds = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
+      const result = await linksApi.getLinks('active');
+      if (!result.success || !result.data) return;
 
-      const response = await fetch(
-        `${getSupabaseUrl()}/functions/v1/friends-api?action=list`,
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-            'apikey': getSupabaseAnonKey(),
-          },
-        }
+      const idSet = new Set<string>(
+        (result.data.links || []).map((l) => l.other_user?.id).filter(Boolean) as string[]
       );
-
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        console.error('Error loading friendships:', data.error);
-        return;
-      }
-
-      // Create a Set of friend IDs from the friends list
-      const friendIdSet = new Set<string>(
-        (data.friends || []).map((f: { friend: { id: string } }) => f.friend?.id).filter(Boolean)
-      );
-      setFriendIds(friendIdSet);
+      setLinkedIds(idSet);
     } catch (err) {
-      console.error('Error loading friend IDs:', err);
+      console.error('Error loading linked IDs:', err);
     }
   };
 
@@ -264,7 +244,7 @@ export const ContactsManager: React.FC = () => {
   const handleSelectContact = async (contact: Contact) => {
     setSelectedContact(contact);
     setContactImages([]);
-    setFriendshipStatus(null);
+    setLinkStatus(null);
 
     // Load images for this contact
     setLoadingImages(true);
@@ -279,18 +259,18 @@ export const ContactsManager: React.FC = () => {
       setLoadingImages(false);
     }
 
-    // Check friendship status if contact has a linked profile
+    // Check link status if contact has a linked profile
     if (contact.linked_profile?.id) {
-      setFriendshipLoading(true);
+      setLinkLoading(true);
       try {
-        const result = await friendsApi.checkFriendship(contact.linked_profile.id);
+        const result = await linksApi.checkLink(contact.linked_profile.id);
         if (result.success && result.data) {
-          setFriendshipStatus(result.data);
+          setLinkStatus(result.data);
         }
       } catch (err) {
-        console.error('Failed to check friendship status:', err);
+        console.error('Failed to check link status:', err);
       } finally {
-        setFriendshipLoading(false);
+        setLinkLoading(false);
       }
     }
   };
@@ -431,101 +411,101 @@ export const ContactsManager: React.FC = () => {
     }
   };
 
-  // Friendship action handlers
-  const handleSendFriendRequest = async () => {
+  // Link action handlers
+  const handleConnect = async () => {
     if (!selectedContact?.linked_profile?.id) return;
-    setFriendshipActionLoading(true);
+    setLinkActionLoading(true);
     try {
-      const result = await friendsApi.sendFriendRequest(selectedContact.linked_profile.id);
+      const result = await linksApi.connect({ user_id: selectedContact.linked_profile.id });
       if (result.success) {
-        // Re-check friendship status
-        const checkResult = await friendsApi.checkFriendship(selectedContact.linked_profile.id);
+        // Re-check link status
+        const checkResult = await linksApi.checkLink(selectedContact.linked_profile.id);
         if (checkResult.success && checkResult.data) {
-          setFriendshipStatus(checkResult.data);
+          setLinkStatus(checkResult.data);
         }
       } else {
-        alert(result.error || 'Failed to send friend request');
+        alert(result.error || 'Failed to connect');
       }
     } catch (err) {
-      console.error('Error sending friend request:', err);
-      alert('Failed to send friend request');
+      console.error('Error connecting:', err);
+      alert('Failed to connect');
     } finally {
-      setFriendshipActionLoading(false);
+      setLinkActionLoading(false);
     }
   };
 
-  const handleAcceptFriendRequest = async () => {
-    if (!friendshipStatus?.pendingRequest?.id) return;
-    setFriendshipActionLoading(true);
+  const handleAcceptLink = async () => {
+    if (!linkStatus?.link?.id) return;
+    setLinkActionLoading(true);
     try {
-      const result = await friendsApi.acceptFriendRequest(friendshipStatus.pendingRequest.id);
+      const result = await linksApi.accept(linkStatus.link.id);
       if (result.success) {
-        setFriendshipStatus({ isFriend: true, pendingRequest: null });
+        setLinkStatus({ link: result.data?.link || linkStatus.link, status: 'active', is_requester: false });
       } else {
-        alert(result.error || 'Failed to accept friend request');
+        alert(result.error || 'Failed to accept link request');
       }
     } catch (err) {
-      console.error('Error accepting friend request:', err);
-      alert('Failed to accept friend request');
+      console.error('Error accepting link request:', err);
+      alert('Failed to accept link request');
     } finally {
-      setFriendshipActionLoading(false);
+      setLinkActionLoading(false);
     }
   };
 
-  const handleDeclineFriendRequest = async () => {
-    if (!friendshipStatus?.pendingRequest?.id) return;
-    setFriendshipActionLoading(true);
+  const handleDeclineLink = async () => {
+    if (!linkStatus?.link?.id) return;
+    setLinkActionLoading(true);
     try {
-      const result = await friendsApi.declineFriendRequest(friendshipStatus.pendingRequest.id);
+      const result = await linksApi.decline(linkStatus.link.id);
       if (result.success) {
-        setFriendshipStatus({ isFriend: false, pendingRequest: null });
+        setLinkStatus({ link: null, status: null, is_requester: false });
       } else {
-        alert(result.error || 'Failed to decline friend request');
+        alert(result.error || 'Failed to decline link request');
       }
     } catch (err) {
-      console.error('Error declining friend request:', err);
-      alert('Failed to decline friend request');
+      console.error('Error declining link request:', err);
+      alert('Failed to decline link request');
     } finally {
-      setFriendshipActionLoading(false);
+      setLinkActionLoading(false);
     }
   };
 
-  const handleCancelFriendRequest = async () => {
-    if (!friendshipStatus?.pendingRequest?.id) return;
-    setFriendshipActionLoading(true);
+  const handleCancelLink = async () => {
+    if (!linkStatus?.link?.id) return;
+    setLinkActionLoading(true);
     try {
-      const result = await friendsApi.cancelFriendRequest(friendshipStatus.pendingRequest.id);
+      const result = await linksApi.cancel(linkStatus.link.id);
       if (result.success) {
-        setFriendshipStatus({ isFriend: false, pendingRequest: null });
+        setLinkStatus({ link: null, status: null, is_requester: false });
       } else {
-        alert(result.error || 'Failed to cancel friend request');
+        alert(result.error || 'Failed to cancel link request');
       }
     } catch (err) {
-      console.error('Error cancelling friend request:', err);
-      alert('Failed to cancel friend request');
+      console.error('Error cancelling link request:', err);
+      alert('Failed to cancel link request');
     } finally {
-      setFriendshipActionLoading(false);
+      setLinkActionLoading(false);
     }
   };
 
-  const handleRemoveFriend = async () => {
-    if (!selectedContact?.linked_profile?.id) return;
-    if (!confirm(`Are you sure you want to remove ${selectedContact.display_name || 'this contact'} as a friend?`)) {
+  const handleRemoveLink = async () => {
+    if (!linkStatus?.link?.id) return;
+    if (!confirm(`Are you sure you want to remove your link with ${selectedContact?.display_name || 'this contact'}?`)) {
       return;
     }
-    setFriendshipActionLoading(true);
+    setLinkActionLoading(true);
     try {
-      const result = await friendsApi.unfriend(selectedContact.linked_profile.id);
+      const result = await linksApi.remove(linkStatus.link.id);
       if (result.success) {
-        setFriendshipStatus({ isFriend: false, pendingRequest: null });
+        setLinkStatus({ link: null, status: null, is_requester: false });
       } else {
-        alert(result.error || 'Failed to remove friend');
+        alert(result.error || 'Failed to remove link');
       }
     } catch (err) {
-      console.error('Error removing friend:', err);
-      alert('Failed to remove friend');
+      console.error('Error removing link:', err);
+      alert('Failed to remove link');
     } finally {
-      setFriendshipActionLoading(false);
+      setLinkActionLoading(false);
     }
   };
 
@@ -644,12 +624,12 @@ export const ContactsManager: React.FC = () => {
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                        {contact.linked_profile && contact.linked_profile_id && friendIds.has(contact.linked_profile_id) ? (
+                        {contact.linked_profile && contact.linked_profile_id && linkedIds.has(contact.linked_profile_id) ? (
                           <span className="inline-flex items-center gap-1 text-emerald-600">
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                               <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
                             </svg>
-                            Friend
+                            Linked
                           </span>
                         ) : contact.linked_profile ? (
                           <span className="inline-flex items-center gap-1 text-green-600">
@@ -677,8 +657,8 @@ export const ContactsManager: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* DM Button for friends */}
-                    {contact.linked_profile_id && friendIds.has(contact.linked_profile_id) && (
+                    {/* DM Button for linked users */}
+                    {contact.linked_profile_id && linkedIds.has(contact.linked_profile_id) && (
                       <button
                         onClick={(e) => handleStartDM(e, contact)}
                         disabled={dmLoading === contact.id}
@@ -801,66 +781,66 @@ export const ContactsManager: React.FC = () => {
                           </div>
                           <p className="text-sm text-green-600">{selectedContact.linked_profile.email}</p>
                         </div>
-                        {/* Friendship Status Badge */}
-                        {friendshipLoading ? (
+                        {/* Link Status Badge */}
+                        {linkLoading ? (
                           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600"></div>
-                        ) : friendshipStatus?.isFriend ? (
+                        ) : linkStatus?.status === 'active' ? (
                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
-                            Connected
+                            Linked
+                          </span>
+                        ) : linkStatus?.status === 'pending' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+                            Pending
                           </span>
                         ) : null}
                       </div>
 
-                      {/* Friendship Actions */}
-                      {!friendshipLoading && (
+                      {/* Link Actions */}
+                      {!linkLoading && (
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {friendshipStatus?.isFriend ? (
-                            // Already friends - show Remove Friend button
+                          {linkStatus?.status === 'active' ? (
                             <button
-                              onClick={handleRemoveFriend}
-                              disabled={friendshipActionLoading}
+                              onClick={handleRemoveLink}
+                              disabled={linkActionLoading}
                               className="px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
                             >
-                              {friendshipActionLoading ? 'Removing...' : 'Remove Friend'}
+                              {linkActionLoading ? 'Removing...' : 'Remove Link'}
                             </button>
-                          ) : friendshipStatus?.pendingRequest?.isIncoming ? (
-                            // Incoming request - show Accept/Decline buttons
+                          ) : linkStatus?.status === 'pending' && !linkStatus?.is_requester ? (
                             <>
                               <button
-                                onClick={handleAcceptFriendRequest}
-                                disabled={friendshipActionLoading}
+                                onClick={handleAcceptLink}
+                                disabled={linkActionLoading}
                                 className="px-3 py-1.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50"
                               >
-                                {friendshipActionLoading ? 'Accepting...' : 'Accept'}
+                                {linkActionLoading ? 'Accepting...' : 'Accept'}
                               </button>
                               <button
-                                onClick={handleDeclineFriendRequest}
-                                disabled={friendshipActionLoading}
+                                onClick={handleDeclineLink}
+                                disabled={linkActionLoading}
                                 className="px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
                               >
                                 Decline
                               </button>
                             </>
-                          ) : friendshipStatus?.pendingRequest ? (
-                            // Outgoing request - show Cancel button
+                          ) : linkStatus?.status === 'pending' ? (
                             <button
-                              onClick={handleCancelFriendRequest}
-                              disabled={friendshipActionLoading}
+                              onClick={handleCancelLink}
+                              disabled={linkActionLoading}
                               className="px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
                             >
-                              {friendshipActionLoading ? 'Cancelling...' : 'Cancel Request'}
+                              {linkActionLoading ? 'Cancelling...' : 'Cancel Request'}
                             </button>
                           ) : (
-                            // No relationship - show Friend Request button
                             <button
-                              onClick={handleSendFriendRequest}
-                              disabled={friendshipActionLoading}
+                              onClick={handleConnect}
+                              disabled={linkActionLoading}
                               className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
                             >
-                              {friendshipActionLoading ? 'Sending...' : 'Friend Request'}
+                              {linkActionLoading ? 'Connecting...' : 'Connect'}
                             </button>
                           )}
                         </div>

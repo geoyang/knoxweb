@@ -29,7 +29,6 @@ export const FaceClustersTab: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clusteringJobId, setClusteringJobId] = useState<string | null>(null);
-  const [backfillRunning, setBackfillRunning] = useState(false);
 
   // Poll for clustering job status
   const { job: clusteringJob, notFound: jobNotFound } = useSingleJobPolling(clusteringJobId);
@@ -90,16 +89,13 @@ export const FaceClustersTab: React.FC = () => {
     loadContacts();
   }, [loadClusters, loadContacts]);
 
-  // Check if clustering/backfill is complete and refresh
+  // Check if clustering is complete and refresh
   useEffect(() => {
     if (clusteringJob?.status === 'completed') {
       loadClusters();
-      setBackfillRunning(false);
-      // Clear job ID after a short delay to show completion
       setTimeout(() => setClusteringJobId(null), 1500);
     } else if (clusteringJob?.status === 'failed') {
       setError(clusteringJob.error_message || 'Job failed');
-      setBackfillRunning(false);
       setTimeout(() => setClusteringJobId(null), 3000);
     }
   }, [clusteringJob?.status, loadClusters]);
@@ -204,36 +200,15 @@ export const FaceClustersTab: React.FC = () => {
     }
   };
 
-  const handleBackfillThumbnails = async () => {
-    try {
-      setError(null);
-      setBackfillRunning(true);
-      const result = await aiApi.backfillFaceThumbnails();
-      if (result.success && result.data?.job_id) {
-        // Set job ID to poll for status
-        setClusteringJobId(result.data.job_id);
-      } else if (result.error) {
-        setError(result.error);
-        setBackfillRunning(false);
-      }
-    } catch (err) {
-      console.error('Failed to backfill thumbnails:', err);
-      setError(err instanceof Error ? err.message : 'Failed to start backfill');
-      setBackfillRunning(false);
-    }
-  };
-
-  const handleClearClustering = async (clearThumbnails: boolean = false) => {
-    const confirmMsg = clearThumbnails
-      ? 'This will delete all face clusters AND thumbnails. You will need to re-run clustering and regenerate thumbnails. Continue?'
-      : 'This will delete all face clusters and contact assignments. Continue?';
+  const handleClearClustering = async () => {
+    const confirmMsg = 'This will delete all face clusters and contact assignments. Continue?';
 
     if (!window.confirm(confirmMsg)) return;
 
     try {
       setError(null);
       setLoading(true);
-      const result = await aiApi.clearClustering(clearThumbnails);
+      const result = await aiApi.clearClustering();
       if (result.success) {
         loadClusters();
       } else if (result.error) {
@@ -309,34 +284,10 @@ export const FaceClustersTab: React.FC = () => {
             {isClusteringRunning ? 'Clustering...' : 'Run Clustering'}
           </button>
           <button
-            className="ai-button ai-button--secondary"
-            onClick={handleBackfillThumbnails}
-            disabled={isClusteringRunning || backfillRunning}
-            title="Generate cropped face thumbnails for existing faces"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              opacity: (isClusteringRunning || backfillRunning) ? 0.7 : 1
-            }}
-          >
-            {backfillRunning && (
-              <span className="spinner" style={{
-                width: '14px',
-                height: '14px',
-                border: '2px solid rgba(0,0,0,0.3)',
-                borderTopColor: '#333',
-                borderRadius: '50%',
-                animation: 'spin 0.8s linear infinite'
-              }} />
-            )}
-            Crop Faces
-          </button>
-          <button
             className="ai-button ai-button--danger"
-            onClick={() => handleClearClustering(true)}
-            disabled={isClusteringRunning || backfillRunning}
-            title="Clear all clustering data and thumbnails"
+            onClick={() => handleClearClustering()}
+            disabled={isClusteringRunning}
+            title="Clear all clustering data"
           >
             Clear All
           </button>
