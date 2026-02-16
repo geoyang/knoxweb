@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
+import { getSupabaseUrl, getSupabaseAnonKey, getAppScheme } from '../lib/environments';
 import { ThemeToggle } from './ui/ThemeToggle';
 
 export const Signup: React.FC = () => {
@@ -195,7 +195,7 @@ export const Signup: React.FC = () => {
     // Use URL-safe base64 encoding (replace +/= with URL-safe chars)
     const base64Tokens = btoa(tokenData);
     const urlSafeTokens = base64Tokens.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-    const appLink = `kizu://auth-session/${urlSafeTokens}`;
+    const appLink = `${getAppScheme()}://auth-session/${urlSafeTokens}`;
 
     addLog('Attempting to open app via deep link...');
 

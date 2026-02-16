@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { DebugSupabase } from './DebugSupabase';
 import { TokenManager } from '../utils/tokenManager';
 import { ThemeToggle } from './ui/ThemeToggle';
-import { getSelectedEnvironmentKey, setEnvironment, ENVIRONMENTS } from '../lib/environments';
+import { getSelectedEnvironmentKey, setEnvironment, ENVIRONMENTS, getAppScheme } from '../lib/environments';
 
 const REMEMBER_EMAIL_KEY = 'knox_remember_email';
 const SAVED_EMAIL_KEY = 'knox_saved_email';
@@ -263,7 +263,7 @@ export const Login: React.FC = () => {
     });
     const base64Tokens = btoa(tokenData);
     const urlSafeTokens = base64Tokens.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-    const appLink = `kizu://auth-session/${urlSafeTokens}`;
+    const appLink = `${getAppScheme()}://auth-session/${urlSafeTokens}`;
 
     let appOpened = false;
     const onVisibilityChange = () => {
@@ -294,7 +294,7 @@ export const Login: React.FC = () => {
     });
     const base64Tokens = btoa(tokenData);
     const urlSafeTokens = base64Tokens.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-    const appLink = `kizu://auth-session/${urlSafeTokens}`;
+    const appLink = `${getAppScheme()}://auth-session/${urlSafeTokens}`;
 
     window.location.href = appLink;
 
