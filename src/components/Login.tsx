@@ -398,7 +398,7 @@ export const Login: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center">
                 <input
                   id="remember-email"
@@ -415,12 +415,9 @@ export const Login: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="btn-primary"
+                className="btn-primary whitespace-nowrap shrink-0"
               >
-                {loading
-                  ? 'Sending...'
-                  : '📱 Send Code'
-                }
+                {loading ? 'Sending...' : 'Send Code'}
               </button>
             </div>
 
@@ -511,6 +508,8 @@ export const Login: React.FC = () => {
                     }
                   }}
                   maxLength={4}
+                  inputMode="text"
+                  autoCapitalize="characters"
                   className="input text-center text-2xl font-bold tracking-widest py-3"
                   placeholder="----"
                   autoComplete="one-time-code"
