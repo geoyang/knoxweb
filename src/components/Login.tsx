@@ -28,6 +28,7 @@ export const Login: React.FC = () => {
   const [selectedEnv, setSelectedEnv] = useState(getSelectedEnvironmentKey());
   const [appOpenFailed, setAppOpenFailed] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
+  const [sessionTokens, setSessionTokens] = useState<{ accessToken: string; refreshToken: string } | null>(null);
 
   const { user, loading: authLoading, signInWithMagicLink, signInWithCode, verifyCode, checkUserExists, signUp } = useAuth();
 
@@ -179,12 +180,21 @@ export const Login: React.FC = () => {
     console.log('🔑 CODE VERIFICATION: Starting verification for:', email);
 
     try {
-      const { error, success } = await verifyCode(email, verificationCode);
+      // On mobile, skip setSession so tokens stay fresh for the deep link handoff.
+      // This matches the Signup.tsx pattern where raw tokens are stored in state.
+      const { error, success, tokens } = await verifyCode(email, verificationCode, undefined, isMobile);
       if (error) {
         setError(error.message);
       } else if (success) {
-        console.log('Code verification successful');
-        if (isMobile) {
+        console.log('Code verification successful, mobile:', isMobile);
+        if (isMobile && tokens) {
+          setSessionTokens({
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token,
+          });
+          setLoginSuccess(true);
+        } else if (isMobile) {
+          // Fallback: tokens not returned (e.g., hashed_token flow), session already set
           setLoginSuccess(true);
         } else {
           navigate('/admin', { replace: true });
@@ -239,14 +249,17 @@ export const Login: React.FC = () => {
     resetForm();
   };
 
-  // Handle opening the mobile app with session tokens
-  const handleOpenMobileApp = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
+  // Handle opening the mobile app with session tokens (matching Signup.tsx pattern)
+  const handleOpenMobileApp = () => {
+    if (!sessionTokens) {
+      // Fallback: try to get from live session (hashed_token flow where tokens were consumed)
+      handleOpenMobileAppFallback();
+      return;
+    }
 
     const tokenData = JSON.stringify({
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
+      access_token: sessionTokens.accessToken,
+      refresh_token: sessionTokens.refreshToken,
     });
     const base64Tokens = btoa(tokenData);
     const urlSafeTokens = base64Tokens.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
@@ -270,7 +283,51 @@ export const Login: React.FC = () => {
     }, 1500);
   };
 
-  const handleContinueToWeb = () => {
+  // Fallback for hashed_token flow where session was already consumed
+  const handleOpenMobileAppFallback = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const tokenData = JSON.stringify({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    });
+    const base64Tokens = btoa(tokenData);
+    const urlSafeTokens = base64Tokens.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    const appLink = `kizu://auth-session/${urlSafeTokens}`;
+
+    window.location.href = appLink;
+
+    let appOpened = false;
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        appOpened = true;
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    setTimeout(() => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      if (!appOpened) {
+        setAppOpenFailed(true);
+      }
+    }, 1500);
+  };
+
+  const handleContinueToWeb = async () => {
+    if (sessionTokens) {
+      // Tokens weren't consumed yet (skipSetSession was used), set them now
+      setLoading(true);
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: sessionTokens.accessToken,
+        refresh_token: sessionTokens.refreshToken,
+      });
+      if (sessionError) {
+        setError('Failed to sign in. Please try logging in again.');
+        setLoading(false);
+        return;
+      }
+    }
     navigate('/admin', { replace: true });
   };
 
@@ -598,11 +655,17 @@ export const Login: React.FC = () => {
                         setLoading(true);
                         setError(null);
                         try {
-                          const { error, success } = await verifyCode(email, code);
+                          const { error, success, tokens } = await verifyCode(email, code, undefined, isMobile);
                           if (error) {
                             setError(error.message);
                           } else if (success) {
-                            if (isMobile) {
+                            if (isMobile && tokens) {
+                              setSessionTokens({
+                                accessToken: tokens.access_token,
+                                refreshToken: tokens.refresh_token,
+                              });
+                              setLoginSuccess(true);
+                            } else if (isMobile) {
                               setLoginSuccess(true);
                             } else {
                               navigate('/admin', { replace: true });
