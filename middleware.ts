@@ -166,17 +166,10 @@ async function handleAlbumShare(token: string, env: EnvConfig) {
   const ownerName = data.owner?.name || 'Someone';
   const photoCount = album?.assets?.length || 0;
 
-  // Use the first asset as the thumbnail for the album preview
-  let thumbnailUrl: string | null = null;
-  let firstAssetWidth: number | undefined;
-  let firstAssetHeight: number | undefined;
-
-  if (album?.assets?.length > 0) {
-    const firstAsset = album.assets[0];
-    thumbnailUrl = `${env.supabaseUrl}/functions/v1/album-share-api?action=serve&token=${token}&asset_id=${firstAsset.id}&type=thumbnail`;
-    firstAssetWidth = firstAsset.width;
-    firstAssetHeight = firstAsset.height;
-  }
+  // Use composite thumbnail showing up to 3 album images
+  const thumbnailUrl = album?.assets?.length > 0
+    ? `${env.webAppUrl}/api/share-thumbnail?token=${token}`
+    : null;
 
   return new Response(generateOGHtml({
     title: album?.title
@@ -188,8 +181,8 @@ async function handleAlbumShare(token: string, env: EnvConfig) {
     imageUrl: thumbnailUrl,
     pageUrl: `${env.webAppUrl}/shared-album/${token}`,
     isVideo: false,
-    width: firstAssetWidth,
-    height: firstAssetHeight,
+    width: 1200,
+    height: 630,
   }), {
     status: 200,
     headers: { 'Content-Type': 'text/html' },
