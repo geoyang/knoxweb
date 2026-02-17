@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
+import { getSupabaseUrl, getSupabaseAnonKey, getAppScheme } from '../lib/environments';
 
 interface InviteData {
   circleName: string;
@@ -128,7 +128,7 @@ export const FrameSetup: React.FC = () => {
     }
   };
 
-  const deepLink = appLoginToken ? `kizu://frame-login/${appLoginToken}` : null;
+  const deepLink = appLoginToken ? `${getAppScheme()}://frame-login/${appLoginToken}` : null;
 
   // Loading state
   if (step === 'loading') {

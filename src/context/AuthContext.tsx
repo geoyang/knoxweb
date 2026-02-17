@@ -19,7 +19,7 @@ interface AuthContextType {
   isSuperAdmin: boolean;
   signInWithMagicLink: (email: string) => Promise<{ error: any }>;
   signInWithCode: (email: string) => Promise<{ error: any; code?: string; deliveryChannel?: string }>;
-  verifyCode: (email: string, code: string, fullName?: string) => Promise<{ error: any; success?: boolean; profile?: UserProfile | null }>;
+  verifyCode: (email: string, code: string, fullName?: string, skipSetSession?: boolean) => Promise<{ error: any; success?: boolean; profile?: UserProfile | null; tokens?: { access_token: string; refresh_token: string } }>;
   checkUserExists: (email: string) => Promise<{ exists: boolean; error?: any }>;
   signUp: (email: string, fullName?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -299,10 +299,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const verifyCode = async (email: string, code: string, fullName?: string) => {
+  const verifyCode = async (email: string, code: string, fullName?: string, skipSetSession?: boolean) => {
     try {
       console.log('🔐 VERIFY CODE: Starting server-side verification');
-      console.log('Verifying code:', { email, code });
+      console.log('Verifying code:', { email, code, skipSetSession });
 
       // Verify code with server (server checks against stored code in user_metadata)
       const { data: authResponse, error: authError } = await supabase.functions.invoke('verify-code-auth', {
@@ -345,6 +345,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // Handle the response - get session from magic link verification
       if (authResponse.session?.properties?.hashed_token) {
+        // When skipSetSession is true, we can't skip OTP verification since
+        // hashed_token flow doesn't give us raw tokens. Fall through to setSession.
         const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
           token_hash: authResponse.session.properties.hashed_token,
           type: 'magiclink',
@@ -363,11 +365,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // Alternative: server may return direct session tokens
       if (authResponse.session?.access_token && authResponse.session?.refresh_token) {
-        console.log('Received session tokens from server');
+        const rawTokens = {
+          access_token: authResponse.session.access_token,
+          refresh_token: authResponse.session.refresh_token,
+        };
+
+        // When skipSetSession is true, return raw tokens without consuming them.
+        // This allows the caller (e.g., mobile login) to pass fresh tokens via
+        // deep link without the web client rotating the refresh token first.
+        if (skipSetSession) {
+          console.log('Returning raw tokens (skipSetSession=true)');
+          return { error: null, success: true, profile: profileFromServer, tokens: rawTokens };
+        }
+
+        console.log('Received session tokens from server, setting session');
 
         const { data: sessionData, error: setSessionError } = await supabase.auth.setSession({
-          access_token: authResponse.session.access_token,
-          refresh_token: authResponse.session.refresh_token
+          access_token: rawTokens.access_token,
+          refresh_token: rawTokens.refresh_token
         });
 
         if (setSessionError) {

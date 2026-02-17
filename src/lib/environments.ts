@@ -102,6 +102,13 @@ export function isProduction(): boolean {
 }
 
 /**
+ * Get the app URL scheme for deep links (kizu:// for prod, kizu-dev:// for dev)
+ */
+export function getAppScheme(): string {
+  return getSelectedEnvironmentKey() === 'prod' ? 'kizu' : 'kizu-dev';
+}
+
+/**
  * Get the current Supabase URL
  */
 export function getSupabaseUrl(): string {

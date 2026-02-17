@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
+import { getSupabaseUrl, getSupabaseAnonKey, getAppScheme } from '../lib/environments';
 
 interface Plan {
   id: string;
@@ -68,7 +68,7 @@ const handleReturnToApp = (e: React.MouseEvent) => {
   }
 
   // Try the deep link
-  window.location.href = 'kizu://subscription-complete';
+  window.location.href = `${getAppScheme()}://subscription-complete`;
 
   // If still here after a short delay, try closing the window (for in-app browsers)
   setTimeout(() => {
