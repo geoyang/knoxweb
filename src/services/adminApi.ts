@@ -240,6 +240,45 @@ class AdminApiService {
     });
   }
 
+  async getPendingWithAccounts(): Promise<ApiResponse<{
+    circles: Array<{
+      circle_id: string;
+      circle_name: string;
+      pending_with_accounts: Array<{
+        circle_user_id: string;
+        user_id: string | null;
+        email: string;
+        role: string;
+        date_invited: string;
+        full_name: string | null;
+        avatar_url: string | null;
+      }>;
+      count: number;
+    }>;
+    total: number;
+  }>> {
+    return this.makeApiCall('admin-circles-api?action=pending_with_accounts', {
+      method: 'GET'
+    });
+  }
+
+  async autoAcceptPending(circleId?: string): Promise<ApiResponse<{
+    accepted: number;
+    results: Array<{
+      circle_id: string;
+      circle_name: string;
+      email: string;
+      full_name: string | null;
+      status: string;
+      error?: string;
+    }>;
+  }>> {
+    return this.makeApiCall('admin-circles-api', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'auto_accept_pending', ...(circleId && { circle_id: circleId }) })
+    });
+  }
+
   async updateMemberRole(memberId: string, role: string): Promise<ApiResponse<{ member: any }>> {
     return this.makeApiCall('admin-circles-api', {
       method: 'PATCH',
