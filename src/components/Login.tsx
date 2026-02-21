@@ -29,6 +29,10 @@ export const Login: React.FC = () => {
   const [appOpenFailed, setAppOpenFailed] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
   const [sessionTokens, setSessionTokens] = useState<{ accessToken: string; refreshToken: string } | null>(null);
+  const [identifierType, setIdentifierType] = useState<'email' | 'phone'>('email');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [countryCode, setCountryCode] = useState('+1');
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
 
   const { user, loading: authLoading, signInWithMagicLink, signInWithCode, verifyCode, checkUserExists, signUp } = useAuth();
 
@@ -47,11 +51,15 @@ export const Login: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Check for signup mode from URL parameter
+  // Check for signup mode and invite token from URL parameters
   useEffect(() => {
     const mode = searchParams.get('mode');
     if (mode === 'signup') {
       setIsSignUp(true);
+    }
+    const token = searchParams.get('invite_token');
+    if (token) {
+      setInviteToken(token);
     }
   }, [searchParams]);
 
@@ -137,33 +145,57 @@ export const Login: React.FC = () => {
   };
 
   const handleCodeAuth = async () => {
-    // Check if user exists first
-    const { exists, error: checkError } = await checkUserExists(email);
+    const isPhone = identifierType === 'phone';
+    const fullPhone = isPhone ? `${countryCode}${phoneNumber.replace(/\D/g, '')}` : '';
 
-    if (checkError) {
-      setError('Failed to verify user account. Please try again.');
-      return;
+    if (isPhone) {
+      if (!phoneNumber) {
+        setError('Please enter your phone number');
+        return;
+      }
+      const digits = phoneNumber.replace(/\D/g, '');
+      if (digits.length < 7 || digits.length > 15) {
+        setError('Please enter a valid phone number');
+        return;
+      }
+    } else {
+      // Check if user exists first (email only — phone users are auto-created)
+      const { exists, error: checkError } = await checkUserExists(email);
+
+      if (checkError) {
+        setError('Failed to verify user account. Please try again.');
+        return;
+      }
+
+      if (!exists) {
+        setError(`No account found for ${email}.`);
+        setIsSignUp(true);
+        return;
+      }
     }
 
-    if (!exists) {
-      setError(`No account found for ${email}.`);
-      setIsSignUp(true);
-      return;
-    }
-
-    const { error, code, deliveryChannel: channel } = await signInWithCode(email);
+    const phoneParams = isPhone ? { phone: fullPhone, identifier_type: 'phone' as const } : undefined;
+    const { error, code, deliveryChannel: channel } = await signInWithCode(email, phoneParams);
     if (error) {
       setError(error.message);
     } else {
-      saveEmailIfRemembered();
+      if (!isPhone) {
+        saveEmailIfRemembered();
+      }
       setCodeSent(true);
-      if (channel === 'sms') {
+      if (channel === 'sms' || isPhone) {
         setDeliveryChannel('sms');
       }
       if (import.meta.env.DEV && code) {
         setDevCode(code);
       }
     }
+  };
+
+  const getPhoneVerifyParams = () => {
+    if (identifierType !== 'phone') return undefined;
+    const fullPhone = `${countryCode}${phoneNumber.replace(/\D/g, '')}`;
+    return { phone: fullPhone, identifier_type: 'phone' as const, invite_token: inviteToken };
   };
 
   const handleCodeVerification = async (e: React.FormEvent) => {
@@ -177,12 +209,14 @@ export const Login: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    console.log('🔑 CODE VERIFICATION: Starting verification for:', email);
+    const identifier = identifierType === 'phone' ? `${countryCode}${phoneNumber}` : email;
+    console.log('🔑 CODE VERIFICATION: Starting verification for:', identifier);
 
     try {
       // On mobile, skip setSession so tokens stay fresh for the deep link handoff.
       // This matches the Signup.tsx pattern where raw tokens are stored in state.
-      const { error, success, tokens } = await verifyCode(email, verificationCode, undefined, isMobile);
+      const phoneParams = getPhoneVerifyParams();
+      const { error, success, tokens } = await verifyCode(email, verificationCode, undefined, isMobile, phoneParams);
       if (error) {
         setError(error.message);
       } else if (success) {
@@ -214,6 +248,7 @@ export const Login: React.FC = () => {
     setDevCode(null);
     setDeliveryChannel('email');
     setEmail('');
+    setPhoneNumber('');
     setError(null);
     setIsSignUp(false);
     setSignUpSuccess(false);
@@ -418,7 +453,7 @@ export const Login: React.FC = () => {
               ? 'Check your email for the magic link'
               : codeSent
               ? deliveryChannel === 'sms'
-                ? 'Enter the 4-digit code sent to your phone'
+                ? `Enter the 4-digit code sent to ${countryCode}${phoneNumber}`
                 : `Enter the 4-digit code sent to ${email}`
               : 'Passwordless Authentication'
             }
@@ -497,39 +532,120 @@ export const Login: React.FC = () => {
           </form>
         ) : !emailSent && !codeSent ? (
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="email" className="form-label">
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="input placeholder-muted"
-                placeholder="your@email.com"
-              />
+            {/* Email/Phone Toggle */}
+            <div className="flex rounded-full bg-gray-100 dark:bg-gray-700 p-1">
+              <button
+                type="button"
+                onClick={() => setIdentifierType('email')}
+                className={`flex-1 py-2 text-sm font-medium rounded-full transition-colors ${
+                  identifierType === 'email'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Email
+              </button>
+              <button
+                type="button"
+                onClick={() => setIdentifierType('phone')}
+                className={`flex-1 py-2 text-sm font-medium rounded-full transition-colors ${
+                  identifierType === 'phone'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Phone
+              </button>
             </div>
 
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center">
-                <input
-                  id="remember-email"
-                  type="checkbox"
-                  checked={rememberEmail}
-                  onChange={(e) => handleRememberEmailChange(e.target.checked)}
-                  className="h-4 w-4 checkbox rounded cursor-pointer"
-                />
-                <label htmlFor="remember-email" className="ml-2 block text-sm text-theme-secondary cursor-pointer">
-                  Remember my email
+            {identifierType === 'email' ? (
+              <div>
+                <label htmlFor="email" className="form-label">
+                  Email Address
                 </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="input placeholder-muted"
+                  placeholder="your@email.com"
+                  autoComplete="email"
+                />
               </div>
+            ) : (
+              <div>
+                <label htmlFor="phone" className="form-label">
+                  Phone Number
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
+                    className="input w-24 shrink-0"
+                  >
+                    <option value="+1">+1</option>
+                    <option value="+44">+44</option>
+                    <option value="+81">+81</option>
+                    <option value="+82">+82</option>
+                    <option value="+86">+86</option>
+                    <option value="+91">+91</option>
+                    <option value="+33">+33</option>
+                    <option value="+49">+49</option>
+                    <option value="+61">+61</option>
+                    <option value="+55">+55</option>
+                    <option value="+52">+52</option>
+                    <option value="+34">+34</option>
+                    <option value="+39">+39</option>
+                    <option value="+7">+7</option>
+                    <option value="+90">+90</option>
+                    <option value="+966">+966</option>
+                    <option value="+971">+971</option>
+                    <option value="+65">+65</option>
+                    <option value="+62">+62</option>
+                    <option value="+63">+63</option>
+                    <option value="+66">+66</option>
+                    <option value="+84">+84</option>
+                    <option value="+234">+234</option>
+                    <option value="+27">+27</option>
+                    <option value="+254">+254</option>
+                    <option value="+20">+20</option>
+                  </select>
+                  <input
+                    id="phone"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    className="input placeholder-muted flex-1"
+                    placeholder="phone number"
+                    autoComplete="tel"
+                    inputMode="tel"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              {identifierType === 'email' && (
+                <div className="flex items-center">
+                  <input
+                    id="remember-email"
+                    type="checkbox"
+                    checked={rememberEmail}
+                    onChange={(e) => handleRememberEmailChange(e.target.checked)}
+                    className="h-4 w-4 checkbox rounded cursor-pointer"
+                  />
+                  <label htmlFor="remember-email" className="ml-2 block text-sm text-theme-secondary cursor-pointer">
+                    Remember my email
+                  </label>
+                </div>
+              )}
 
               <button
                 type="submit"
-                disabled={loading}
-                className="btn-primary whitespace-nowrap shrink-0"
+                disabled={loading || (identifierType === 'email' ? !email : !phoneNumber)}
+                className={`btn-primary whitespace-nowrap shrink-0 ${identifierType === 'phone' ? 'w-full' : ''}`}
               >
                 {loading ? 'Sending...' : 'Send Code'}
               </button>
@@ -624,7 +740,7 @@ export const Login: React.FC = () => {
                   <p className="font-medium">Code sent!</p>
                   <p className="text-sm">
                     {deliveryChannel === 'sms'
-                      ? 'Enter the 4-digit code sent to your phone via SMS'
+                      ? `Enter the 4-digit code sent to ${countryCode}${phoneNumber} via SMS`
                       : `Enter the 4-digit code sent to ${email}`}
                   </p>
                   {import.meta.env.DEV && devCode && (
@@ -650,12 +766,14 @@ export const Login: React.FC = () => {
                     setVerificationCode(code);
                     // Auto-submit when 4 characters are entered
                     if (code.length === 4) {
-                      console.log('🔑 AUTO-SUBMIT: Code complete, auto-submitting for:', email);
+                      const identifier = identifierType === 'phone' ? `${countryCode}${phoneNumber}` : email;
+                      console.log('🔑 AUTO-SUBMIT: Code complete, auto-submitting for:', identifier);
                       setTimeout(async () => {
                         setLoading(true);
                         setError(null);
                         try {
-                          const { error, success, tokens } = await verifyCode(email, code, undefined, isMobile);
+                          const phoneParams = getPhoneVerifyParams();
+                          const { error, success, tokens } = await verifyCode(email, code, undefined, isMobile, phoneParams);
                           if (error) {
                             setError(error.message);
                           } else if (success) {
@@ -707,7 +825,7 @@ export const Login: React.FC = () => {
               onClick={resetForm}
               className="w-full btn-secondary"
             >
-              Try Different Email
+              {identifierType === 'phone' ? 'Try Different Phone' : 'Try Different Email'}
             </button>
           </div>
         )}
