@@ -5,6 +5,7 @@ import { MemoryInputBar } from './MemoryInputBar';
 import { ReactionBar } from './ReactionBar';
 import { supabase } from '../lib/supabase';
 import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
+import { getDisplayIdentifier, isPlaceholderEmail } from '../utils/phoneDisplayUtils';
 
 // Public memories API helper (no auth required, uses invite ID for access)
 const publicMemoriesApi = {
@@ -578,7 +579,7 @@ export const AlbumViewer: React.FC = () => {
             <p className="text-gray-600 mb-4">
               We've sent a verification link to:
             </p>
-            <p className="font-semibold text-blue-600 text-lg mb-6">{invite.email}</p>
+            <p className="font-semibold text-blue-600 text-lg mb-6">{getDisplayIdentifier(invite.email)}</p>
             <div className="bg-blue-50 rounded-lg p-4 mb-6">
               <p className="text-sm text-blue-800">
                 Click the link in the email to complete your registration and access <strong>{invite.circle?.name}</strong>.
@@ -758,7 +759,7 @@ export const AlbumViewer: React.FC = () => {
               <p className="text-sm font-medium">
                 {isReadOnly ? '👁️ View-only access' : canEdit ? '✏️ Editor access' : '👤 Member access'}
               </p>
-              {invite.email && (
+              {invite.email && !isPlaceholderEmail(invite.email) && (
                 <p className="text-xs opacity-75 mt-1">{invite.email}</p>
               )}
             </div>
@@ -851,11 +852,11 @@ export const AlbumViewer: React.FC = () => {
                           />
                         ) : (
                           <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center text-white text-[8px] font-medium">
-                            {(album.owner.full_name || album.owner.email || '?')[0].toUpperCase()}
+                            {(album.owner.full_name || getDisplayIdentifier(album.owner.email) || '?')[0].toUpperCase()}
                           </div>
                         )}
                         <span className="text-[10px] text-gray-500 truncate">
-                          {album.owner.full_name || album.owner.email || 'Unknown'}
+                          {album.owner.full_name || getDisplayIdentifier(album.owner.email) || 'Unknown'}
                         </span>
                       </div>
                     )}
@@ -1429,14 +1430,14 @@ export const AlbumDetailView: React.FC = () => {
                           ) : (
                             <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                               <span className="text-blue-600 text-sm font-medium">
-                                {(memory.user.name || memory.user.email || '?').charAt(0).toUpperCase()}
+                                {(memory.user.name || getDisplayIdentifier(memory.user.email) || '?').charAt(0).toUpperCase()}
                               </span>
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
                               <span className="font-medium text-sm text-gray-900">
-                                {memory.user.name || memory.user.email}
+                                {memory.user.name || getDisplayIdentifier(memory.user.email)}
                               </span>
                               <span className="text-xs text-gray-500">{formatDate(memory.created_at)}</span>
                             </div>
@@ -1522,11 +1523,11 @@ export const AlbumDetailView: React.FC = () => {
                           <img src={memory.user.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
-                            {(memory.user.name || memory.user.email || '?')[0].toUpperCase()}
+                            {(memory.user.name || getDisplayIdentifier(memory.user.email) || '?')[0].toUpperCase()}
                           </div>
                         )}
                         <div className="flex-1">
-                          <div className="font-medium text-gray-800">{memory.user.name || memory.user.email || 'Unknown'}</div>
+                          <div className="font-medium text-gray-800">{memory.user.name || getDisplayIdentifier(memory.user.email) || 'Unknown'}</div>
                           <div className="text-xs text-gray-500">{formatDate(memory.created_at)}</div>
                         </div>
                       </div>

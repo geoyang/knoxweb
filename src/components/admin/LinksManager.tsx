@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { linksApi, Link } from '../../services/linksApi';
 import { moderationApi, BlockedUser } from '../../services/moderationApi';
 import { chatApi } from '../../services/chatApi';
+import { getDisplayIdentifier, isPlaceholderEmail } from '../../utils/phoneDisplayUtils';
 
 interface LinksManagerProps {
   userId: string;
@@ -163,13 +164,13 @@ export const LinksManager: React.FC<LinksManagerProps> = ({ userId, userName, on
                 {link.other_user?.avatar_url ? (
                   <img src={link.other_user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                 ) : (
-                  <span className="text-theme-accent font-medium text-sm">{getInitials(link.other_user?.display_name || link.other_user?.email)}</span>
+                  <span className="text-theme-accent font-medium text-sm">{getInitials(link.other_user?.display_name || getDisplayIdentifier(link.other_user?.email))}</span>
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-theme-primary truncate">{link.other_user?.display_name || link.other_user?.email || 'Unknown'}</p>
+                <p className="font-medium text-theme-primary truncate">{link.other_user?.display_name || getDisplayIdentifier(link.other_user?.email) || 'Unknown'}</p>
                 <div className="flex items-center gap-2 text-sm text-theme-secondary">
-                  <span>{link.other_user?.email}</span>
+                  {!isPlaceholderEmail(link.other_user?.email) && <span>{link.other_user?.email}</span>}
                   {link.unread_count > 0 && (
                     <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
                       {link.unread_count}
@@ -229,13 +230,13 @@ export const LinksManager: React.FC<LinksManagerProps> = ({ userId, userName, on
                   <img src={link.other_user.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
                 ) : (
                   <span className="text-yellow-600 font-medium text-sm">
-                    {getInitials(link.other_user?.display_name || link.other_user?.email)}
+                    {getInitials(link.other_user?.display_name || getDisplayIdentifier(link.other_user?.email))}
                   </span>
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-theme-primary truncate">{link.other_user?.display_name || link.other_user?.email || 'Unknown'}</p>
-                <p className="text-sm text-theme-secondary">{link.other_user?.email}</p>
+                <p className="font-medium text-theme-primary truncate">{link.other_user?.display_name || getDisplayIdentifier(link.other_user?.email) || 'Unknown'}</p>
+                {!isPlaceholderEmail(link.other_user?.email) && <p className="text-sm text-theme-secondary">{link.other_user?.email}</p>}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {actionLoading === link.id ? (
@@ -295,7 +296,7 @@ export const LinksManager: React.FC<LinksManagerProps> = ({ userId, userName, on
               </div>
               <div className="flex-1">
                 <p className="font-medium text-theme-primary">{block.blocked_user?.full_name}</p>
-                <p className="text-sm text-theme-secondary">{block.blocked_user?.email}</p>
+                {!isPlaceholderEmail(block.blocked_user?.email) && <p className="text-sm text-theme-secondary">{block.blocked_user?.email}</p>}
               </div>
               <div className="text-sm text-theme-muted">
                 Blocked {formatDate(block.created_at)}

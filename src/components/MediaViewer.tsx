@@ -3,6 +3,7 @@ import { VideoPlayer } from './VideoPlayer';
 import { ReactionBar } from './ReactionBar';
 import { MemoryInputBar } from './MemoryInputBar';
 import { memoriesApi, Memory } from '../services/memoriesApi';
+import { getDisplayIdentifier } from '../utils/phoneDisplayUtils';
 
 interface MediaAsset {
   id?: string;
@@ -190,14 +191,14 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({
                     ) : (
                       <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                         <span className="text-blue-600 text-sm font-medium">
-                          {(memory.user.name || memory.user.email || '?').charAt(0).toUpperCase()}
+                          {(memory.user.name || getDisplayIdentifier(memory.user.email) || '?').charAt(0).toUpperCase()}
                         </span>
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="font-medium text-sm text-gray-900">
-                          {memory.user.name || memory.user.email}
+                          {memory.user.name || getDisplayIdentifier(memory.user.email)}
                         </span>
                         <span className="text-xs text-gray-500">{formatTimeAgo(memory.created_at)}</span>
                       </div>

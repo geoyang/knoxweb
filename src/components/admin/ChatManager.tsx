@@ -12,6 +12,7 @@ import {
   type EmojiCode,
 } from '../../services/reactionsApi';
 import { ChatSearchGlobal } from './chat/ChatSearchGlobal';
+import { getDisplayIdentifier } from '../../utils/phoneDisplayUtils';
 import { ChatSearchInChat, highlightSearchText } from './chat/ChatSearchInChat';
 
 // Sticker data - matching mobile app
@@ -475,7 +476,7 @@ export const ChatManager: React.FC = () => {
     if (conversation.title) return conversation.title;
     if (conversation.type === 'dm' && conversation.participants) {
       const otherParticipant = conversation.participants.find(p => p.user_id !== user?.id);
-      return otherParticipant?.profile?.full_name || otherParticipant?.profile?.email || 'Unknown';
+      return otherParticipant?.profile?.full_name || getDisplayIdentifier(otherParticipant?.profile?.email) || 'Unknown';
     }
     return 'Conversation';
   };
@@ -897,7 +898,7 @@ export const ChatManager: React.FC = () => {
                             >
                               {!isOwn && selectedConversation.type === 'circle' && (
                                 <p className="text-xs font-medium mb-1 opacity-75">
-                                  {message.sender?.full_name || message.sender?.email}
+                                  {message.sender?.full_name || getDisplayIdentifier(message.sender?.email)}
                                 </p>
                               )}
 

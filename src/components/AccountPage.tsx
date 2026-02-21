@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
 import { PhoneVerificationFlow } from './PhoneVerificationFlow';
+import { getDisplayIdentifier, isPlaceholderEmail } from '../utils/phoneDisplayUtils';
 
 interface SubscriptionInfo {
   plan_name: string;
@@ -179,7 +180,7 @@ export const AccountPage: React.FC = () => {
                   />
                 ) : (
                   <span className="text-2xl text-blue-600">
-                    {userProfile?.full_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
+                    {userProfile?.full_name?.[0]?.toUpperCase() || getDisplayIdentifier(user.email)?.[0]?.toUpperCase() || 'U'}
                   </span>
                 )}
               </div>
@@ -187,7 +188,7 @@ export const AccountPage: React.FC = () => {
                 <h2 className="font-semibold text-gray-900">
                   {userProfile?.full_name || 'User'}
                 </h2>
-                <p className="text-sm text-gray-500">{user.email}</p>
+                <p className="text-sm text-gray-500">{getDisplayIdentifier(user.email)}</p>
               </div>
             </div>
           </div>

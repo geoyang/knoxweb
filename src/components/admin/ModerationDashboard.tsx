@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { moderationApi, UserReport, ReportAction } from '../../services/moderationApi';
+import { isPlaceholderEmail } from '../../utils/phoneDisplayUtils';
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -186,7 +187,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ report, actionLoading, on
             </div>
             <div>
               <p className="font-medium">{report.reported_user?.full_name}</p>
-              <p className="text-sm text-gray-500">{report.reported_user?.email}</p>
+              {!isPlaceholderEmail(report.reported_user?.email) && <p className="text-sm text-gray-500">{report.reported_user?.email}</p>}
             </div>
           </div>
         </div>
@@ -200,7 +201,7 @@ const ReportDetails: React.FC<ReportDetailsProps> = ({ report, actionLoading, on
             </div>
             <div>
               <p className="font-medium text-sm">{report.reporter?.full_name}</p>
-              <p className="text-xs text-gray-500">{report.reporter?.email}</p>
+              {!isPlaceholderEmail(report.reporter?.email) && <p className="text-xs text-gray-500">{report.reporter?.email}</p>}
             </div>
           </div>
         </div>

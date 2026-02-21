@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { friendsApi, Friend, FriendRequest } from '../../services/friendsApi';
 import { moderationApi, BlockedUser } from '../../services/moderationApi';
+import { isPlaceholderEmail } from '../../utils/phoneDisplayUtils';
 
 interface FriendsManagerProps {
   userId: string;
@@ -92,7 +93,7 @@ export const FriendsManager: React.FC<FriendsManagerProps> = ({ userId, userName
               </div>
               <div className="flex-1">
                 <p className="font-medium text-gray-900">{friend.fullName}</p>
-                <p className="text-sm text-gray-500">{friend.email}</p>
+                {!isPlaceholderEmail(friend.email) && <p className="text-sm text-gray-500">{friend.email}</p>}
               </div>
               <div className="text-right text-sm text-gray-400">
                 <p>Friends since</p>
@@ -121,7 +122,7 @@ export const FriendsManager: React.FC<FriendsManagerProps> = ({ userId, userName
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-gray-900">{otherUser?.fullName}</p>
-                  <p className="text-sm text-gray-500">{otherUser?.email}</p>
+                  {!isPlaceholderEmail(otherUser?.email) && <p className="text-sm text-gray-500">{otherUser?.email}</p>}
                 </div>
                 <div className="text-right">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -152,7 +153,7 @@ export const FriendsManager: React.FC<FriendsManagerProps> = ({ userId, userName
               </div>
               <div className="flex-1">
                 <p className="font-medium text-gray-900">{block.blocked_user?.full_name}</p>
-                <p className="text-sm text-gray-500">{block.blocked_user?.email}</p>
+                {!isPlaceholderEmail(block.blocked_user?.email) && <p className="text-sm text-gray-500">{block.blocked_user?.email}</p>}
               </div>
               <div className="text-sm text-gray-400">
                 Blocked {formatDate(block.created_at)}

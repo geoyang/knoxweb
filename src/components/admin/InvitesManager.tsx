@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { adminApi } from '../../services/adminApi';
+import { getDisplayIdentifier, isPlaceholderEmail } from '../../utils/phoneDisplayUtils';
 
 interface Invitation {
   id: string;
@@ -317,7 +318,7 @@ export const InvitesManager: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-gray-900 truncate">
-                        {inv.user_profile?.full_name || inv.email}
+                        {inv.user_profile?.full_name || getDisplayIdentifier(inv.email)}
                       </p>
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(inv.status)}`}>
                         {inv.status}
@@ -326,7 +327,7 @@ export const InvitesManager: React.FC = () => {
                         {formatRoleLabel(inv.role)}
                       </span>
                     </div>
-                    {inv.user_profile?.full_name && (
+                    {inv.user_profile?.full_name && !isPlaceholderEmail(inv.email) && (
                       <p className="text-sm text-gray-500 truncate">{inv.email}</p>
                     )}
                     <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
@@ -338,7 +339,7 @@ export const InvitesManager: React.FC = () => {
                       </span>
                       {inv.invited_by_profile && (
                         <span>
-                          by {inv.invited_by_profile.full_name || inv.invited_by_profile.email}
+                          by {inv.invited_by_profile.full_name || getDisplayIdentifier(inv.invited_by_profile.email)}
                         </span>
                       )}
                       {inv.date_responded && (

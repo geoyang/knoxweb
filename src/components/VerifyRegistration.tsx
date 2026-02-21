@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
+import { getDisplayIdentifier } from '../utils/phoneDisplayUtils';
 
 interface VerificationResult {
   success: boolean;
@@ -122,7 +123,7 @@ export const VerifyRegistration: React.FC = () => {
                 <strong>Name:</strong> {result.user.firstName} {result.user.lastName}
               </p>
               <p className="text-sm text-gray-600">
-                <strong>Email:</strong> {result.user.email}
+                <strong>Email:</strong> {getDisplayIdentifier(result.user.email)}
               </p>
               {result.circle && (
                 <p className="text-sm text-gray-600">

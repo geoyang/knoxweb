@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
+import { isPlaceholderEmail } from '../utils/phoneDisplayUtils';
 
 interface ShareRequestData {
   id: string;
@@ -248,7 +249,7 @@ export const ShareRequest: React.FC = () => {
           </div>
           <div>
             <p className="font-semibold text-gray-800">{request.requester.full_name}</p>
-            <p className="text-sm text-gray-500">{request.requester.email}</p>
+            {!isPlaceholderEmail(request.requester.email) && <p className="text-sm text-gray-500">{request.requester.email}</p>}
           </div>
         </div>
 

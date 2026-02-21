@@ -6,6 +6,7 @@ import { adminApi } from '../services/adminApi';
 import { useAuth } from '../context/AuthContext';
 import { MediaGallery } from './MediaGallery';
 import { MomentsGallery } from './MomentsGallery';
+import { getDisplayIdentifier } from '../utils/phoneDisplayUtils';
 
 type TabType = 'home' | 'media' | 'moments';
 
@@ -404,7 +405,7 @@ export const Dashboard: React.FC = () => {
               <p className="font-medium text-gray-800">
                 {user?.full_name}
               </p>
-              <p className="text-sm text-gray-500">{user?.email}</p>
+              <p className="text-sm text-gray-500">{getDisplayIdentifier(user?.email)}</p>
             </div>
             <button
               onClick={handleLogout}

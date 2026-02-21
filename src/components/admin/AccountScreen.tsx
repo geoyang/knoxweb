@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { adminApi } from '../../services/adminApi';
 import { getSelectedEnvironmentKey, setEnvironment, ENVIRONMENTS, getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
+import { getDisplayIdentifier, isPlaceholderEmail } from '../../utils/phoneDisplayUtils';
 
 interface UserStats {
   albums: number;
@@ -306,9 +307,9 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
 
   if (!isOpen) return null;
 
-  const displayName = userProfile?.full_name || user?.email || 'Unknown User';
+  const displayName = userProfile?.full_name || getDisplayIdentifier(user?.email) || 'Unknown User';
   const createdAt = user?.created_at ? new Date(user.created_at) : null;
-  const avatarInitial = userProfile?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U';
+  const avatarInitial = userProfile?.full_name?.[0]?.toUpperCase() || getDisplayIdentifier(user?.email)?.[0]?.toUpperCase() || 'U';
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -413,7 +414,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
             <h3 className="text-lg font-semibold text-gray-900 mb-1">
               {displayName}
             </h3>
-            {userProfile?.full_name && (
+            {userProfile?.full_name && !isPlaceholderEmail(user?.email) && (
               <p className="text-sm text-gray-500 mb-2">{user?.email}</p>
             )}
             {isSuperAdmin && (
@@ -454,7 +455,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ isOpen, onClose })
                   </div>
                   <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">
                     <span className="text-sm text-gray-600">Email</span>
-                    <span className="text-sm font-medium text-gray-900">{user?.email}</span>
+                    <span className="text-sm font-medium text-gray-900">{getDisplayIdentifier(user?.email)}</span>
                   </div>
                   {createdAt && (
                     <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-md">

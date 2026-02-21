@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { adminApi } from '../../services/adminApi';
+import { getDisplayIdentifier, isPlaceholderEmail } from '../../utils/phoneDisplayUtils';
 
 interface PendingMember {
   circle_user_id: string;
@@ -171,19 +172,19 @@ export const PendingMembersManager: React.FC = () => {
                       />
                     ) : (
                       <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-600">
-                        {(member.full_name?.[0] || member.email[0]).toUpperCase()}
+                        {(member.full_name?.[0] || getDisplayIdentifier(member.email)[0]).toUpperCase()}
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-gray-900 truncate">
-                          {member.full_name || member.email}
+                          {member.full_name || getDisplayIdentifier(member.email)}
                         </p>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getRoleColor(member.role)}`}>
                           {formatRoleLabel(member.role)}
                         </span>
                       </div>
-                      {member.full_name && (
+                      {member.full_name && !isPlaceholderEmail(member.email) && (
                         <p className="text-sm text-gray-500 truncate">{member.email}</p>
                       )}
                     </div>
