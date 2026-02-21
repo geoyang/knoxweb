@@ -265,7 +265,7 @@ export const MemoryInputBar: React.FC<MemoryInputBarProps> = ({
           fileToUpload = selectedFile!;
         }
 
-        const uploadResult = await memoriesApi.uploadMemoryMedia(fileToUpload, assetId, mediaType);
+        const uploadResult = await memoriesApi.uploadMemoryMedia(fileToUpload, assetId, mediaType as 'image' | 'video' | 'audio');
         if (!uploadResult) {
           throw new Error('Failed to upload file');
         }

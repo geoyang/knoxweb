@@ -47,14 +47,8 @@ export const FaceClustersTab: React.FC = () => {
       const result = await aiApi.getClusters();
       if (result.success && result.data) {
         // Map cluster_id to id for frontend compatibility
-        const mappedClusters = (result.data.clusters || []).map((c: {
-          cluster_id: string;
-          name?: string;
-          contact_id?: string;
-          face_count: number;
-          sample_faces?: { asset_id: string; face_index: number; thumbnail_url?: string; is_from_video?: boolean }[];
-        }) => ({
-          id: c.cluster_id,
+        const mappedClusters = (result.data.clusters || []).map((c: any) => ({
+          id: c.cluster_id || c.id,
           name: c.name,
           contact_id: c.contact_id,
           face_count: c.face_count,

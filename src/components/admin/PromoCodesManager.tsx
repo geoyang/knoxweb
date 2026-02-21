@@ -441,7 +441,7 @@ export const PromoCodesManager: React.FC = () => {
           className="w-full input"
         >
           {DURATION_PRESETS.map((preset) => (
-            <option key={preset.label} value={preset.isPerpetual ? 'perpetual' : preset.days === -1 ? 'custom' : preset.days}>
+            <option key={preset.label} value={preset.isPerpetual ? 'perpetual' : preset.days === -1 ? 'custom' : preset.days ?? 0}>
               {preset.label}
             </option>
           ))}
