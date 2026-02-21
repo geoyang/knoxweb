@@ -20,9 +20,9 @@ interface ExportJob {
   result: {
     download_url: string;
     file_size_bytes: number;
-    asset_count: number;
-    album_count: number;
-    folder_count: number;
+    asset_count?: number;
+    album_count?: number;
+    folder_count?: number;
     expires_at: string;
   } | null;
   error: {

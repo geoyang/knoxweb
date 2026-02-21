@@ -60,6 +60,8 @@ export const AdminDashboard: React.FC = () => {
   const [showUploader, setShowUploader] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const locationRef = React.useRef(location);
+  locationRef.current = location;
 
   // Get member duration
   const getMemberDuration = (): string => {
@@ -206,11 +208,22 @@ export const AdminDashboard: React.FC = () => {
   }, [user?.id]);
 
   // Global drag-drop for file upload
+  // Skip on pages that have their own drop handlers (album detail, folders)
   useEffect(() => {
     let dragCounter = 0;
 
+    const hasOwnDropHandler = () => {
+      const path = locationRef.current.pathname;
+      // Album detail: /admin/albums/<uuid>
+      if (/^\/admin\/albums\/[^/]+$/.test(path)) return true;
+      // Folders page has its own drop handler
+      if (path.startsWith('/admin/folders')) return true;
+      return false;
+    };
+
     const handleDragEnter = (e: DragEvent) => {
       e.preventDefault();
+      if (hasOwnDropHandler()) return;
       dragCounter++;
       if (e.dataTransfer?.types.includes('Files')) {
         setIsDraggingOver(true);
@@ -219,6 +232,7 @@ export const AdminDashboard: React.FC = () => {
 
     const handleDragLeave = (e: DragEvent) => {
       e.preventDefault();
+      if (hasOwnDropHandler()) return;
       dragCounter--;
       if (dragCounter === 0) {
         setIsDraggingOver(false);
@@ -232,6 +246,10 @@ export const AdminDashboard: React.FC = () => {
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
       dragCounter = 0;
+      if (hasOwnDropHandler()) {
+        setIsDraggingOver(false);
+        return;
+      }
       setIsDraggingOver(false);
 
       if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
@@ -645,7 +663,7 @@ export const AdminDashboard: React.FC = () => {
             <Route path="circles/:circleId/add-member" element={<AddMember />} />
             <Route path="pending-members" element={<PendingMembersManager />} />
             <Route path="invites" element={<InvitesManager />} />
-            <Route path="links" element={<LinksManager userId={user.id} userName={userProfile?.full_name} />} />
+            <Route path="links" element={<LinksManager userId={user.id} userName={userProfile?.full_name ?? undefined} />} />
             <Route path="contacts" element={<ContactsManager />} />
             <Route path="import" element={<ImportManager />} />
             <Route path="ai-processing" element={<AIProcessingManager />} />

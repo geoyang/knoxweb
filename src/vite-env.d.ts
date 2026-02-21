@@ -9,6 +9,15 @@ interface ImportMeta {
   readonly env: ImportMetaEnv
 }
 
+// Type declaration for firebase/messaging
+declare module 'firebase/messaging' {
+  export type Messaging = any;
+  export function getMessaging(app?: any): Messaging;
+  export function getToken(messaging: Messaging, options?: any): Promise<string>;
+  export function onMessage(messaging: Messaging, callback: (payload: any) => void): () => void;
+  export function deleteToken(messaging: Messaging): Promise<boolean>;
+}
+
 // Type declaration for heic2any
 declare module 'heic2any' {
   interface Heic2AnyOptions {

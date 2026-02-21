@@ -18,7 +18,7 @@ export const ChatSearchInChat: React.FC<ChatSearchInChatProps> = ({
   const [results, setResults] = useState<ConversationSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<NodeJS.Timeout>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {

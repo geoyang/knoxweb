@@ -95,7 +95,7 @@ class ContactsApiService {
       const accessToken = getAccessToken();
 
       if (!accessToken) {
-        console.error('No valid session for API call:', error);
+        console.error('No valid session for API call');
         return null;
       }
 

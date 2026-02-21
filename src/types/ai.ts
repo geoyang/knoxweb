@@ -43,11 +43,17 @@ export interface ProcessingResult {
   text?: string;
   description?: string;
   processing_time_ms?: number;
+  // Nested response shapes from API
+  result?: Record<string, any>;
+  ocr?: { text?: string };
+  status?: string;
+  error?: string;
 }
 
 // Background processing job
 export interface ProcessingJob {
   id: string;
+  job_id?: string;
   job_type: string;
   status: JobStatus;
   progress: number;
@@ -61,11 +67,13 @@ export interface ProcessingJob {
 // Face cluster
 export interface FaceCluster {
   id: string;
+  cluster_id?: string;
   name?: string;
   contact_id?: string;
   face_count: number;
   representative_face_id?: string;
   updated_at?: string;
+  sample_faces?: SampleFace[];
 }
 
 // Sample face in a cluster

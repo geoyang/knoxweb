@@ -45,7 +45,7 @@ class MemoriesApiService {
       const accessToken = getAccessToken();
 
       if (!accessToken) {
-        console.error('No valid session for API call:', error);
+        console.error('No valid session for API call');
         return null;
       }
 
@@ -193,11 +193,16 @@ class MemoriesApiService {
   ): Promise<{ url: string; thumbnailUrl?: string } | null> {
     try {
       const accessToken = getAccessToken();
-      if (!session?.user) {
+      if (!accessToken) {
         throw new Error('User not authenticated');
       }
 
-      const userId = session.user.id;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const userId = user.id;
       const timestamp = Date.now();
       const getDefaultExtension = () => {
         if (mediaType === 'video') return 'mp4';

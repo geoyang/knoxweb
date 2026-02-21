@@ -1379,7 +1379,6 @@ export const AlbumDetailView: React.FC = () => {
 
                 <div className="flex-1 overflow-y-auto p-4">
                   {/* Memory Input Bar - show at top for users who can add */}
-                  {console.log('[AlbumDetailView] Rendering memories section, canAddMemory:', canAddMemory)}
                   {canAddMemory && (
                     <div className="mb-4">
                       <MemoryInputBar

@@ -24,7 +24,7 @@ export interface Folder {
   item_count?: number;
   type_counts?: Record<string, number>;
   previews?: {
-    album_previews: Array<{ id: string; title: string; keyphoto: string | null; keyphoto_thumbnail: string | null }>;
+    album_previews: Array<{ id: string; title: string; keyphoto?: string; keyphoto_thumbnail?: string }>;
     asset_previews: Array<{ id: string; thumbnail: string | null; web_uri: string | null; media_type: string | null }>;
   };
   child_folder_count?: number;
@@ -844,7 +844,7 @@ export async function uploadDocumentFile(
     .from('documents')
     .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 year expiry
 
-  const fileUrl = urlData?.signedUrl || `${SUPABASE_URL}/storage/v1/object/documents/${filePath}`;
+  const fileUrl = urlData?.signedUrl || `${getSupabaseUrl()}/storage/v1/object/documents/${filePath}`;
 
   // Determine content type based on MIME type
   let contentType: 'text' | 'markdown' | 'rich_text' | 'file' = 'file';

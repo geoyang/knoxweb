@@ -15,7 +15,7 @@ export const ChatSearchGlobal: React.FC<ChatSearchGlobalProps> = ({
   const [loading, setLoading] = useState(false);
   const [totalHits, setTotalHits] = useState(0);
   const [showResults, setShowResults] = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<NodeJS.Timeout>(undefined);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
