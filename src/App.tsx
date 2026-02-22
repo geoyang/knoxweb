@@ -19,6 +19,7 @@ import { SharedAlbumViewer } from './components/SharedAlbumViewer';
 import { SubscriptionPage } from './components/SubscriptionPage';
 import { AccountPage } from './components/AccountPage';
 import { FacebookImport } from './components/FacebookImport';
+import { Unsubscribe } from './components/Unsubscribe';
 
 function App() {
   return (
@@ -48,6 +49,9 @@ function App() {
 
         {/* Shared album viewer route */}
         <Route path="/shared-album/:token" element={<SharedAlbumViewer />} />
+
+        {/* Email unsubscribe (public, no auth) */}
+        <Route path="/unsubscribe" element={<Unsubscribe />} />
 
         {/* Subscription management route */}
         <Route path="/subscription" element={<SubscriptionPage />} />
