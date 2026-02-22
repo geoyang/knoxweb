@@ -16,18 +16,29 @@ export const Unsubscribe: React.FC = () => {
 
   const apiBase = `${getSupabaseUrl()}/functions/v1/email-unsubscribe`;
 
+  console.log('[Unsubscribe] Component mounted, uid:', uid, 'sig:', sig?.slice(0, 8) + '...');
+  console.log('[Unsubscribe] API base:', apiBase);
+
   useEffect(() => {
     if (!uid || !sig) {
+      console.warn('[Unsubscribe] Missing uid or sig params');
       setError('Invalid unsubscribe link.');
       setStatus('error');
       return;
     }
 
-    fetch(`${apiBase}?uid=${uid}&sig=${sig}`, {
+    const url = `${apiBase}?uid=${uid}&sig=${sig}`;
+    console.log('[Unsubscribe] Fetching status from:', url);
+
+    fetch(url, {
       headers: { apikey: getSupabaseAnonKey() },
     })
-      .then((res) => res.json())
+      .then((res) => {
+        console.log('[Unsubscribe] Response status:', res.status);
+        return res.json();
+      })
       .then((data) => {
+        console.log('[Unsubscribe] Response data:', data);
         if (data.error) {
           setError(data.error);
           setStatus('error');
@@ -39,27 +50,32 @@ export const Unsubscribe: React.FC = () => {
           setStatus('confirm');
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[Unsubscribe] Fetch error:', err);
         setError('Something went wrong. Please try again.');
         setStatus('error');
       });
   }, [uid, sig, apiBase]);
 
   const handleUnsubscribe = async () => {
+    console.log('[Unsubscribe] User confirmed unsubscribe');
     setSubmitting(true);
     try {
       const res = await fetch(`${apiBase}?uid=${uid}&sig=${sig}`, {
         method: 'POST',
         headers: { apikey: getSupabaseAnonKey() },
       });
+      console.log('[Unsubscribe] POST response status:', res.status);
       const data = await res.json();
+      console.log('[Unsubscribe] POST response data:', data);
       if (data.error) {
         setError(data.error);
         setStatus('error');
       } else {
         setStatus('success');
       }
-    } catch {
+    } catch (err) {
+      console.error('[Unsubscribe] POST error:', err);
       setError('Something went wrong. Please try again.');
       setStatus('error');
     } finally {
