@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { CountryCodePicker } from './ui/CountryCodePicker';
+import { DEFAULT_COUNTRY, CountryData } from '../data/countries';
+import { formatPhoneForInput, extractDigits } from '../utils/phoneFormatting';
 
 interface Props {
   onVerified: (phone: string) => void;
@@ -17,6 +20,7 @@ export const PhoneVerificationFlow: React.FC<Props> = ({ onVerified, onCancel, i
   const [error, setError] = useState<string | null>(null);
   const [maskedPhone, setMaskedPhone] = useState('');
   const [cooldown, setCooldown] = useState(0);
+  const [selectedCountry, setSelectedCountry] = useState<CountryData>(DEFAULT_COUNTRY);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -25,22 +29,11 @@ export const PhoneVerificationFlow: React.FC<Props> = ({ onVerified, onCancel, i
     }
   }, [step]);
 
-  const formatPhoneInput = (text: string) => {
-    const cleaned = text.replace(/\D/g, '');
-    if (cleaned.length >= 10) {
-      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
-    } else if (cleaned.length >= 6) {
-      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
-    } else if (cleaned.length >= 3) {
-      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3)}`;
-    }
-    return cleaned;
-  };
-
   const handleSendCode = async () => {
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 10) {
-      setError('Please enter a valid 10-digit phone number.');
+    const digits = extractDigits(phone, selectedCountry.dialCode);
+    const minDigits = selectedCountry.dialCode === '+1' ? 10 : 7;
+    if (digits.length < minDigits) {
+      setError('Please enter a valid phone number.');
       return;
     }
 
@@ -48,7 +41,7 @@ export const PhoneVerificationFlow: React.FC<Props> = ({ onVerified, onCancel, i
     setError(null);
     try {
       const { data, error: fnError } = await supabase.functions.invoke('send-phone-verification', {
-        body: { phone: digits },
+        body: { phone: `${selectedCountry.dialCode}${digits}` },
       });
 
       if (fnError || !data?.success) {
@@ -120,15 +113,21 @@ export const PhoneVerificationFlow: React.FC<Props> = ({ onVerified, onCancel, i
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
-              placeholder="(555) 123-4567"
-              maxLength={14}
-              className="input text-center text-lg"
-              autoFocus
-            />
+            <div className="flex gap-2">
+              <CountryCodePicker
+                selectedCountry={selectedCountry}
+                onSelect={(c) => { setSelectedCountry(c); setPhone(''); }}
+              />
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(formatPhoneForInput(e.target.value, selectedCountry.dialCode, phone))}
+                placeholder={selectedCountry.dialCode === '+1' ? '(555) 123-4567' : 'phone number'}
+                maxLength={selectedCountry.dialCode === '+1' ? 14 : 15}
+                className="input text-center text-lg flex-1"
+                autoFocus
+              />
+            </div>
           </div>
 
           {error && <div className="alert-error text-sm">{error}</div>}
@@ -139,7 +138,7 @@ export const PhoneVerificationFlow: React.FC<Props> = ({ onVerified, onCancel, i
             </button>
             <button
               onClick={handleSendCode}
-              disabled={loading || phone.replace(/\D/g, '').length < 10}
+              disabled={loading || extractDigits(phone, selectedCountry.dialCode).length < (selectedCountry.dialCode === '+1' ? 10 : 7)}
               className="flex-1 btn-primary py-2"
             >
               {loading ? 'Sending...' : 'Send Code'}
