@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface StepCardProps {
   number: number;
   title: string;
   description: string;
   illustration: React.ReactNode;
-  tip?: string;
+  tip?: React.ReactNode;
 }
 
 function StepCard({ number, title, description, illustration, tip }: StepCardProps) {
@@ -29,93 +29,161 @@ function StepCard({ number, title, description, illustration, tip }: StepCardPro
   );
 }
 
+const TOTAL_STEPS = 9;
+
+const STEPS: Omit<StepCardProps, 'illustration'>[] = [
+  {
+    number: 1,
+    title: 'Open "Settings & Privacy"',
+    description: 'On Facebook, tap the menu icon, then go to Settings & Privacy > Settings.',
+    tip: (
+      <>
+        On a computer? Go directly to{' '}
+        <a
+          href="https://accountscenter.facebook.com/info_and_permissions/dyi"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline font-medium text-amber-800 hover:text-amber-900"
+        >
+          accountscenter.facebook.com
+        </a>{' '}
+        and skip to step 4.
+      </>
+    ),
+  },
+  {
+    number: 2,
+    title: 'Tap "See more in Accounts Center"',
+    description: 'Scroll down to the Meta Accounts Center section and tap "See more in Accounts Center".',
+  },
+  {
+    number: 3,
+    title: 'Select "Your information and permissions"',
+    description: 'In the Accounts Center sidebar, tap "Your information and permissions", then tap "Export your information".',
+  },
+  {
+    number: 4,
+    title: 'Select "Export to device"',
+    description: 'Choose to export the data to your device so you can pick it up as a ZIP file.',
+  },
+  {
+    number: 5,
+    title: 'Choose your format',
+    description: 'JSON is recommended for the best import experience. HTML also works — Kizu supports both formats.',
+    tip: 'JSON includes more metadata. If you already have an HTML export, that works too.',
+  },
+  {
+    number: 6,
+    title: 'Set Date range to "All time"',
+    description: 'Select All time to get your complete Facebook history, or choose a custom range.',
+  },
+  {
+    number: 7,
+    title: 'Set Media quality to "Higher quality"',
+    description: 'This ensures your photos and videos are imported at the best resolution.',
+  },
+  {
+    number: 8,
+    title: 'Click "Start export" and wait',
+    description: "Facebook will prepare your file and notify you when it's ready. This can take minutes to hours.\n\nYou have 4 days to download it once it's ready.",
+    tip: 'Save the ZIP somewhere easy to find, like your Desktop or Downloads folder.',
+  },
+  {
+    number: 9,
+    title: 'Select the file in Kizu',
+    description: 'Click the button below to pick your Facebook export ZIP. Kizu will read it, show you a summary, and start importing.',
+  },
+];
+
+const ILLUSTRATIONS: React.ReactNode[] = [
+  <SettingsPrivacyIllustration />,
+  <AccountsCenterIllustration />,
+  <YourInfoIllustration />,
+  <ExportToDeviceIllustration />,
+  <FormatIllustration />,
+  <DateRangeIllustration />,
+  <QualityIllustration />,
+  <StartExportIllustration />,
+  <ImportIllustration />,
+];
+
 export function FacebookImportGuide() {
+  // step 0 = hero, steps 1-9 = instruction steps
+  const [step, setStep] = useState(0);
+
   return (
     <div className="space-y-4">
-      {/* Hero */}
-      <div className="text-center mb-2">
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <FbLogo />
-          <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-          </svg>
-          <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center border-2 border-gray-200">
-            <span className="text-white font-bold text-xl">K</span>
+      {step === 0 ? (
+        /* Hero screen */
+        <div className="text-center py-6">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <FbLogo />
+            <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+            <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center border-2 border-gray-200">
+              <span className="text-white font-bold text-xl">K</span>
+            </div>
           </div>
+          <h1 className="text-xl font-bold text-gray-900 leading-snug">
+            Bring your memories<br />from Facebook
+          </h1>
+          <p className="text-sm text-gray-500 mt-1.5">
+            Import your photos, videos, comments, and reactions in just a few steps.
+          </p>
+          <button
+            onClick={() => setStep(1)}
+            className="mt-6 px-6 py-2.5 bg-[#1877F2] text-white text-sm font-semibold rounded-full hover:bg-[#166FE5] transition-colors"
+          >
+            Get Started
+          </button>
         </div>
-        <h1 className="text-xl font-bold text-gray-900 leading-snug">
-          Bring your memories<br />from Facebook
-        </h1>
-        <p className="text-sm text-gray-500 mt-1.5">
-          Import your photos, videos, comments, and reactions in just a few steps.
-        </p>
-      </div>
+      ) : (
+        /* Step card */
+        <StepCard
+          {...STEPS[step - 1]}
+          illustration={ILLUSTRATIONS[step - 1]}
+        />
+      )}
 
-      <StepCard
-        number={1}
-        title='Open "Settings & Privacy"'
-        description={'On Facebook, tap the menu icon, then go to Settings & Privacy > Settings.'}
-        illustration={<SettingsPrivacyIllustration />}
-        tip="On a computer? Go directly to accountscenter.facebook.com/info_and_permissions/dyi and skip to step 4."
-      />
+      {/* Step dots */}
+      {step > 0 && (
+        <div className="flex items-center justify-center gap-1.5 pt-1">
+          {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => setStep(i + 1)}
+              className={`w-2 h-2 rounded-full transition-colors ${
+                i + 1 === step ? 'bg-[#1877F2]' : 'bg-gray-300 hover:bg-gray-400'
+              }`}
+              aria-label={`Go to step ${i + 1}`}
+            />
+          ))}
+        </div>
+      )}
 
-      <StepCard
-        number={2}
-        title='Tap "See more in Accounts Center"'
-        description={'Scroll down to the Meta Accounts Center section and tap "See more in Accounts Center".'}
-        illustration={<AccountsCenterIllustration />}
-      />
-
-      <StepCard
-        number={3}
-        title='Select "Your information and permissions"'
-        description={'In the Accounts Center sidebar, tap "Your information and permissions", then tap "Export your information".'}
-        illustration={<YourInfoIllustration />}
-      />
-
-      <StepCard
-        number={4}
-        title='Select "Export to device"'
-        description="Choose to export the data to your device so you can pick it up as a ZIP file."
-        illustration={<ExportToDeviceIllustration />}
-      />
-
-      <StepCard
-        number={5}
-        title='Choose your format'
-        description="JSON is recommended for the best import experience. HTML also works — Kizu supports both formats."
-        illustration={<FormatIllustration />}
-        tip="JSON includes more metadata. If you already have an HTML export, that works too."
-      />
-
-      <StepCard
-        number={6}
-        title='Set Date range to "All time"'
-        description="Select All time to get your complete Facebook history, or choose a custom range."
-        illustration={<DateRangeIllustration />}
-      />
-
-      <StepCard
-        number={7}
-        title='Set Media quality to "Higher quality"'
-        description="This ensures your photos and videos are imported at the best resolution."
-        illustration={<QualityIllustration />}
-      />
-
-      <StepCard
-        number={8}
-        title='Click "Start export" and wait'
-        description={"Facebook will prepare your file and notify you when it's ready. This can take minutes to hours.\n\nYou have 4 days to download it once it's ready."}
-        illustration={<StartExportIllustration />}
-        tip="Save the ZIP somewhere easy to find, like your Desktop or Downloads folder"
-      />
-
-      <StepCard
-        number={9}
-        title="Select the file in Kizu"
-        description="Click the button below to pick your Facebook export ZIP. Kizu will read it, show you a summary, and start importing."
-        illustration={<ImportIllustration />}
-      />
+      {/* Navigation */}
+      {step > 0 && (
+        <div className="flex items-center justify-between pt-1">
+          <button
+            onClick={() => setStep(step - 1)}
+            className="text-sm text-gray-500 hover:text-gray-700 font-medium"
+          >
+            {step === 1 ? '← Overview' : '← Back'}
+          </button>
+          <span className="text-xs text-gray-400">{step} of {TOTAL_STEPS}</span>
+          {step < TOTAL_STEPS ? (
+            <button
+              onClick={() => setStep(step + 1)}
+              className="text-sm text-[#1877F2] hover:text-[#166FE5] font-medium"
+            >
+              Next →
+            </button>
+          ) : (
+            <span className="text-sm text-gray-300">Last step</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

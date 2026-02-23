@@ -527,12 +527,48 @@ async function parseHtmlCaptions(
 /* ------------------------------------------------------------------ */
 
 function findRootPrefix(zip: JSZip): string {
-  const topEntries = Object.keys(zip.files).map(p => p.split('/')[0]);
+  const allPaths = Object.keys(zip.files);
+
+  // Strip single top-level wrapper folder (e.g. "facebook-username/")
+  const topEntries = allPaths.map(p => p.split('/')[0]);
   const uniqueTop = [...new Set(topEntries)];
+  let prefix = '';
   if (uniqueTop.length === 1 && zip.files[uniqueTop[0] + '/']) {
-    return uniqueTop[0] + '/';
+    prefix = uniqueTop[0] + '/';
   }
-  return '';
+
+  // Look for activity root (e.g. "your_facebook_activity/", "your_activity_across_facebook/")
+  const activityDirNames = allPaths
+    .filter(p => {
+      const relative = prefix ? p.replace(prefix, '') : p;
+      const parts = relative.split('/');
+      return parts.length >= 2 && zip.files[p]?.dir;
+    })
+    .map(p => {
+      const relative = prefix ? p.replace(prefix, '') : p;
+      return relative.split('/')[0];
+    })
+    .filter(Boolean);
+
+  const uniqueActivityDirs = [...new Set(activityDirNames)];
+  for (const dir of uniqueActivityDirs) {
+    const lower = dir.toLowerCase().replace(/ /g, '_');
+    if (lower.includes('facebook_activity') || lower.includes('your_activity')) {
+      return `${prefix}${dir}/`;
+    }
+  }
+
+  // Fallback: check if known FB data dirs (posts, photos_and_videos) exist at second level
+  for (const dir of uniqueActivityDirs) {
+    const testPrefix = `${prefix}${dir}/`;
+    const hasKnownDir = allPaths.some(p =>
+      p.startsWith(`${testPrefix}posts/`) ||
+      p.startsWith(`${testPrefix}photos_and_videos/`)
+    );
+    if (hasKnownDir) return testPrefix;
+  }
+
+  return prefix;
 }
 
 function shouldSkipUri(uri: string): boolean {
@@ -589,17 +625,29 @@ async function extractMediaAsset(
 }
 
 function resolveMediaPathInZip(zip: JSZip, rootPrefix: string, uri: string): string | null {
-  // Try with rootPrefix
+  // Try with rootPrefix (activity root)
   const withPrefix = `${rootPrefix}${uri}`;
   if (zip.files[withPrefix] && !zip.files[withPrefix].dir) return withPrefix;
-  // Try without prefix
+
+  // Try without any prefix (raw uri from JSON)
   if (zip.files[uri] && !zip.files[uri].dir) return uri;
-  // Try just filename in common dirs
+
+  // Try with just the outer wrapper folder (export root, not activity root)
+  // e.g. rootPrefix="username/your_facebook_activity/" → try "username/{uri}"
+  const parts = rootPrefix.split('/').filter(Boolean);
+  if (parts.length >= 2) {
+    const exportRoot = parts[0] + '/';
+    const withExportRoot = `${exportRoot}${uri}`;
+    if (zip.files[withExportRoot] && !zip.files[withExportRoot].dir) return withExportRoot;
+  }
+
+  // Try just filename in common media dirs
   const filename = uri.split('/').pop() || '';
-  for (const dir of ['posts/media/', 'photos_and_videos/']) {
+  for (const dir of ['posts/media/', 'photos_and_videos/', 'photos_and_videos/album/']) {
     const tryPath = `${rootPrefix}${dir}${filename}`;
     if (zip.files[tryPath] && !zip.files[tryPath].dir) return tryPath;
   }
+
   return null;
 }
 
