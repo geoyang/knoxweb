@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
+import { getDisplayIdentifier, isPlaceholderEmail } from '../../utils/phoneDisplayUtils';
 
 interface CircleMember {
   id: string;
@@ -184,7 +185,7 @@ export const CircleMemberEdit: React.FC = () => {
     );
   }
 
-  const memberName = member?.profiles?.full_name || member?.email || 'Unknown Member';
+  const memberName = member?.profiles?.full_name || getDisplayIdentifier(member?.email) || 'Unknown Member';
   const currentRoleInfo = getRoleInfo(member?.role || 'read_only');
   const requestedRoleInfo = requestedRole ? getRoleInfo(requestedRole) : null;
 
@@ -247,10 +248,10 @@ export const CircleMemberEdit: React.FC = () => {
           )}
           <div>
             <h2 className="text-xl font-semibold text-theme-primary">{memberName}</h2>
-            {member?.profiles?.email && member.profiles.email !== member.email && (
+            {member?.profiles?.email && member.profiles.email !== member.email && !isPlaceholderEmail(member.profiles.email) && (
               <p className="text-theme-secondary">{member.profiles.email}</p>
             )}
-            {member?.email && (
+            {member?.email && !isPlaceholderEmail(member.email) && (
               <p className="text-theme-secondary text-sm">{member.email}</p>
             )}
             <div className="flex items-center gap-2 mt-2">

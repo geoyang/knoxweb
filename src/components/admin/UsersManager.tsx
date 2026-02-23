@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../../services/adminApi';
+import { getDisplayIdentifier, isPlaceholderEmail } from '../../utils/phoneDisplayUtils';
 
 interface User {
   id: string;
@@ -375,7 +376,7 @@ export const UsersManager: React.FC = () => {
                       <div className="text-sm font-medium text-gray-900">
                         {user.full_name || 'Unnamed User'}
                       </div>
-                      <div className="text-sm text-gray-500">{user.email}</div>
+                      <div className="text-sm text-gray-500">{getDisplayIdentifier(user.email)}</div>
                       {user.id === currentUser?.id && (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           You
@@ -480,7 +481,7 @@ export const UsersManager: React.FC = () => {
                       </button>
                     </div>
                   )}
-                  <p className="text-gray-600">{selectedUser.email}</p>
+                  <p className="text-gray-600">{getDisplayIdentifier(selectedUser.email)}</p>
                   <div className="flex items-center space-x-2 mt-1">
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                       Active

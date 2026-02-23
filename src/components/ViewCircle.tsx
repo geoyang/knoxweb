@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { getSupabaseUrl, getSupabaseAnonKey } from '../lib/environments';
+import { getDisplayIdentifier, isPlaceholderEmail } from '../utils/phoneDisplayUtils';
 
 interface InviteData {
   id: string;
@@ -146,7 +147,7 @@ export const ViewCircle: React.FC = () => {
 
       // If user is logged in and email matches, verify they can accept
       if (session?.user && session.user.email?.toLowerCase() !== inviteData.email.toLowerCase()) {
-        setError(`This invitation was sent to ${inviteData.email}. Please log in with that email address.`);
+        setError(`This invitation was sent to ${getDisplayIdentifier(inviteData.email)}. Please log in with that account.`);
       }
     } catch (err) {
       console.error('Error loading invite:', err);
@@ -328,7 +329,7 @@ export const ViewCircle: React.FC = () => {
           )}
           <div className="bg-blue-50 rounded-lg p-4 mb-6">
             <p className="text-sm text-blue-800">
-              Please log in with <strong>{invite.email}</strong> to accept this invitation.
+              Please log in with <strong>{getDisplayIdentifier(invite.email)}</strong> to accept this invitation.
             </p>
           </div>
           <button
@@ -358,7 +359,7 @@ export const ViewCircle: React.FC = () => {
         <div className="bg-gray-50 rounded-lg p-4 mb-6">
           <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
             <span>Signed in as</span>
-            <strong>{user.email}</strong>
+            <strong>{getDisplayIdentifier(user.email)}</strong>
           </div>
         </div>
 

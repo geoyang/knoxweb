@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { memoriesApi, Memory, MemoryInput } from '../services/memoriesApi';
 import { ReactionBar } from './ReactionBar';
 import { MemoryInputBar } from './MemoryInputBar';
+import { getDisplayIdentifier } from '../utils/phoneDisplayUtils';
 
 interface MemoriesPanelProps {
   assetId: string;
@@ -442,14 +443,14 @@ export const MemoriesPanel: React.FC<MemoriesPanelProps> = ({
       ) : (
         <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
           <span className="text-gray-500 text-sm font-medium">
-            {(reply.user.name || reply.user.email || '?').charAt(0).toUpperCase()}
+            {(reply.user.name || getDisplayIdentifier(reply.user.email) || '?').charAt(0).toUpperCase()}
           </span>
         </div>
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className="font-medium text-sm text-gray-900">
-            {reply.user.name || reply.user.email}
+            {reply.user.name || getDisplayIdentifier(reply.user.email)}
           </span>
           <span className="text-xs text-gray-500">{formatDate(reply.created_at)}</span>
         </div>
@@ -491,14 +492,14 @@ export const MemoriesPanel: React.FC<MemoriesPanelProps> = ({
           ) : (
             <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
               <span className="text-blue-600 font-medium">
-                {(memory.user.name || memory.user.email || '?').charAt(0).toUpperCase()}
+                {(memory.user.name || getDisplayIdentifier(memory.user.email) || '?').charAt(0).toUpperCase()}
               </span>
             </div>
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="font-medium text-gray-900">
-                {memory.user.name || memory.user.email}
+                {memory.user.name || getDisplayIdentifier(memory.user.email)}
               </span>
               <span className="text-sm text-gray-500">{formatDate(memory.created_at)}</span>
               <span className={`text-xs px-2 py-0.5 rounded-full ${

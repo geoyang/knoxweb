@@ -7,6 +7,7 @@ import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 import { contactsApi } from '../../services/contactsApi';
 import { getFolders, Folder } from '../../services/foldersApi';
 import { chatApi, Conversation } from '../../services/chatApi';
+import { getDisplayIdentifier, isPlaceholderEmail } from '../../utils/phoneDisplayUtils';
 
 interface CircleAlbum {
   id: string;
@@ -555,7 +556,7 @@ export const CirclesManager: React.FC = () => {
           );
 
           const contactData = {
-            display_name: member.profiles?.full_name || member.email || 'Unknown',
+            display_name: member.profiles?.full_name || getDisplayIdentifier(member.email) || 'Unknown',
             first_name: member.profiles?.full_name?.split(' ')[0] || undefined,
             last_name: member.profiles?.full_name?.split(' ').slice(1).join(' ') || undefined,
             relationship_type: 'friend' as const,
@@ -747,12 +748,12 @@ export const CirclesManager: React.FC = () => {
                       <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
                           <p className="font-medium text-sm">
-                            {member.profiles?.full_name || member.email}
+                            {member.profiles?.full_name || getDisplayIdentifier(member.email)}
                           </p>
-                          {member.profiles?.email && member.profiles.email !== member.email && (
+                          {member.profiles?.email && member.profiles.email !== member.email && !isPlaceholderEmail(member.profiles.email) && (
                             <p className="text-xs text-gray-500">{member.profiles.email}</p>
                           )}
-                          {!member.user_id && member.email && (
+                          {!member.user_id && member.email && !isPlaceholderEmail(member.email) && (
                             <p className="text-xs text-gray-500">{member.email} (invited)</p>
                           )}
                         </div>

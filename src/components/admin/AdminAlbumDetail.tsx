@@ -11,6 +11,7 @@ import { PhotoPicker } from './PhotoPicker';
 import { ImageUploader } from './ImageUploader';
 import { ReactionBar } from '../ReactionBar';
 import { PermissionRequestDialog } from '../PermissionRequestDialog';
+import { getDisplayIdentifier } from '../../utils/phoneDisplayUtils';
 
 interface Album {
   id: string;
@@ -324,14 +325,14 @@ const AssetModalWithMemories: React.FC<AssetModalWithMemoriesProps> = ({
                   ) : (
                     <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-blue-600 font-medium">
-                        {(memory.user.name || memory.user.email || '?').charAt(0).toUpperCase()}
+                        {(memory.user.name || getDisplayIdentifier(memory.user.email) || '?').charAt(0).toUpperCase()}
                       </span>
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">{memory.user.name || memory.user.email}</span>
+                        <span className="font-medium text-gray-900">{memory.user.name || getDisplayIdentifier(memory.user.email)}</span>
                         <span className="text-xs text-gray-500">{formatTimeAgo(memory.created_at)}</span>
                       </div>
                       {/* Edit/Delete buttons for editors */}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../../services/adminApi';
+import { getDisplayIdentifier } from '../../utils/phoneDisplayUtils';
 
 interface PromoCode {
   id: string;
@@ -742,7 +743,7 @@ export const PromoCodesManager: React.FC = () => {
                       <div className="max-h-48 overflow-y-auto border border-theme-border rounded-md divide-y divide-theme-border">
                         {promoUsers.map((user) => (
                           <div key={user.user_id} className="p-2 text-sm">
-                            <div className="font-medium text-theme-primary">{user.display_name || user.email}</div>
+                            <div className="font-medium text-theme-primary">{user.display_name || getDisplayIdentifier(user.email)}</div>
                             <div className="text-xs text-theme-tertiary flex justify-between">
                               <span>{user.status}</span>
                               <span>{formatDate(user.signed_up_at)}</span>

@@ -20,6 +20,7 @@ import {
 import { adminApi } from '../../services/adminApi';
 import { MediaViewer } from '../MediaViewer';
 import { ImageUploader } from './ImageUploader';
+import { getDisplayIdentifier } from '../../utils/phoneDisplayUtils';
 
 interface Circle {
   id: string;
@@ -836,7 +837,7 @@ export const FoldersManager: React.FC = () => {
                   <div key={share.id} className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full">
                     <span className="text-sm">{share.type === 'circle' ? '👥' : '👤'}</span>
                     <span className="text-sm font-medium">
-                      {share.type === 'circle' ? share.circles?.name : share.profile?.full_name || share.profile?.email}
+                      {share.type === 'circle' ? share.circles?.name : share.profile?.full_name || getDisplayIdentifier(share.profile?.email)}
                     </span>
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getRoleColor(share.role)}`}>
                       {share.role.replace('_', ' ')}

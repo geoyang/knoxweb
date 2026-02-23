@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { getSupabaseUrl, getSupabaseAnonKey, getAppScheme } from '../lib/environments';
+import { isPlaceholderEmail } from '../utils/phoneDisplayUtils';
 
 interface Plan {
   id: string;
@@ -127,7 +128,7 @@ export const SubscriptionPage: React.FC = () => {
     if (accessToken) {
       try {
         const payload = JSON.parse(atob(accessToken.split('.')[1]));
-        const earlyName = payload.user_metadata?.full_name || payload.user_metadata?.name || payload.email?.split('@')[0] || null;
+        const earlyName = payload.user_metadata?.full_name || payload.user_metadata?.name || (!isPlaceholderEmail(payload.email) ? payload.email?.split('@')[0] : null) || null;
         if (earlyName) setUserName(earlyName);
       } catch {}
     }

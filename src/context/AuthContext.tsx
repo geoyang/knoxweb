@@ -18,8 +18,8 @@ interface AuthContextType {
   loading: boolean;
   isSuperAdmin: boolean;
   signInWithMagicLink: (email: string) => Promise<{ error: any }>;
-  signInWithCode: (email: string) => Promise<{ error: any; code?: string; deliveryChannel?: string }>;
-  verifyCode: (email: string, code: string, fullName?: string, skipSetSession?: boolean) => Promise<{ error: any; success?: boolean; profile?: UserProfile | null; tokens?: { access_token: string; refresh_token: string } }>;
+  signInWithCode: (email: string, phoneParams?: { phone: string; identifier_type: 'phone' }) => Promise<{ error: any; code?: string; deliveryChannel?: string }>;
+  verifyCode: (email: string, code: string, fullName?: string, skipSetSession?: boolean, phoneParams?: { phone: string; identifier_type: 'phone'; invite_token?: string | null }) => Promise<{ error: any; success?: boolean; profile?: UserProfile | null; tokens?: { access_token: string; refresh_token: string } }>;
   checkUserExists: (email: string) => Promise<{ exists: boolean; error?: any }>;
   signUp: (email: string, fullName?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -262,16 +262,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signInWithCode = async (email: string) => {
+  const signInWithCode = async (email: string, phoneParams?: { phone: string; identifier_type: 'phone' }) => {
     try {
-      console.log('Requesting verification code for email:', email);
+      console.log('Requesting verification code for:', phoneParams ? phoneParams.phone : email);
+
+      // Build request body based on identifier type
+      const body = phoneParams
+        ? { phone: phoneParams.phone, identifier_type: 'phone', type: '4-digit' }
+        : { email: email.toLowerCase().trim(), type: '4-digit' };
 
       // Request verification code from server (code is generated server-side)
       const { data, error } = await supabase.functions.invoke('send-verification-code', {
-        body: {
-          email: email.toLowerCase().trim(),
-          type: '4-digit'
-        }
+        body,
       });
 
       if (error) {
@@ -299,17 +301,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const verifyCode = async (email: string, code: string, fullName?: string, skipSetSession?: boolean) => {
+  const verifyCode = async (email: string, code: string, fullName?: string, skipSetSession?: boolean, phoneParams?: { phone: string; identifier_type: 'phone'; invite_token?: string | null }) => {
     try {
       console.log('🔐 VERIFY CODE: Starting server-side verification');
-      console.log('Verifying code:', { email, code, skipSetSession });
+      console.log('Verifying code:', { email, code, skipSetSession, phoneParams: !!phoneParams });
+
+      // Build request body based on identifier type
+      const verifyBody = phoneParams
+        ? { phone: phoneParams.phone, identifier_type: 'phone', code: code.toUpperCase(), invite_token: phoneParams.invite_token || undefined }
+        : { email: email.toLowerCase().trim(), code: code.toUpperCase() };
 
       // Verify code with server (server checks against stored code in user_metadata)
       const { data: authResponse, error: authError } = await supabase.functions.invoke('verify-code-auth', {
-        body: {
-          email: email.toLowerCase().trim(),
-          code: code.toUpperCase()
-        }
+        body: verifyBody,
       });
 
       if (authError) {

@@ -16,6 +16,7 @@ import { ChatManager } from './admin/ChatManager';
 import { AccountScreen } from './admin/AccountScreen';
 import { FoldersManager } from './admin/FoldersManager';
 import PushNotificationTest from './admin/PushNotificationTest';
+import EmailTestTool from './admin/EmailTestTool';
 import { PromoCodesManager } from './admin/PromoCodesManager';
 import { DiscountManager } from './admin/DiscountManager';
 import { ExportManager } from './admin/ExportManager';
@@ -31,6 +32,7 @@ import { getFolders } from '../services/foldersApi';
 import { contactsApi } from '../services/contactsApi';
 import { ImageUploader } from './admin/ImageUploader';
 import { getSelectedEnvironmentKey } from '../lib/environments';
+import { getDisplayIdentifier } from '../utils/phoneDisplayUtils';
 
 export const AdminDashboard: React.FC = () => {
   const { user, userProfile, signOut, loading, isSuperAdmin } = useAuth();
@@ -338,7 +340,7 @@ export const AdminDashboard: React.FC = () => {
             <div className="flex items-center space-x-4">
               <div className="text-right">
                 <div className="text-sm text-theme-secondary">
-                  Welcome, {userProfile?.full_name || user.email}
+                  Welcome, {userProfile?.full_name || getDisplayIdentifier(user.email)}
                   {isSuperAdmin && (
                     <span className="ml-2 px-2 py-1 badge-admin text-xs rounded-full font-medium">
                       Super Admin
@@ -376,7 +378,7 @@ export const AdminDashboard: React.FC = () => {
                   />
                 ) : (
                   <span className="text-lg text-theme-accent">
-                    {userProfile?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
+                    {userProfile?.full_name?.[0]?.toUpperCase() || getDisplayIdentifier(user?.email)?.[0]?.toUpperCase() || 'U'}
                   </span>
                 )}
               </button>
@@ -606,6 +608,19 @@ export const AdminDashboard: React.FC = () => {
                   </li>
                   <li>
                     <Link
+                      to="/admin/email-test"
+                      className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                        location.pathname.includes('/admin/email-test')
+                          ? 'bg-primary-light text-theme-accent font-medium'
+                          : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
+                      }`}
+                    >
+                      <i className="fi fi-sr-envelope mr-3 text-lg"></i>
+                      Email Test
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
                       to="/admin/promo-codes"
                       className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                         location.pathname.includes('/admin/promo-codes')
@@ -684,6 +699,16 @@ export const AdminDashboard: React.FC = () => {
               element={
                 isSuperAdmin ? (
                   <PushNotificationTest />
+                ) : (
+                  <Navigate to="/admin/albums" replace />
+                )
+              }
+            />
+            <Route
+              path="email-test"
+              element={
+                isSuperAdmin ? (
+                  <EmailTestTool />
                 ) : (
                   <Navigate to="/admin/albums" replace />
                 )

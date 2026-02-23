@@ -9,6 +9,7 @@ import { getSupabaseUrl, getSupabaseAnonKey } from '../../lib/environments';
 import { MemoriesPanel } from '../MemoriesPanel';
 import { memoriesApi } from '../../services/memoriesApi';
 import { AlbumPhotoGrid, AlbumAsset, ContextMenuItem, getThumbnailUrl, isWebAccessibleUrl, isHeicUrl, getDisplayUrl } from '../AlbumPhotoGrid';
+import { getDisplayIdentifier } from '../../utils/phoneDisplayUtils';
 
 interface Album {
   id: string;
@@ -801,11 +802,11 @@ export const AlbumsManager: React.FC = () => {
                       />
                     ) : (
                       <div className="avatar w-4 h-4 text-[8px]">
-                        {(album.profiles.full_name || album.profiles.email || '?')[0].toUpperCase()}
+                        {(album.profiles.full_name || getDisplayIdentifier(album.profiles.email) || '?')[0].toUpperCase()}
                       </div>
                     )}
                     <span className="text-[10px] text-theme-muted truncate">
-                      {album.profiles.full_name || album.profiles.email || 'Unknown'}
+                      {album.profiles.full_name || getDisplayIdentifier(album.profiles.email) || 'Unknown'}
                     </span>
                   </div>
                 )}
@@ -917,11 +918,11 @@ export const AlbumsManager: React.FC = () => {
                               />
                             ) : (
                               <div className="avatar w-5 h-5 text-[10px]">
-                                {(album.profiles.full_name || album.profiles.email || '?')[0].toUpperCase()}
+                                {(album.profiles.full_name || getDisplayIdentifier(album.profiles.email) || '?')[0].toUpperCase()}
                               </div>
                             )}
                             <span className="text-xs text-theme-muted">
-                              {album.profiles.full_name || album.profiles.email || 'Unknown'}
+                              {album.profiles.full_name || getDisplayIdentifier(album.profiles.email) || 'Unknown'}
                             </span>
                           </div>
                         )}
