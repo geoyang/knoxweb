@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   importServicesApi,
   importSourcesApi,
@@ -17,10 +18,13 @@ import {
 } from '../../services/importApi';
 
 export const ImportManager: React.FC = () => {
+  const navigate = useNavigate();
+
   // State
   const [services, setServices] = useState<ImportService[]>([]);
   const [sources, setSources] = useState<ImportSource[]>([]);
   const [jobs, setJobs] = useState<ImportJob[]>([]);
+  const [jobsLoaded, setJobsLoaded] = useState(false);
   const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,31 +52,27 @@ export const ImportManager: React.FC = () => {
   // View mode
   const [viewMode, setViewMode] = useState<'sources' | 'history' | 'duplicates'>('sources');
 
-  // Load data
+  // Load data — non-blocking, each call updates state independently
   const loadData = useCallback(async () => {
-    setLoading(true);
     setError(null);
 
-    try {
-      const [servicesRes, sourcesRes, jobsRes] = await Promise.all([
-        importServicesApi.list(),
-        importSourcesApi.list(),
-        importJobsApi.list(),
-      ]);
+    importServicesApi.list().then((res) => {
+      if (res.success && res.services) setServices(res.services);
+    });
 
-      if (servicesRes.success && servicesRes.services) {
-        setServices(servicesRes.services);
+    importSourcesApi.list().then((res) => {
+      if (res.success) {
+        setSources(res.sources || []);
+        setPlanInfo(res.planInfo || null);
       }
+      setLoading(false);
+    }).catch(() => setLoading(false));
 
-      if (sourcesRes.success) {
-        setSources(sourcesRes.sources || []);
-        setPlanInfo(sourcesRes.planInfo || null);
-      }
-
-      if (jobsRes.success && jobsRes.jobs) {
-        setJobs(jobsRes.jobs);
-        // Find active job
-        const active = jobsRes.jobs.find((j) =>
+    importJobsApi.list().then((res) => {
+      if (res.success && res.jobs) {
+        setJobs(res.jobs);
+        setJobsLoaded(true);
+        const active = res.jobs.find((j) =>
           ['pending', 'estimating', 'ready', 'importing'].includes(j.status)
         );
         if (active) {
@@ -80,11 +80,7 @@ export const ImportManager: React.FC = () => {
           startPolling(active.id);
         }
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data');
-    } finally {
-      setLoading(false);
-    }
+    });
   }, []);
 
   useEffect(() => {
@@ -357,14 +353,6 @@ export const ImportManager: React.FC = () => {
     return Math.round((job.processed_assets / job.total_assets) * 100);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -456,7 +444,17 @@ export const ImportManager: React.FC = () => {
             Sources
           </button>
           <button
-            onClick={() => setViewMode('history')}
+            onClick={() => {
+              setViewMode('history');
+              if (!jobsLoaded) {
+                importJobsApi.list().then((res) => {
+                  if (res.success && res.jobs) {
+                    setJobs(res.jobs);
+                    setJobsLoaded(true);
+                  }
+                });
+              }
+            }}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               viewMode === 'history'
                 ? 'border-blue-500 text-blue-600'
@@ -484,6 +482,11 @@ export const ImportManager: React.FC = () => {
       {/* Sources View */}
       {viewMode === 'sources' && (
         <div className="grid gap-4 md:grid-cols-2">
+          {services.length === 0 && loading && (
+            <div className="col-span-2 flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          )}
           {services
             .filter((s) => s.is_active && s.service_key !== 'camera_roll')
             .map((service) => {
@@ -513,6 +516,8 @@ export const ImportManager: React.FC = () => {
                             ? `${source.total_assets_synced.toLocaleString()} photos synced`
                             : 'Connected'}
                         </p>
+                      ) : service.service_key === 'facebook' ? (
+                        <p className="text-sm text-gray-500">Import from ZIP export</p>
                       ) : (
                         <p className="text-sm text-gray-500">
                           {service.requires_app_review ? 'Coming soon' : 'Not connected'}
@@ -532,6 +537,13 @@ export const ImportManager: React.FC = () => {
                           Disconnect
                         </button>
                       </div>
+                    ) : service.service_key === 'facebook' ? (
+                      <button
+                        onClick={() => navigate('/import/facebook')}
+                        className="px-4 py-2 bg-[#1877F2] text-white rounded-lg hover:bg-[#1565D8]"
+                      >
+                        Import
+                      </button>
                     ) : (
                       <button
                         onClick={() => handleConnect(service.service_key)}
@@ -551,7 +563,11 @@ export const ImportManager: React.FC = () => {
       {/* History View */}
       {viewMode === 'history' && (
         <div className="bg-white rounded-lg border">
-          {jobs.length === 0 ? (
+          {!jobsLoaded ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : jobs.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <p>No import history yet</p>
             </div>

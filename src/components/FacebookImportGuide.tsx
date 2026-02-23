@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface StepCardProps {
   number: number;
   title: string;
   description: string;
   illustration: React.ReactNode;
-  tip?: string;
+  tip?: React.ReactNode;
 }
 
 function StepCard({ number, title, description, illustration, tip }: StepCardProps) {
@@ -29,86 +29,161 @@ function StepCard({ number, title, description, illustration, tip }: StepCardPro
   );
 }
 
+const TOTAL_STEPS = 9;
+
+const STEPS: Omit<StepCardProps, 'illustration'>[] = [
+  {
+    number: 1,
+    title: 'Open "Settings & Privacy"',
+    description: 'On Facebook, tap the menu icon, then go to Settings & Privacy > Settings.',
+    tip: (
+      <>
+        On a computer? Go directly to{' '}
+        <a
+          href="https://accountscenter.facebook.com/info_and_permissions/dyi"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline font-medium text-amber-800 hover:text-amber-900"
+        >
+          accountscenter.facebook.com
+        </a>{' '}
+        and skip to step 4.
+      </>
+    ),
+  },
+  {
+    number: 2,
+    title: 'Tap "See more in Accounts Center"',
+    description: 'Scroll down to the Meta Accounts Center section and tap "See more in Accounts Center".',
+  },
+  {
+    number: 3,
+    title: 'Select "Your information and permissions"',
+    description: 'In the Accounts Center sidebar, tap "Your information and permissions", then tap "Export your information".',
+  },
+  {
+    number: 4,
+    title: 'Select "Export to device"',
+    description: 'Choose to export the data to your device so you can pick it up as a ZIP file.',
+  },
+  {
+    number: 5,
+    title: 'Choose your format',
+    description: 'JSON is recommended for the best import experience. HTML also works — Kizu supports both formats.',
+    tip: 'JSON includes more metadata. If you already have an HTML export, that works too.',
+  },
+  {
+    number: 6,
+    title: 'Set Date range to "All time"',
+    description: 'Select All time to get your complete Facebook history, or choose a custom range.',
+  },
+  {
+    number: 7,
+    title: 'Set Media quality to "Higher quality"',
+    description: 'This ensures your photos and videos are imported at the best resolution.',
+  },
+  {
+    number: 8,
+    title: 'Click "Start export" and wait',
+    description: "Facebook will prepare your file and notify you when it's ready. This can take minutes to hours.\n\nYou have 4 days to download it once it's ready.",
+    tip: 'Save the ZIP somewhere easy to find, like your Desktop or Downloads folder.',
+  },
+  {
+    number: 9,
+    title: 'Select the file in Kizu',
+    description: 'Click the button below to pick your Facebook export ZIP. Kizu will read it, show you a summary, and start importing.',
+  },
+];
+
+const ILLUSTRATIONS: React.ReactNode[] = [
+  <SettingsPrivacyIllustration />,
+  <AccountsCenterIllustration />,
+  <YourInfoIllustration />,
+  <ExportToDeviceIllustration />,
+  <FormatIllustration />,
+  <DateRangeIllustration />,
+  <QualityIllustration />,
+  <StartExportIllustration />,
+  <ImportIllustration />,
+];
+
 export function FacebookImportGuide() {
+  // step 0 = hero, steps 1-9 = instruction steps
+  const [step, setStep] = useState(0);
+
   return (
     <div className="space-y-4">
-      {/* Hero */}
-      <div className="text-center mb-2">
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <FbLogo />
-          <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-          </svg>
-          <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center border-2 border-gray-200">
-            <span className="text-white font-bold text-xl">K</span>
+      {step === 0 ? (
+        /* Hero screen */
+        <div className="text-center py-6">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <FbLogo />
+            <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+            <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center border-2 border-gray-200">
+              <span className="text-white font-bold text-xl">K</span>
+            </div>
           </div>
+          <h1 className="text-xl font-bold text-gray-900 leading-snug">
+            Bring your memories<br />from Facebook
+          </h1>
+          <p className="text-sm text-gray-500 mt-1.5">
+            Import your photos, videos, comments, and reactions in just a few steps.
+          </p>
+          <button
+            onClick={() => setStep(1)}
+            className="mt-6 px-6 py-2.5 bg-[#1877F2] text-white text-sm font-semibold rounded-full hover:bg-[#166FE5] transition-colors"
+          >
+            Get Started
+          </button>
         </div>
-        <h1 className="text-xl font-bold text-gray-900 leading-snug">
-          Bring your memories<br />from Facebook
-        </h1>
-        <p className="text-sm text-gray-500 mt-1.5">
-          Import your photos, videos, comments, and reactions in just a few steps.
-        </p>
-      </div>
+      ) : (
+        /* Step card */
+        <StepCard
+          {...STEPS[step - 1]}
+          illustration={ILLUSTRATIONS[step - 1]}
+        />
+      )}
 
-      <StepCard
-        number={1}
-        title="Go to Download your information"
-        description={'On Facebook, go to:\nSettings & Privacy > Settings > Your Facebook Information > Download your information'}
-        illustration={<DownloadInfoIllustration />}
-        tip="You can search 'Download your information' in Facebook's search bar"
-      />
+      {/* Step dots */}
+      {step > 0 && (
+        <div className="flex items-center justify-center gap-1.5 pt-1">
+          {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => setStep(i + 1)}
+              className={`w-2 h-2 rounded-full transition-colors ${
+                i + 1 === step ? 'bg-[#1877F2]' : 'bg-gray-300 hover:bg-gray-400'
+              }`}
+              aria-label={`Go to step ${i + 1}`}
+            />
+          ))}
+        </div>
+      )}
 
-      <StepCard
-        number={2}
-        title='Select "Export to device"'
-        description="Choose to export the data to your device so you can pick it up as a ZIP file."
-        illustration={<ExportToDeviceIllustration />}
-      />
-
-      <StepCard
-        number={3}
-        title="Change the export settings"
-        description="Before starting the export, tap each setting to change them:"
-        illustration={<ConfirmExportIllustration />}
-      />
-
-      <StepCard
-        number={4}
-        title='Change Format to "JSON"'
-        description="The default is HTML — you must change it to JSON so Kizu can read your data."
-        illustration={<FormatIllustration />}
-        tip="JSON lets Kizu import your data. HTML only lets you view it in a browser."
-      />
-
-      <StepCard
-        number={5}
-        title='Set Date range to "All time"'
-        description="Select All time to get your complete Facebook history, or choose a custom range."
-        illustration={<DateRangeIllustration />}
-      />
-
-      <StepCard
-        number={6}
-        title='Set Media quality to "Higher quality"'
-        description="This ensures your photos and videos are imported at the best resolution."
-        illustration={<QualityIllustration />}
-      />
-
-      <StepCard
-        number={7}
-        title='Click "Start export" and wait'
-        description={"Facebook will prepare your file and notify you when it's ready. This can take minutes to hours.\n\nYou have 4 days to download it once it's ready."}
-        illustration={<StartExportIllustration />}
-        tip="Save the ZIP somewhere easy to find, like your Desktop or Downloads folder"
-      />
-
-      <StepCard
-        number={8}
-        title="Select the file in Kizu"
-        description="Click the button below to pick your Facebook export ZIP. Kizu will read it, show you a summary, and start importing."
-        illustration={<ImportIllustration />}
-      />
+      {/* Navigation */}
+      {step > 0 && (
+        <div className="flex items-center justify-between pt-1">
+          <button
+            onClick={() => setStep(step - 1)}
+            className="text-sm text-gray-500 hover:text-gray-700 font-medium"
+          >
+            {step === 1 ? '← Overview' : '← Back'}
+          </button>
+          <span className="text-xs text-gray-400">{step} of {TOTAL_STEPS}</span>
+          {step < TOTAL_STEPS ? (
+            <button
+              onClick={() => setStep(step + 1)}
+              className="text-sm text-[#1877F2] hover:text-[#166FE5] font-medium"
+            >
+              Next →
+            </button>
+          ) : (
+            <span className="text-sm text-gray-300">Last step</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -175,25 +250,82 @@ function ChevronRight() {
   );
 }
 
-/* --- Screen illustrations --- */
+/* --- NEW: Step 1 — Settings & Privacy --- */
 
-function DownloadInfoIllustration() {
+function SettingsPrivacyIllustration() {
   return (
     <FbScreen>
-      <div className="flex items-center justify-between mb-2">
-        <svg className="w-3 h-3 text-[#E4E6EB]" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
-        </svg>
-        <svg className="w-3 h-3 text-[#E4E6EB]" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-        </svg>
+      <FbTitle text="Settings & privacy" />
+      <div className="rounded-lg overflow-hidden border border-[#3E4042] mt-1">
+        <div className="flex items-center gap-2 bg-[#303236] px-3 py-2 border-b border-[#3E4042]">
+          <svg className="w-2.5 h-2.5 text-[#B0B3B8] shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+          </svg>
+          <span className="text-[10px] text-[#B0B3B8]">Search settings</span>
+        </div>
       </div>
-      <FbSubheader text="Your Name · Facebook" />
-      <FbTitle text="Download your information" />
-      <FbButton text="Request a download" />
+      <div className="rounded-lg overflow-hidden border border-[#3E4042] mt-2">
+        <div className="bg-[#303236] px-3 py-2 border-b border-[#3E4042]">
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] font-bold text-[#B0B3B8]">Meta</span>
+            <span className="text-[10px] font-semibold text-[#E4E6EB]">Accounts Center</span>
+          </div>
+          <p className="text-[8px] text-[#B0B3B8] mt-0.5">Manage your connected experiences</p>
+        </div>
+        <div className="flex items-center gap-2 bg-[#303236] px-3 py-2 border-b border-[#3E4042]">
+          <svg className="w-2.5 h-2.5 text-[#B0B3B8] shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+          </svg>
+          <span className="text-[10px] text-[#E4E6EB]">Personal details</span>
+        </div>
+        <div className="flex items-center gap-2 bg-[#303236] px-3 py-2 border-b border-[#3E4042]">
+          <svg className="w-2.5 h-2.5 text-[#B0B3B8] shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <span className="text-[10px] text-[#E4E6EB]">Password and security</span>
+        </div>
+        <div className="bg-[#303236] px-3 py-2">
+          <span className="text-[10px] text-[#4599FF]">See more in Accounts Center</span>
+        </div>
+      </div>
     </FbScreen>
   );
 }
+
+/* --- NEW: Step 2 — Accounts Center --- */
+
+function AccountsCenterIllustration() {
+  return (
+    <FbScreen>
+      <FbTitle text="Accounts Center" />
+      <FbDesc>Manage your connected experiences and account settings across Meta technologies.</FbDesc>
+      <div className="rounded-lg overflow-hidden border border-[#3E4042] mt-2">
+        <OptionRow label="Profiles" />
+        <OptionRow label="Password and security" />
+        <OptionRow label="Your information and permissions" highlight />
+        <OptionRow label="Ad preferences" last />
+      </div>
+    </FbScreen>
+  );
+}
+
+/* --- NEW: Step 3 — Your information and permissions --- */
+
+function YourInfoIllustration() {
+  return (
+    <FbScreen>
+      <FbSubheader text="Accounts Center" />
+      <FbTitle text="Your information and permissions" />
+      <div className="rounded-lg overflow-hidden border border-[#3E4042] mt-1">
+        <OptionRow label="Access your information" />
+        <OptionRow label="Export your information" highlight />
+        <OptionRow label="Search history" last />
+      </div>
+    </FbScreen>
+  );
+}
+
+/* --- Existing illustrations (renumbered) --- */
 
 function ExportToDeviceIllustration() {
   return (
@@ -211,21 +343,6 @@ function ExportToDeviceIllustration() {
           <ChevronRight />
         </div>
       </div>
-    </FbScreen>
-  );
-}
-
-function ConfirmExportIllustration() {
-  return (
-    <FbScreen>
-      <FbSubheader text="Confirm your export" />
-      <FbDesc>Change these before starting:</FbDesc>
-      <div className="rounded-lg overflow-hidden border border-[#3E4042] mt-1">
-        <SettingsRow icon="cal" label="Date range" value="All time" highlight />
-        <SettingsRow icon="doc" label="Format" value="JSON" highlight />
-        <SettingsRow icon="img" label="Media quality" value="Higher quality" highlight />
-      </div>
-      <FbButton text="Start export" />
     </FbScreen>
   );
 }
@@ -349,7 +466,16 @@ function ImportIllustration() {
   );
 }
 
-/* --- Reusable sub-component --- */
+/* --- Reusable sub-components --- */
+
+function OptionRow({ label, highlight, last }: { label: string; highlight?: boolean; last?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between bg-[#303236] px-3 py-2.5 ${!last ? 'border-b border-[#3E4042]' : ''} ${highlight ? 'bg-[#263354]' : ''}`}>
+      <span className={`text-[11px] ${highlight ? 'text-white font-medium' : 'text-[#E4E6EB]'}`}>{label}</span>
+      <ChevronRight />
+    </div>
+  );
+}
 
 function SettingsRow({ icon, label, value, highlight }: {
   icon: string; label: string; value: string; highlight?: boolean;

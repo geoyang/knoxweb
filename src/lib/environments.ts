@@ -10,16 +10,20 @@ export interface EnvironmentConfig {
 }
 
 // Environment configurations - loaded from env vars
+// Falls back to base VITE_SUPABASE_URL/KEY when prefixed vars aren't set
+const baseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const baseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
 export const ENVIRONMENTS: Record<string, EnvironmentConfig> = {
   dev: {
     name: 'Development',
-    supabaseUrl: import.meta.env.VITE_DEV_SUPABASE_URL || '',
-    supabaseAnonKey: import.meta.env.VITE_DEV_SUPABASE_ANON_KEY || '',
+    supabaseUrl: import.meta.env.VITE_DEV_SUPABASE_URL || baseUrl,
+    supabaseAnonKey: import.meta.env.VITE_DEV_SUPABASE_ANON_KEY || baseKey,
   },
   prod: {
     name: 'Production',
-    supabaseUrl: import.meta.env.VITE_PROD_SUPABASE_URL || '',
-    supabaseAnonKey: import.meta.env.VITE_PROD_SUPABASE_ANON_KEY || '',
+    supabaseUrl: import.meta.env.VITE_PROD_SUPABASE_URL || baseUrl,
+    supabaseAnonKey: import.meta.env.VITE_PROD_SUPABASE_ANON_KEY || baseKey,
   },
 };
 
