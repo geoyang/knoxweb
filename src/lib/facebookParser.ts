@@ -33,11 +33,31 @@ export interface ImportSummary {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Facebook encodes JSON strings as Latin-1 escaped UTF-8.
+ * Each character's code point is actually a byte in a UTF-8 sequence.
+ */
+function decodeFbString(str: string): string {
+  if (!str) return str;
+  try {
+    const bytes = new Uint8Array(str.length);
+    for (let i = 0; i < str.length; i++) {
+      bytes[i] = str.charCodeAt(i);
+    }
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch {
+    return str;
+  }
+}
+
 const MEDIA_EXTENSIONS = new Set([
   'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic',
   'mp4', 'mov', 'avi', 'mkv',
 ]);
 const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv']);
+const VIDEO_MIME: Record<string, string> = {
+  mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska',
+};
 const SKIP_DIRS = new Set(['stickers_used', 'gifs']);
 const SKIP_ALBUM_DIRS = new Set(['media', 'posts', 'your_facebook_activity', 'photos_and_videos']);
 const MAX_GAP_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -76,12 +96,12 @@ export async function parseExport(zip: JSZip): Promise<{
       if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.photos)) {
         // Album format: { name, photos: [...] }
         hasJsonPosts = true;
-        const albumName = parsed.name || undefined;
+        const albumName = decodeFbString(parsed.name) || undefined;
         for (const photo of parsed.photos) {
           const asset = await extractMediaAsset(zip, rootPrefix, photo.uri, {
             sourcePrefix: 'fb_album',
             createdAt: photo.creation_timestamp,
-            description: photo.title || parsed.description,
+            description: decodeFbString(photo.title || parsed.description),
             albumName,
             gpsLat: photo.media_metadata?.photo_metadata?.latitude,
             gpsLng: photo.media_metadata?.photo_metadata?.longitude,
@@ -98,7 +118,7 @@ export async function parseExport(zip: JSZip): Promise<{
           const asset = await extractMediaAsset(zip, rootPrefix, item.uri, {
             sourcePrefix: 'fb_media',
             createdAt: item.creation_timestamp,
-            description: item.description,
+            description: decodeFbString(item.description),
             forceVideo: defaultVideo,
             gpsLat: item.media_metadata?.photo_metadata?.latitude,
             gpsLng: item.media_metadata?.photo_metadata?.longitude,
@@ -109,7 +129,7 @@ export async function parseExport(zip: JSZip): Promise<{
         // Posts array format
         hasJsonPosts = true;
         for (const post of parsed) {
-          const postText = post.data?.[0]?.post || '';
+          const postText = decodeFbString(post.data?.[0]?.post || '');
           if (!post.attachments) continue;
           for (const attachment of post.attachments) {
             for (const data of (attachment.data || [])) {
@@ -117,11 +137,11 @@ export async function parseExport(zip: JSZip): Promise<{
               const uriParts = data.media.uri.split('/');
               const mediaDir = uriParts.length >= 2 ? uriParts[uriParts.length - 2] : undefined;
               const postAlbumName = mediaDir && !SKIP_ALBUM_DIRS.has(mediaDir)
-                ? mediaDir : undefined;
+                ? decodeFbString(mediaDir) : undefined;
               const asset = await extractMediaAsset(zip, rootPrefix, data.media.uri, {
                 sourcePrefix: `fb_post_${post.timestamp}`,
                 createdAt: post.timestamp,
-                description: postText || data.media.title,
+                description: postText || decodeFbString(data.media.title),
                 albumName: postAlbumName,
                 gpsLat: data.media?.media_metadata?.photo_metadata?.latitude,
                 gpsLng: data.media?.media_metadata?.photo_metadata?.longitude,
@@ -179,7 +199,7 @@ export async function parseExport(zip: JSZip): Promise<{
       const blob = await zip.files[path].async('blob');
       assets.push({
         file: new File([blob], filename, {
-          type: isVideo ? 'video/mp4' : 'image/jpeg',
+          type: isVideo ? (VIDEO_MIME[ext] || 'video/mp4') : 'image/jpeg',
         }),
         filename,
         sourceAssetId: sourceId,
@@ -208,8 +228,8 @@ export async function parseExport(zip: JSZip): Promise<{
         for (const d of (entry.data || [])) {
           if (d.comment) {
             allComments.push({
-              author_name: d.comment.author || 'Unknown',
-              text: d.comment.comment || '',
+              author_name: decodeFbString(d.comment.author) || 'Unknown',
+              text: decodeFbString(d.comment.comment) || '',
               timestamp: d.comment.timestamp
                 ? new Date(d.comment.timestamp * 1000).toISOString()
                 : new Date().toISOString(),
@@ -239,8 +259,8 @@ export async function parseExport(zip: JSZip): Promise<{
       for (const entry of oldEntries) {
         if (entry.data?.[0]?.reaction) {
           allReactions.push({
-            author_name: entry.data[0].reaction.actor || 'Unknown',
-            emoji: entry.data[0].reaction.reaction || 'LIKE',
+            author_name: decodeFbString(entry.data[0].reaction.actor) || 'Unknown',
+            emoji: decodeFbString(entry.data[0].reaction.reaction) || 'LIKE',
             timestamp: entry.timestamp
               ? new Date(entry.timestamp * 1000).toISOString()
               : new Date().toISOString(),
@@ -256,8 +276,8 @@ export async function parseExport(zip: JSZip): Promise<{
           const nameLabel = entry.label_values.find((lv: any) => lv.label === 'Name');
           if (reactionLabel) {
             allReactions.push({
-              author_name: nameLabel?.value || 'Unknown',
-              emoji: reactionLabel.value || 'LIKE',
+              author_name: decodeFbString(nameLabel?.value) || 'Unknown',
+              emoji: decodeFbString(reactionLabel.value) || 'LIKE',
               timestamp: entry.timestamp
                 ? new Date(entry.timestamp * 1000).toISOString()
                 : new Date().toISOString(),
@@ -437,7 +457,7 @@ async function parseHtmlExport(zip: JSZip, rootPrefix: string): Promise<ParsedAs
       const doc = parser.parseFromString(html, 'text/html');
 
       // Album name from <title>
-      const albumName = doc.querySelector('title')?.textContent || undefined;
+      const albumName = decodeFbString(doc.querySelector('title')?.textContent || '') || undefined;
 
       // Split into photo sections
       const sections = doc.querySelectorAll('section._a6-g, section[class*="_a6-g"]');
@@ -478,7 +498,7 @@ async function parseHtmlExport(zip: JSZip, rootPrefix: string): Promise<ParsedAs
         const blob = await zip.files[mediaPath].async('blob');
         assets.push({
           file: new File([blob], filename, {
-            type: isVideo ? 'video/mp4' : 'image/jpeg',
+            type: isVideo ? (VIDEO_MIME[ext] || 'video/mp4') : 'image/jpeg',
           }),
           filename,
           sourceAssetId: `fb_album_${imgSrc}`,
@@ -521,7 +541,7 @@ async function parseHtmlCaptions(
         const filename = srcMatch[1].split('/').pop() || '';
         if (!filename) continue;
         const capMatch = section.match(/<div class="_3-95">(.*?)<\/div>/);
-        const caption = capMatch?.[1]?.trim() || undefined;
+        const caption = decodeFbString(capMatch?.[1]?.trim() || '') || undefined;
         const takenMatch = section.match(
           /<div class="_a6-q">Taken<\/div>.*?<div class="_a6-q">(.*?)<\/div>/s,
         );
@@ -628,7 +648,7 @@ async function extractMediaAsset(
     const blob = await zip.files[mediaPath].async('blob');
     return {
       file: new File([blob], filename, {
-        type: isVideo ? 'video/mp4' : 'image/jpeg',
+        type: isVideo ? (VIDEO_MIME[ext] || 'video/mp4') : 'image/jpeg',
       }),
       filename,
       sourceAssetId: `${opts.sourcePrefix}_${uri}`,
