@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   importServicesApi,
   importSourcesApi,
@@ -17,6 +18,8 @@ import {
 } from '../../services/importApi';
 
 export const ImportManager: React.FC = () => {
+  const navigate = useNavigate();
+
   // State
   const [services, setServices] = useState<ImportService[]>([]);
   const [sources, setSources] = useState<ImportSource[]>([]);
@@ -513,6 +516,8 @@ export const ImportManager: React.FC = () => {
                             ? `${source.total_assets_synced.toLocaleString()} photos synced`
                             : 'Connected'}
                         </p>
+                      ) : service.service_key === 'facebook' ? (
+                        <p className="text-sm text-gray-500">Import from ZIP export</p>
                       ) : (
                         <p className="text-sm text-gray-500">
                           {service.requires_app_review ? 'Coming soon' : 'Not connected'}
@@ -532,6 +537,13 @@ export const ImportManager: React.FC = () => {
                           Disconnect
                         </button>
                       </div>
+                    ) : service.service_key === 'facebook' ? (
+                      <button
+                        onClick={() => navigate('/import/facebook')}
+                        className="px-4 py-2 bg-[#1877F2] text-white rounded-lg hover:bg-[#1565D8]"
+                      >
+                        Import
+                      </button>
                     ) : (
                       <button
                         onClick={() => handleConnect(service.service_key)}
