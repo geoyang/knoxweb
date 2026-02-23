@@ -57,11 +57,14 @@ export async function parseExport(zip: JSZip): Promise<{
 
   // Find root prefix (may be nested in a folder like facebook-username/)
   const rootPrefix = findRootPrefix(zip);
+  console.log('[FB Import] Root prefix:', JSON.stringify(rootPrefix));
+  console.log('[FB Import] Total files in ZIP:', Object.keys(zip.files).length);
 
   // 1. Parse JSON post/album/uncategorized/video files
   const postFiles = Object.keys(zip.files).filter(
     p => p.startsWith(`${rootPrefix}posts/`) && p.endsWith('.json')
   );
+  console.log('[FB Import] JSON post files found:', postFiles.length, postFiles.slice(0, 3));
 
   let hasJsonPosts = false;
 
@@ -133,24 +136,34 @@ export async function parseExport(zip: JSZip): Promise<{
     }
   }
 
+  console.log('[FB Import] Assets from JSON:', assets.length, '| hasJsonPosts:', hasJsonPosts);
+
   // 2. HTML fallback if no JSON posts found
   if (!hasJsonPosts) {
     const htmlAssets = await parseHtmlExport(zip, rootPrefix);
     assets.push(...htmlAssets);
+    console.log('[FB Import] Assets from HTML fallback:', htmlAssets.length);
   }
 
-  // 3. Scan photos_and_videos/, stories/ for additional media
+  // 3. Scan for all media files in the export
   const existingPaths = new Set(assets.map(a => a.sourceAssetId));
   const mediaPaths = Object.keys(zip.files).filter(p => {
     const ext = p.split('.').pop()?.toLowerCase() || '';
     if (!MEDIA_EXTENSIONS.has(ext) || zip.files[p].dir) return false;
+    if (!p.startsWith(rootPrefix)) return false;
     const lower = p.toLowerCase();
     if (SKIP_DIRS.has(lower.split('/').slice(-2, -1)[0] || '')) return false;
+    const relative = p.slice(rootPrefix.length);
+    // Include photos_and_videos/, stories/, posts/media/, and any album dirs
     return (
-      p.startsWith(`${rootPrefix}photos_and_videos/`) ||
-      p.startsWith(`${rootPrefix}stories/`)
+      relative.startsWith('photos_and_videos/') ||
+      relative.startsWith('stories/') ||
+      relative.startsWith('posts/media/') ||
+      relative.startsWith('photos/')
     );
   });
+
+  console.log('[FB Import] Additional media files found:', mediaPaths.length, mediaPaths.slice(0, 3));
 
   for (const path of mediaPaths) {
     const relativePath = path.replace(rootPrefix, '');
@@ -527,47 +540,58 @@ async function parseHtmlCaptions(
 /* ------------------------------------------------------------------ */
 
 function findRootPrefix(zip: JSZip): string {
-  const allPaths = Object.keys(zip.files);
+  // Only look at actual files (not directory entries — many ZIPs lack them)
+  const allPaths = Object.keys(zip.files).filter(p => !zip.files[p].dir);
+  if (allPaths.length === 0) return '';
 
-  // Strip single top-level wrapper folder (e.g. "facebook-username/")
-  const topEntries = allPaths.map(p => p.split('/')[0]);
-  const uniqueTop = [...new Set(topEntries)];
+  // Check if all files share a single top-level folder
+  const topDirs = new Set(allPaths.map(p => p.split('/')[0]));
   let prefix = '';
-  if (uniqueTop.length === 1 && zip.files[uniqueTop[0] + '/']) {
-    prefix = uniqueTop[0] + '/';
+  if (topDirs.size === 1 && allPaths.every(p => p.includes('/'))) {
+    prefix = [...topDirs][0] + '/';
   }
 
-  // Look for activity root (e.g. "your_facebook_activity/", "your_activity_across_facebook/")
-  const activityDirNames = allPaths
-    .filter(p => {
-      const relative = prefix ? p.replace(prefix, '') : p;
-      const parts = relative.split('/');
-      return parts.length >= 2 && zip.files[p]?.dir;
-    })
-    .map(p => {
-      const relative = prefix ? p.replace(prefix, '') : p;
-      return relative.split('/')[0];
-    })
-    .filter(Boolean);
+  // Collect unique second-level directory names
+  const secondLevelDirs = new Set<string>();
+  for (const p of allPaths) {
+    const relative = prefix ? p.slice(prefix.length) : p;
+    const slash = relative.indexOf('/');
+    if (slash > 0) secondLevelDirs.add(relative.slice(0, slash));
+  }
 
-  const uniqueActivityDirs = [...new Set(activityDirNames)];
-  for (const dir of uniqueActivityDirs) {
+  // Look for activity root (e.g. "your_facebook_activity/")
+  for (const dir of secondLevelDirs) {
     const lower = dir.toLowerCase().replace(/ /g, '_');
     if (lower.includes('facebook_activity') || lower.includes('your_activity')) {
-      return `${prefix}${dir}/`;
+      const result = `${prefix}${dir}/`;
+      console.log('[FB Import] Found activity root:', result);
+      return result;
     }
   }
 
-  // Fallback: check if known FB data dirs (posts, photos_and_videos) exist at second level
-  for (const dir of uniqueActivityDirs) {
+  // Fallback: check if known FB data dirs exist at second level
+  for (const dir of secondLevelDirs) {
     const testPrefix = `${prefix}${dir}/`;
-    const hasKnownDir = allPaths.some(p =>
+    if (allPaths.some(p =>
       p.startsWith(`${testPrefix}posts/`) ||
       p.startsWith(`${testPrefix}photos_and_videos/`)
-    );
-    if (hasKnownDir) return testPrefix;
+    )) {
+      console.log('[FB Import] Found data root via fallback:', testPrefix);
+      return testPrefix;
+    }
   }
 
+  // Check if posts/ or photos_and_videos/ exist directly under prefix
+  if (allPaths.some(p =>
+    p.startsWith(`${prefix}posts/`) ||
+    p.startsWith(`${prefix}photos_and_videos/`)
+  )) {
+    console.log('[FB Import] Using prefix directly:', prefix || '(root)');
+    return prefix;
+  }
+
+  console.log('[FB Import] No root prefix found. Top dirs:', [...topDirs].slice(0, 10));
+  console.log('[FB Import] Sample paths:', allPaths.slice(0, 5));
   return prefix;
 }
 
