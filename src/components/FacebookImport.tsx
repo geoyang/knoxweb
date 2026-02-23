@@ -45,7 +45,10 @@ export function FacebookImport() {
   const [pairingMode, setPairingMode] = useState(false);
   const [pairingSelection, setPairingSelection] = useState<number[]>([]);
   const [uploadStartTime, setUploadStartTime] = useState<number>(0);
+  const [batchPaused, setBatchPaused] = useState(false);
+  const skipPausesRef = useRef(false);
   const cancelledRef = useRef(false);
+  const batchResolveRef = useRef<((skip: boolean) => void) | null>(null);
 
   const getAuthHeaders = useCallback(() => ({
     Authorization: `Bearer ${session?.access_token}`,
@@ -123,6 +126,8 @@ export function FacebookImport() {
     if (!session?.access_token || parsedAssets.length === 0) return;
 
     cancelledRef.current = false;
+    skipPausesRef.current = false;
+    setBatchPaused(false);
     setStep('importing');
     setUploadStartTime(Date.now());
     const uploadOrder = buildUploadOrder(parsedAssets, backSidePairs);
@@ -157,12 +162,16 @@ export function FacebookImport() {
       for (let orderIdx = 0; orderIdx < uploadOrder.length; orderIdx++) {
         if (cancelledRef.current) break;
 
-        // Batch pause every 50
-        if (orderIdx > 0 && orderIdx % BATCH_SIZE === 0) {
-          const shouldContinue = window.confirm(
-            `Uploaded ${orderIdx} of ${uploadOrder.length} assets.\n\nContinue with next ${Math.min(BATCH_SIZE, uploadOrder.length - orderIdx)}?`
-          );
-          if (!shouldContinue) { cancelledRef.current = true; break; }
+        // Batch pause every 50 (unless user chose to skip pauses)
+        if (orderIdx > 0 && orderIdx % BATCH_SIZE === 0 && !skipPausesRef.current) {
+          setBatchPaused(true);
+          const skipFuturePauses = await new Promise<boolean>(resolve => {
+            batchResolveRef.current = resolve;
+          });
+          setBatchPaused(false);
+          batchResolveRef.current = null;
+          if (cancelledRef.current) break;
+          if (skipFuturePauses) skipPausesRef.current = true;
         }
 
         const i = uploadOrder[orderIdx];
@@ -327,30 +336,61 @@ export function FacebookImport() {
         {/* Importing */}
         {step === 'importing' && (
           <div className="text-center">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Importing...</h2>
-            <p className="text-gray-500 mb-4">
-              Uploading asset {progress.processed} of {progress.total}
+            <h2 className="text-xl font-bold text-gray-900 mb-1">
+              {batchPaused ? 'Batch Complete' : 'Importing...'}
+            </h2>
+            <p className="text-sm text-gray-700 mb-4">
+              {batchPaused
+                ? `Uploaded ${progress.processed} of ${progress.total} assets`
+                : `Uploading asset ${progress.processed} of ${progress.total}`}
             </p>
-            <div className="w-full h-3 bg-gray-200 rounded-full mb-2 overflow-hidden">
+            <div className="w-full h-3 bg-gray-200 rounded-full mb-3 overflow-hidden">
               <div className="h-full bg-[#1877F2] rounded-full transition-all duration-300" style={{ width: `${progressPercent}%` }} />
             </div>
-            <p className="text-2xl font-bold text-gray-900 mb-1">{progressPercent}%</p>
+            <p className="text-3xl font-bold text-gray-900">{progressPercent}%</p>
             {estimatedRemaining !== null && estimatedRemaining > 0 && (
-              <p className="text-xs text-gray-400 mb-4">
-                ~{estimatedRemaining > 60 ? `${Math.round(estimatedRemaining / 60)}m` : `${estimatedRemaining}s`} remaining
+              <p className="text-sm text-gray-600 mt-1 mb-3">
+                ~{estimatedRemaining > 60 ? `${Math.round(estimatedRemaining / 60)} min` : `${estimatedRemaining}s`} remaining
               </p>
             )}
-            <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-2">
-              <StatRow label="Imported" value={progress.imported} color="text-green-600" />
-              {progress.skipped > 0 && <StatRow label="Skipped" value={progress.skipped} color="text-gray-500" />}
-              {progress.failed > 0 && <StatRow label="Failed" value={progress.failed} color="text-red-500" />}
+            <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-2">
+              <StatRow label="Imported" value={progress.imported} color="text-green-700" />
+              {progress.skipped > 0 && <StatRow label="Skipped (duplicates)" value={progress.skipped} color="text-gray-600" />}
+              {progress.failed > 0 && <StatRow label="Failed" value={progress.failed} color="text-red-600" />}
             </div>
-            <button
-              onClick={() => { cancelledRef.current = true; setStep('complete'); }}
-              className="py-3 px-8 border border-red-500 text-red-500 rounded-xl font-semibold hover:bg-red-50 transition"
-            >
-              Cancel
-            </button>
+
+            {batchPaused ? (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-600">
+                  Duplicates are automatically skipped and won't be imported again.
+                </p>
+                <button
+                  onClick={() => batchResolveRef.current?.(false)}
+                  className="w-full py-3 bg-[#1877F2] text-white rounded-xl font-semibold hover:bg-[#1565D8] transition"
+                >
+                  Continue (next {Math.min(BATCH_SIZE, progress.total - progress.processed)})
+                </button>
+                <button
+                  onClick={() => batchResolveRef.current?.(true)}
+                  className="w-full py-3 border border-[#1877F2] text-[#1877F2] rounded-xl font-semibold hover:bg-blue-50 transition"
+                >
+                  Import All Remaining Without Pausing
+                </button>
+                <button
+                  onClick={() => { cancelledRef.current = true; batchResolveRef.current?.(false); }}
+                  className="w-full py-2 text-sm text-red-500 hover:text-red-600 font-medium"
+                >
+                  Stop Import
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { cancelledRef.current = true; setStep('complete'); }}
+                className="py-3 px-8 border border-red-500 text-red-500 rounded-xl font-semibold hover:bg-red-50 transition"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         )}
 
@@ -421,6 +461,27 @@ function SummaryStep({ summary, graphApiStats, graphApiInputRef, onGraphApiFile,
         {summary.albums.length > 0 && <StatRow label="Albums" value={summary.albums.length} />}
         {summary.comments > 0 && <StatRow label="Comments" value={summary.comments} />}
         {summary.reactions > 0 && <StatRow label="Reactions" value={summary.reactions} />}
+      </div>
+
+      {/* Where assets go */}
+      <div className="bg-blue-50 rounded-xl p-4 mb-4 text-left space-y-1.5">
+        <div className="flex items-start gap-2">
+          <svg className="w-4 h-4 text-[#1877F2] mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+          </svg>
+          <div>
+            <p className="text-sm font-medium text-gray-900">Your assets will be imported to:</p>
+            <p className="text-xs text-gray-600 mt-1">
+              A <span className="font-semibold">Facebook</span> folder in your asset library
+              {summary.albums.length > 0 && (
+                <>, with {summary.albums.length} album{summary.albums.length !== 1 ? 's' : ''} as sub-folders</>
+              )}
+            </p>
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 ml-6">
+          Duplicates are automatically detected and won't be imported again.
+        </p>
       </div>
 
       {/* Graph API enhancement */}
