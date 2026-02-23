@@ -21,6 +21,7 @@ export const ImportManager: React.FC = () => {
   const [services, setServices] = useState<ImportService[]>([]);
   const [sources, setSources] = useState<ImportSource[]>([]);
   const [jobs, setJobs] = useState<ImportJob[]>([]);
+  const [jobsLoaded, setJobsLoaded] = useState(false);
   const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,16 +49,15 @@ export const ImportManager: React.FC = () => {
   // View mode
   const [viewMode, setViewMode] = useState<'sources' | 'history' | 'duplicates'>('sources');
 
-  // Load data
+  // Load essential data (services + sources). Jobs loaded lazily.
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const [servicesRes, sourcesRes, jobsRes] = await Promise.all([
+      const [servicesRes, sourcesRes] = await Promise.all([
         importServicesApi.list(),
         importSourcesApi.list(),
-        importJobsApi.list(),
       ]);
 
       if (servicesRes.success && servicesRes.services) {
@@ -68,10 +68,17 @@ export const ImportManager: React.FC = () => {
         setSources(sourcesRes.sources || []);
         setPlanInfo(sourcesRes.planInfo || null);
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
 
+    // Check for active jobs in background (non-blocking)
+    importJobsApi.list().then((jobsRes) => {
       if (jobsRes.success && jobsRes.jobs) {
         setJobs(jobsRes.jobs);
-        // Find active job
+        setJobsLoaded(true);
         const active = jobsRes.jobs.find((j) =>
           ['pending', 'estimating', 'ready', 'importing'].includes(j.status)
         );
@@ -80,11 +87,7 @@ export const ImportManager: React.FC = () => {
           startPolling(active.id);
         }
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data');
-    } finally {
-      setLoading(false);
-    }
+    });
   }, []);
 
   useEffect(() => {
@@ -456,7 +459,17 @@ export const ImportManager: React.FC = () => {
             Sources
           </button>
           <button
-            onClick={() => setViewMode('history')}
+            onClick={() => {
+              setViewMode('history');
+              if (!jobsLoaded) {
+                importJobsApi.list().then((res) => {
+                  if (res.success && res.jobs) {
+                    setJobs(res.jobs);
+                    setJobsLoaded(true);
+                  }
+                });
+              }
+            }}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               viewMode === 'history'
                 ? 'border-blue-500 text-blue-600'
@@ -551,7 +564,11 @@ export const ImportManager: React.FC = () => {
       {/* History View */}
       {viewMode === 'history' && (
         <div className="bg-white rounded-lg border">
-          {jobs.length === 0 ? (
+          {!jobsLoaded ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : jobs.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <p>No import history yet</p>
             </div>
