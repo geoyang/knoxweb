@@ -52,37 +52,27 @@ export const ImportManager: React.FC = () => {
   // View mode
   const [viewMode, setViewMode] = useState<'sources' | 'history' | 'duplicates'>('sources');
 
-  // Load essential data (services + sources). Jobs loaded lazily.
+  // Load data — non-blocking, each call updates state independently
   const loadData = useCallback(async () => {
-    setLoading(true);
     setError(null);
 
-    try {
-      const [servicesRes, sourcesRes] = await Promise.all([
-        importServicesApi.list(),
-        importSourcesApi.list(),
-      ]);
+    importServicesApi.list().then((res) => {
+      if (res.success && res.services) setServices(res.services);
+    });
 
-      if (servicesRes.success && servicesRes.services) {
-        setServices(servicesRes.services);
+    importSourcesApi.list().then((res) => {
+      if (res.success) {
+        setSources(res.sources || []);
+        setPlanInfo(res.planInfo || null);
       }
-
-      if (sourcesRes.success) {
-        setSources(sourcesRes.sources || []);
-        setPlanInfo(sourcesRes.planInfo || null);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data');
-    } finally {
       setLoading(false);
-    }
+    }).catch(() => setLoading(false));
 
-    // Check for active jobs in background (non-blocking)
-    importJobsApi.list().then((jobsRes) => {
-      if (jobsRes.success && jobsRes.jobs) {
-        setJobs(jobsRes.jobs);
+    importJobsApi.list().then((res) => {
+      if (res.success && res.jobs) {
+        setJobs(res.jobs);
         setJobsLoaded(true);
-        const active = jobsRes.jobs.find((j) =>
+        const active = res.jobs.find((j) =>
           ['pending', 'estimating', 'ready', 'importing'].includes(j.status)
         );
         if (active) {
@@ -363,14 +353,6 @@ export const ImportManager: React.FC = () => {
     return Math.round((job.processed_assets / job.total_assets) * 100);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -500,6 +482,11 @@ export const ImportManager: React.FC = () => {
       {/* Sources View */}
       {viewMode === 'sources' && (
         <div className="grid gap-4 md:grid-cols-2">
+          {services.length === 0 && loading && (
+            <div className="col-span-2 flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          )}
           {services
             .filter((s) => s.is_active && s.service_key !== 'camera_roll')
             .map((service) => {
