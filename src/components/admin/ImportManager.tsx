@@ -444,7 +444,17 @@ export const ImportManager: React.FC = () => {
             Sources
           </button>
           <button
-            onClick={() => setViewMode('history')}
+            onClick={() => {
+              setViewMode('history');
+              if (!jobsLoaded) {
+                importJobsApi.list().then((res) => {
+                  if (res.success && res.jobs) {
+                    setJobs(res.jobs);
+                    setJobsLoaded(true);
+                  }
+                });
+              }
+            }}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               viewMode === 'history'
                 ? 'border-blue-500 text-blue-600'
