@@ -5,6 +5,9 @@ import { supabase } from '../lib/supabase';
 import { DebugSupabase } from './DebugSupabase';
 import { TokenManager } from '../utils/tokenManager';
 import { ThemeToggle } from './ui/ThemeToggle';
+import { CountryCodePicker } from './ui/CountryCodePicker';
+import { DEFAULT_COUNTRY, CountryData } from '../data/countries';
+import { formatPhoneForInput, extractDigits } from '../utils/phoneFormatting';
 import { getSelectedEnvironmentKey, setEnvironment, ENVIRONMENTS, getAppScheme } from '../lib/environments';
 
 const REMEMBER_EMAIL_KEY = 'knox_remember_email';
@@ -31,8 +34,9 @@ export const Login: React.FC = () => {
   const [sessionTokens, setSessionTokens] = useState<{ accessToken: string; refreshToken: string } | null>(null);
   const [identifierType, setIdentifierType] = useState<'email' | 'phone'>('email');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [countryCode, setCountryCode] = useState('+1');
+  const [selectedCountry, setSelectedCountry] = useState<CountryData>(DEFAULT_COUNTRY);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const { user, loading: authLoading, signInWithMagicLink, signInWithCode, verifyCode, checkUserExists, signUp } = useAuth();
 
@@ -146,7 +150,7 @@ export const Login: React.FC = () => {
 
   const handleCodeAuth = async () => {
     const isPhone = identifierType === 'phone';
-    const fullPhone = isPhone ? `${countryCode}${phoneNumber.replace(/\D/g, '')}` : '';
+    const fullPhone = isPhone ? `${selectedCountry.dialCode}${extractDigits(phoneNumber, selectedCountry.dialCode)}` : '';
 
     if (isPhone) {
       if (!phoneNumber) {
@@ -194,7 +198,7 @@ export const Login: React.FC = () => {
 
   const getPhoneVerifyParams = () => {
     if (identifierType !== 'phone') return undefined;
-    const fullPhone = `${countryCode}${phoneNumber.replace(/\D/g, '')}`;
+    const fullPhone = `${selectedCountry.dialCode}${extractDigits(phoneNumber, selectedCountry.dialCode)}`;
     return { phone: fullPhone, identifier_type: 'phone' as const, invite_token: inviteToken };
   };
 
@@ -209,7 +213,7 @@ export const Login: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    const identifier = identifierType === 'phone' ? `${countryCode}${phoneNumber}` : email;
+    const identifier = identifierType === 'phone' ? `${selectedCountry.dialCode}${extractDigits(phoneNumber, selectedCountry.dialCode)}` : email;
     console.log('🔑 CODE VERIFICATION: Starting verification for:', identifier);
 
     try {
@@ -266,7 +270,10 @@ export const Login: React.FC = () => {
     setError(null);
 
     try {
-      const { error } = await signUp(email, fullName.trim());
+      const { error } = await signUp(email, fullName.trim(), {
+        agreed_to_terms: true,
+        terms_accepted_at: new Date().toISOString(),
+      });
       if (error) {
         setError(error.message);
       } else {
@@ -453,7 +460,7 @@ export const Login: React.FC = () => {
               ? 'Check your email for the magic link'
               : codeSent
               ? deliveryChannel === 'sms'
-                ? `Enter the 4-digit code sent to ${countryCode}${phoneNumber}`
+                ? `Enter the 4-digit code sent to ${selectedCountry.dialCode} ${phoneNumber}`
                 : `Enter the 4-digit code sent to ${email}`
               : 'Passwordless Authentication'
             }
@@ -512,6 +519,26 @@ export const Login: React.FC = () => {
               />
             </div>
 
+            <div className="flex items-start gap-2">
+              <input
+                id="agree-terms"
+                type="checkbox"
+                checked={agreedToTerms}
+                onChange={(e) => setAgreedToTerms(e.target.checked)}
+                className="h-4 w-4 checkbox rounded cursor-pointer mt-0.5 shrink-0"
+              />
+              <label htmlFor="agree-terms" className="text-sm text-theme-secondary cursor-pointer leading-5">
+                I agree to the{' '}
+                <a href="https://kizu.online/terms" target="_blank" rel="noopener noreferrer" className="text-theme-link hover:underline font-medium">
+                  Terms of Use
+                </a>
+                {' '}and{' '}
+                <a href="https://kizu.online/privacy" target="_blank" rel="noopener noreferrer" className="text-theme-link hover:underline font-medium">
+                  Privacy Policy
+                </a>
+              </label>
+            </div>
+
             {error && (
               <div className="alert-error">
                 {error}
@@ -520,7 +547,7 @@ export const Login: React.FC = () => {
 
             <button
               type="submit"
-              disabled={loading || !email || !fullName.trim()}
+              disabled={loading || !email || !fullName.trim() || !agreedToTerms}
               className="w-full btn-primary"
             >
               {loading ? 'Creating Account...' : 'Create Account'}
@@ -580,45 +607,17 @@ export const Login: React.FC = () => {
                   Phone Number
                 </label>
                 <div className="flex gap-2">
-                  <select
-                    value={countryCode}
-                    onChange={(e) => setCountryCode(e.target.value)}
-                    className="input w-24 shrink-0"
-                  >
-                    <option value="+1">+1</option>
-                    <option value="+44">+44</option>
-                    <option value="+81">+81</option>
-                    <option value="+82">+82</option>
-                    <option value="+86">+86</option>
-                    <option value="+91">+91</option>
-                    <option value="+33">+33</option>
-                    <option value="+49">+49</option>
-                    <option value="+61">+61</option>
-                    <option value="+55">+55</option>
-                    <option value="+52">+52</option>
-                    <option value="+34">+34</option>
-                    <option value="+39">+39</option>
-                    <option value="+7">+7</option>
-                    <option value="+90">+90</option>
-                    <option value="+966">+966</option>
-                    <option value="+971">+971</option>
-                    <option value="+65">+65</option>
-                    <option value="+62">+62</option>
-                    <option value="+63">+63</option>
-                    <option value="+66">+66</option>
-                    <option value="+84">+84</option>
-                    <option value="+234">+234</option>
-                    <option value="+27">+27</option>
-                    <option value="+254">+254</option>
-                    <option value="+20">+20</option>
-                  </select>
+                  <CountryCodePicker
+                    selectedCountry={selectedCountry}
+                    onSelect={(c) => { setSelectedCountry(c); setPhoneNumber(''); }}
+                  />
                   <input
                     id="phone"
                     type="tel"
                     value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    onChange={(e) => setPhoneNumber(formatPhoneForInput(e.target.value, selectedCountry.dialCode, phoneNumber))}
                     className="input placeholder-muted flex-1"
-                    placeholder="phone number"
+                    placeholder={selectedCountry.dialCode === '+1' ? '(555) 123-4567' : 'phone number'}
                     autoComplete="tel"
                     inputMode="tel"
                   />
@@ -740,7 +739,7 @@ export const Login: React.FC = () => {
                   <p className="font-medium">Code sent!</p>
                   <p className="text-sm">
                     {deliveryChannel === 'sms'
-                      ? `Enter the 4-digit code sent to ${countryCode}${phoneNumber} via SMS`
+                      ? `Enter the 4-digit code sent to ${selectedCountry.dialCode} ${phoneNumber} via SMS`
                       : `Enter the 4-digit code sent to ${email}`}
                   </p>
                   {import.meta.env.DEV && devCode && (
@@ -766,7 +765,7 @@ export const Login: React.FC = () => {
                     setVerificationCode(code);
                     // Auto-submit when 4 characters are entered
                     if (code.length === 4) {
-                      const identifier = identifierType === 'phone' ? `${countryCode}${phoneNumber}` : email;
+                      const identifier = identifierType === 'phone' ? `${selectedCountry.dialCode}${extractDigits(phoneNumber, selectedCountry.dialCode)}` : email;
                       console.log('🔑 AUTO-SUBMIT: Code complete, auto-submitting for:', identifier);
                       setTimeout(async () => {
                         setLoading(true);
@@ -835,7 +834,7 @@ export const Login: React.FC = () => {
             <p>
               Already have an account?{' '}
               <button
-                onClick={() => { setIsSignUp(false); setError(null); }}
+                onClick={() => { setIsSignUp(false); setError(null); setAgreedToTerms(false); }}
                 className="text-theme-link hover:underline font-medium"
               >
                 Sign in
