@@ -12,6 +12,7 @@ import { RootRedirect } from './components/RootRedirect';
 import { Dashboard } from './components/Dashboard';
 import { FrameSetup } from './components/FrameSetup';
 import { JoinCircle } from './components/JoinCircle';
+import { StartCircle } from './components/StartCircle';
 import { FrameMode } from './components/FrameMode';
 import { ShareRequest } from './components/ShareRequest';
 import { SharedAssetViewer } from './components/SharedAssetViewer';
@@ -34,6 +35,9 @@ function App() {
 
         {/* QR Circle Invite route */}
         <Route path="/join-circle/:token" element={<JoinCircle />} />
+
+        {/* Circle Seed route */}
+        <Route path="/start-circle/:token" element={<StartCircle />} />
 
         {/* Picture Frame Setup route */}
         <Route path="/frame-setup/:token" element={<FrameSetup />} />
