@@ -339,27 +339,38 @@ export async function parseExport(zip: JSZip): Promise<{
     }
   }
 
-  // 7. Deduplicate — prefer entries with more metadata
+  // 7. Deduplicate — by normalized filename (strips Facebook size suffixes
+  // like _n, _o, _a so variant copies collapse to one entry). Also catches
+  // the same photo referenced from album JSON, posts JSON, and media scan
+  // with different sourceAssetIds.
+  const normalizeFBFilename = (filename: string): string => {
+    const withoutExt = filename.replace(/\.[^.]+$/, '');
+    return withoutExt.replace(/_[noa]$/, '');
+  };
+  const mergeDup = (existing: ParsedAsset, incoming: ParsedAsset, idx: number) => {
+    const mergedComments = existing.comments.length >= incoming.comments.length ? existing.comments : incoming.comments;
+    const mergedReactions = existing.reactions.length >= incoming.reactions.length ? existing.reactions : incoming.reactions;
+    if (!existing.albumName && incoming.albumName) {
+      uniqueAssets[idx] = { ...incoming, comments: mergedComments, reactions: mergedReactions };
+    } else if (!existing.description && incoming.description) {
+      uniqueAssets[idx] = { ...incoming, comments: mergedComments, reactions: mergedReactions };
+    } else {
+      uniqueAssets[idx] = { ...existing, comments: mergedComments, reactions: mergedReactions };
+    }
+  };
   const seen = new Map<string, number>();
   const uniqueAssets: ParsedAsset[] = [];
   for (const asset of assets) {
-    const existIdx = seen.get(asset.sourceAssetId);
+    const key = normalizeFBFilename(asset.filename);
+    const existIdx = seen.get(key);
     if (existIdx === undefined) {
-      seen.set(asset.sourceAssetId, uniqueAssets.length);
+      seen.set(key, uniqueAssets.length);
       uniqueAssets.push(asset);
     } else {
-      const existing = uniqueAssets[existIdx];
-      if (!existing.albumName && asset.albumName) {
-        uniqueAssets[existIdx] = {
-          ...asset,
-          comments: existing.comments.length > asset.comments.length ? existing.comments : asset.comments,
-          reactions: existing.reactions.length > asset.reactions.length ? existing.reactions : asset.reactions,
-        };
-      } else if (!existing.description && asset.description) {
-        uniqueAssets[existIdx] = { ...asset, comments: existing.comments, reactions: existing.reactions };
-      }
+      mergeDup(uniqueAssets[existIdx], asset, existIdx);
     }
   }
+  console.log('[FB Import] duplicates removed:', assets.length - uniqueAssets.length);
 
   const albums = [...new Set(uniqueAssets.map(a => a.albumName).filter(Boolean) as string[])];
 

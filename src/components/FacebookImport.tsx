@@ -280,6 +280,12 @@ export function FacebookImport() {
               </svg>
               Select Facebook Export ZIP
             </button>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="w-full py-2 mt-3 text-sm text-gray-500 hover:text-gray-700 font-medium transition"
+            >
+              Cancel
+            </button>
           </div>
         )}
 
@@ -329,6 +335,7 @@ export function FacebookImport() {
             onUnpair={handleUnpair}
             onDonePairing={() => { setPairingMode(false); setPairingSelection([]); }}
             onBack={() => setStep('instructions')}
+            onCancel={() => navigate('/dashboard')}
             onImport={handleStartImport}
           />
         )}
@@ -429,7 +436,7 @@ export function FacebookImport() {
 
 function SummaryStep({ summary, graphApiStats, graphApiInputRef, onGraphApiFile, backSidePairs,
   pairingMode, pairingSelection, assets, onStartPairing, onPairingTap, onUnpair, onDonePairing,
-  onBack, onImport }: {
+  onBack, onCancel, onImport }: {
   summary: ImportSummary;
   graphApiStats: GraphApiStats | null;
   graphApiInputRef: React.RefObject<HTMLInputElement | null>;
@@ -443,6 +450,7 @@ function SummaryStep({ summary, graphApiStats, graphApiInputRef, onGraphApiFile,
   onUnpair: (frontIndex: number) => void;
   onDonePairing: () => void;
   onBack: () => void;
+  onCancel: () => void;
   onImport: () => void;
 }) {
   return (
@@ -554,6 +562,12 @@ function SummaryStep({ summary, graphApiStats, graphApiInputRef, onGraphApiFile,
           Import All
         </button>
       </div>
+      <button
+        onClick={onCancel}
+        className="w-full py-2 mt-3 text-sm text-gray-500 hover:text-gray-700 font-medium transition"
+      >
+        Cancel
+      </button>
     </div>
   );
 }
