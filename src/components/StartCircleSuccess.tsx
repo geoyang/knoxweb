@@ -1,12 +1,12 @@
 import React from 'react';
 
-interface JoinCircleSuccessProps {
+interface StartCircleSuccessProps {
   circleName: string;
   hasPromo: boolean;
   promoMessage: string | null;
 }
 
-export const JoinCircleSuccess: React.FC<JoinCircleSuccessProps> = ({
+export const StartCircleSuccess: React.FC<StartCircleSuccessProps> = ({
   circleName,
   hasPromo,
   promoMessage,

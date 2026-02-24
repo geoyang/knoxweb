@@ -237,7 +237,7 @@ export const FrameSetup: React.FC = () => {
           <div className="text-gray-400 text-sm">— or use a mobile device —</div>
 
           <div className="flex gap-3 items-center justify-center">
-            <a href="https://apps.apple.com/app/kizu/id6738030817" target="_blank" rel="noopener noreferrer">
+            <a href="https://apps.apple.com/us/app/kizu-mobile/id6757609621" target="_blank" rel="noopener noreferrer">
               <img src="https://www.kizu.online/app-store-badge.png"
                    alt="Download on the App Store" height="44" />
             </a>
