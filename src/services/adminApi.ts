@@ -387,6 +387,34 @@ class AdminApiService {
     });
   }
 
+  // Circle Seeds API
+  async getCircleSeeds(): Promise<ApiResponse<{ seeds: any[] }>> {
+    return this.makeApiCall('circle-seed-api?action=list', {
+      method: 'GET'
+    });
+  }
+
+  async createCircleSeed(seedData: {
+    label?: string;
+    promo_code_id?: string;
+    default_role?: string;
+    max_uses?: number;
+    expires_in_days?: number;
+    count?: number;
+  }): Promise<ApiResponse<{ seed: any; seeds: any[]; count: number }>> {
+    return this.makeApiCall('circle-seed-api?action=create', {
+      method: 'POST',
+      body: JSON.stringify(seedData)
+    });
+  }
+
+  async revokeCircleSeed(seedId: string): Promise<ApiResponse<{ seed: any }>> {
+    return this.makeApiCall('circle-seed-api?action=revoke', {
+      method: 'POST',
+      body: JSON.stringify({ seed_id: seedId })
+    });
+  }
+
   // Subscription Plans API
   async getSubscriptionPlans(): Promise<ApiResponse<{ plans: Array<{ id: string; name: string; display_name: string }> }>> {
     return this.makeApiCall('subscription-api?action=plans', {

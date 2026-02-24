@@ -18,6 +18,7 @@ import { FoldersManager } from './admin/FoldersManager';
 import PushNotificationTest from './admin/PushNotificationTest';
 import EmailTestTool from './admin/EmailTestTool';
 import { PromoCodesManager } from './admin/PromoCodesManager';
+import { CircleSeedsManager } from './admin/CircleSeedsManager';
 import { DiscountManager } from './admin/DiscountManager';
 import { ExportManager } from './admin/ExportManager';
 import { ImportManager } from './admin/ImportManager';
@@ -634,6 +635,19 @@ export const AdminDashboard: React.FC = () => {
                   </li>
                   <li>
                     <Link
+                      to="/admin/circle-seeds"
+                      className={`flex items-center px-4 py-2 rounded-md transition-colors ${
+                        location.pathname.includes('/admin/circle-seeds')
+                          ? 'bg-primary-light text-theme-accent font-medium'
+                          : 'text-theme-secondary hover:bg-primary-light hover:text-theme-accent'
+                      }`}
+                    >
+                      <i className="fi fi-sr-seedling mr-3 text-lg"></i>
+                      Circle Seeds
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
                       to="/admin/discount"
                       className={`flex items-center px-4 py-2 rounded-md transition-colors ${
                         location.pathname.includes('/admin/discount')
@@ -719,6 +733,16 @@ export const AdminDashboard: React.FC = () => {
               element={
                 isSuperAdmin ? (
                   <PromoCodesManager />
+                ) : (
+                  <Navigate to="/admin/albums" replace />
+                )
+              }
+            />
+            <Route
+              path="circle-seeds"
+              element={
+                isSuperAdmin ? (
+                  <CircleSeedsManager />
                 ) : (
                   <Navigate to="/admin/albums" replace />
                 )
