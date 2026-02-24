@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../../services/adminApi';
 
@@ -31,6 +32,53 @@ interface CreatedBatch {
   seeds: Array<{ id: string; label: string | null; url: string }>;
 }
 
+const QR_SIZE = 128; // px — good for business card print at 300dpi (~1.1cm)
+
+const downloadQR = (svgEl: SVGSVGElement | null, filename: string) => {
+  if (!svgEl) return;
+  const canvas = document.createElement('canvas');
+  const scale = 3; // 3x for crisp print
+  canvas.width = QR_SIZE * scale;
+  canvas.height = QR_SIZE * scale;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const svgData = new XMLSerializer().serializeToString(svgEl);
+  const img = new Image();
+  img.onload = () => {
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const link = document.createElement('a');
+    link.download = `${filename}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
+  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+};
+
+const SeedQRCode: React.FC<{ url: string; label: string }> = ({ url, label }) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const filename = label.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-') || 'seed-qr';
+
+  return (
+    <div className="flex items-center gap-3 mt-3">
+      <div className="bg-white p-2 rounded inline-block">
+        <QRCodeSVG ref={svgRef} value={url} size={QR_SIZE} level="M" />
+      </div>
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={() => downloadQR(svgRef.current, filename)}
+          className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded hover:bg-purple-500/30 text-xs"
+        >
+          Download PNG
+        </button>
+        <span className="text-xs text-theme-tertiary">{QR_SIZE * 3}px (print-ready)</span>
+      </div>
+    </div>
+  );
+};
+
 export const CircleSeedsManager: React.FC = () => {
   const [seeds, setSeeds] = useState<CircleSeed[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +89,7 @@ export const CircleSeedsManager: React.FC = () => {
   const [promoCodes, setPromoCodes] = useState<PromoCodeOption[]>([]);
   const [createdBatch, setCreatedBatch] = useState<CreatedBatch | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+  const [expandedQR, setExpandedQR] = useState<string | null>(null);
 
   // Form state
   const [formLabel, setFormLabel] = useState('');
@@ -282,17 +331,28 @@ export const CircleSeedsManager: React.FC = () => {
               </button>
             </div>
           </div>
-          <div className="max-h-64 overflow-y-auto space-y-2">
+          <div className="max-h-96 overflow-y-auto space-y-2">
             {createdBatch.seeds.map((s, i) => (
-              <div key={s.id} className="flex items-center gap-3 p-2 bg-theme-secondary/5 rounded">
-                <span className="text-xs text-theme-tertiary w-6 text-right">{i + 1}.</span>
-                <code className="flex-1 text-sm text-theme-primary break-all">{s.url}</code>
-                <button
-                  onClick={() => copyLink(s.url, s.id)}
-                  className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 text-xs flex-shrink-0"
-                >
-                  {copiedId === s.id ? 'Copied!' : 'Copy'}
-                </button>
+              <div key={s.id} className="p-3 bg-theme-secondary/5 rounded">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-theme-tertiary w-6 text-right">{i + 1}.</span>
+                  <code className="flex-1 text-sm text-theme-primary break-all">{s.url}</code>
+                  <button
+                    onClick={() => copyLink(s.url, s.id)}
+                    className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 text-xs flex-shrink-0"
+                  >
+                    {copiedId === s.id ? 'Copied!' : 'Copy'}
+                  </button>
+                  <button
+                    onClick={() => setExpandedQR(expandedQR === s.id ? null : s.id)}
+                    className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded hover:bg-purple-500/30 text-xs flex-shrink-0"
+                  >
+                    QR
+                  </button>
+                </div>
+                {expandedQR === s.id && (
+                  <SeedQRCode url={s.url} label={s.label || `seed-${i + 1}`} />
+                )}
               </div>
             ))}
           </div>
@@ -457,9 +517,23 @@ export const CircleSeedsManager: React.FC = () => {
                         </>
                       )}
                     </div>
+
+                    {expandedQR === seed.id && (
+                      <SeedQRCode url={seed.url} label={seed.label || seed.id} />
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                    <button
+                      onClick={() => setExpandedQR(expandedQR === seed.id ? null : seed.id)}
+                      className={`px-3 py-1 rounded text-sm ${
+                        expandedQR === seed.id
+                          ? 'bg-purple-500/30 text-purple-300'
+                          : 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
+                      }`}
+                    >
+                      QR
+                    </button>
                     <button
                       onClick={() => copyLink(seed.url, seed.id)}
                       className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 text-sm"
