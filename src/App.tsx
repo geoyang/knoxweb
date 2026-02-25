@@ -21,6 +21,7 @@ import { SubscriptionPage } from './components/SubscriptionPage';
 import { AccountPage } from './components/AccountPage';
 import { FacebookImport } from './components/FacebookImport';
 import { Unsubscribe } from './components/Unsubscribe';
+import { NotificationsPage } from './components/NotificationsPage';
 
 function App() {
   return (
@@ -71,6 +72,9 @@ function App() {
 
         {/* User dashboard (for circle members) */}
         <Route path="/dashboard" element={<Dashboard />} />
+
+        {/* Notifications page (linked from email digests) */}
+        <Route path="/notifications" element={<NotificationsPage />} />
 
         {/* Authentication routes */}
         <Route path="/login" element={<Login />} />
