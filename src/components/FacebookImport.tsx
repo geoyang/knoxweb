@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, DragEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import JSZip from 'jszip';
 import { useAuth } from '../context/AuthContext';
@@ -33,6 +33,7 @@ export function FacebookImport() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const graphApiInputRef = useRef<HTMLInputElement>(null);
 
+  const [isDragging, setIsDragging] = useState(false);
   const [step, setStep] = useState<Step>('instructions');
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [parsedAssets, setParsedAssets] = useState<ParsedAsset[]>([]);
@@ -56,9 +57,11 @@ export function FacebookImport() {
 
   /* ---- File select & parse ---- */
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processFile = async (file: File) => {
+    if (!file.name.endsWith('.zip')) {
+      alert('Please select a .zip file.');
+      return;
+    }
     setStep('parsing');
     try {
       const zip = await JSZip.loadAsync(file);
@@ -72,6 +75,28 @@ export function FacebookImport() {
       alert('Failed to open the export file. Make sure it\'s a valid Facebook export ZIP.');
       setStep('instructions');
     }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
   };
 
   /* ---- Graph API merge ---- */
@@ -271,15 +296,27 @@ export function FacebookImport() {
           <div>
             <FacebookImportGuide />
             <input ref={fileInputRef} type="file" accept=".zip" className="hidden" onChange={handleFileSelect} />
-            <button
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className="w-full py-3 mt-5 bg-[#1877F2] text-white rounded-xl font-semibold hover:bg-[#1565D8] transition flex items-center justify-center gap-2"
+              className={`mt-5 border-2 border-dashed rounded-xl p-6 cursor-pointer transition ${
+                isDragging
+                  ? 'border-[#1877F2] bg-blue-50'
+                  : 'border-gray-300 hover:border-[#1877F2] hover:bg-blue-50/50'
+              }`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-              Select Facebook Export ZIP
-            </button>
+              <div className="flex flex-col items-center gap-2">
+                <svg className={`w-8 h-8 ${isDragging ? 'text-[#1877F2]' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p className={`text-sm font-semibold ${isDragging ? 'text-[#1877F2]' : 'text-gray-700'}`}>
+                  {isDragging ? 'Drop your file here' : 'Drag & drop your Facebook export ZIP'}
+                </p>
+                <p className="text-xs text-gray-400">or click to browse</p>
+              </div>
+            </div>
             <button
               onClick={() => navigate('/dashboard')}
               className="w-full py-2 mt-3 text-sm text-gray-500 hover:text-gray-700 font-medium transition"
