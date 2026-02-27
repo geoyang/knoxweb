@@ -885,7 +885,7 @@ export const AdminAlbumDetail: React.FC = () => {
         <div className="mb-6 bg-gray-50 rounded-lg p-4">
           <h4 className="font-semibold text-gray-900 mb-3">Shared with</h4>
           <div className="flex flex-wrap gap-2">
-            {album.album_shares.filter(s => s.is_active).map(share => (
+            {album.album_shares.filter(s => s.is_active && s.circles).map(share => (
               <div key={share.id} className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border">
                 <span className="font-medium text-sm">{share.circles.name}</span>
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getRoleColor(share.role)}`}>{share.role.replace('_', ' ')}</span>
